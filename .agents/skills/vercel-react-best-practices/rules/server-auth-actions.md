@@ -1,4 +1,5 @@
 ---
+
 title: Authenticate Server Actions Like API Routes
 impact: CRITICAL
 impactDescription: prevents unauthorized access to server mutations
@@ -19,9 +20,9 @@ Next.js documentation explicitly states: "Treat Server Actions with the same sec
 "use server";
 
 export async function deleteUser(userId: string) {
-  // Anyone can call this! No auth check
-  await db.user.delete({ where: { id: userId } });
-  return { success: true };
+	// Anyone can call this! No auth check
+	await db.user.delete({ where: { id: userId } });
+	return { success: true };
 }
 ```
 
@@ -34,20 +35,20 @@ import { verifySession } from "@/lib/auth";
 import { unauthorized } from "@/lib/errors";
 
 export async function deleteUser(userId: string) {
-  // Always check auth inside the action
-  const session = await verifySession();
+	// Always check auth inside the action
+	const session = await verifySession();
 
-  if (!session) {
-    throw unauthorized("Must be logged in");
-  }
+	if (!session) {
+		throw unauthorized("Must be logged in");
+	}
 
-  // Check authorization too
-  if (session.user.role !== "admin" && session.user.id !== userId) {
-    throw unauthorized("Cannot delete other users");
-  }
+	// Check authorization too
+	if (session.user.role !== "admin" && session.user.id !== userId) {
+		throw unauthorized("Cannot delete other users");
+	}
 
-  await db.user.delete({ where: { id: userId } });
-  return { success: true };
+	await db.user.delete({ where: { id: userId } });
+	return { success: true };
 }
 ```
 
@@ -61,36 +62,36 @@ import { z } from "zod";
 import { verifySession } from "@/lib/auth";
 
 const updateProfileSchema = z.object({
-  userId: z.string().uuid(),
-  name: z.string().min(1).max(100),
-  email: z.string().email(),
+	userId: z.string().uuid(),
+	name: z.string().min(1).max(100),
+	email: z.string().email(),
 });
 
 export async function updateProfile(data: unknown) {
-  // Validate input first
-  const validated = updateProfileSchema.parse(data);
+	// Validate input first
+	const validated = updateProfileSchema.parse(data);
 
-  // Then authenticate
-  const session = await verifySession();
-  if (!session) {
-    throw new Error("Unauthorized");
-  }
+	// Then authenticate
+	const session = await verifySession();
+	if (!session) {
+		throw new Error("Unauthorized");
+	}
 
-  // Then authorize
-  if (session.user.id !== validated.userId) {
-    throw new Error("Can only update own profile");
-  }
+	// Then authorize
+	if (session.user.id !== validated.userId) {
+		throw new Error("Can only update own profile");
+	}
 
-  // Finally perform the mutation
-  await db.user.update({
-    where: { id: validated.userId },
-    data: {
-      name: validated.name,
-      email: validated.email,
-    },
-  });
+	// Finally perform the mutation
+	await db.user.update({
+		where: { id: validated.userId },
+		data: {
+			name: validated.name,
+			email: validated.email,
+		},
+	});
 
-  return { success: true };
+	return { success: true };
 }
 ```
 

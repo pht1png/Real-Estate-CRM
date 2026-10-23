@@ -34,6 +34,7 @@ A structured repository for creating and maintaining React Best Practices optimi
    ```
 
 4. Extract test cases:
+
    ```bash
    pnpm extract-tests
    ```
@@ -60,6 +61,7 @@ Each rule file should follow this structure:
 
 ````markdown
 ---
+
 title: Rule Title Here
 impact: MEDIUM
 impactDescription: Optional description
@@ -114,7 +116,6 @@ Reference: [Link](https://example.com)
 ## Contributing
 
 When adding or modifying rules:
-
 1. Use the correct filename prefix for your section
 2. Follow the `_template.md` structure
 3. Include clear bad/good examples with explanations

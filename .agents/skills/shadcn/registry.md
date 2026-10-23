@@ -6,7 +6,6 @@ a shadcn registry.
 ## Mental Model
 
 A registry has two forms:
-
 - **Source registry**: an authored `registry.json` in a project or repository.
   It may use `include` and file paths that point at source files.
 - **Built registry**: generated JSON files served to CLI consumers, usually
@@ -26,28 +25,27 @@ The root registry file should define registry metadata and either `items` or
 
 ```json
 {
-  "$schema": "https://ui.shadcn.com/schema/registry.json",
-  "name": "acme",
-  "homepage": "https://acme.com",
-  "items": [
-    {
-      "name": "absolute-url",
-      "type": "registry:lib",
-      "title": "Absolute URL",
-      "description": "A utility to turn any path into an absolute URL.",
-      "files": [
-        {
-          "path": "lib/absolute-url.ts",
-          "type": "registry:lib"
-        }
-      ]
-    }
-  ]
+	"$schema": "https://ui.shadcn.com/schema/registry.json",
+	"name": "acme",
+	"homepage": "https://acme.com",
+	"items": [
+		{
+			"name": "absolute-url",
+			"type": "registry:lib",
+			"title": "Absolute URL",
+			"description": "A utility to turn any path into an absolute URL.",
+			"files": [
+				{
+					"path": "lib/absolute-url.ts",
+					"type": "registry:lib"
+				}
+			]
+		}
+	]
 }
 ```
 
 Root registry rules:
-
 - Root `registry.json` must include `name` and `homepage`.
 - `items` is an array of registry item definitions.
 - `include` may be used to split the source registry into multiple files.
@@ -59,15 +57,14 @@ Use `include` to keep large registries modular.
 
 ```json
 {
-  "$schema": "https://ui.shadcn.com/schema/registry.json",
-  "name": "acme",
-  "homepage": "https://acme.com",
-  "include": ["registry/ui/registry.json", "registry/blocks/registry.json"]
+	"$schema": "https://ui.shadcn.com/schema/registry.json",
+	"name": "acme",
+	"homepage": "https://acme.com",
+	"include": ["registry/ui/registry.json", "registry/blocks/registry.json"]
 }
 ```
 
 Include rules:
-
 - Include paths are relative to the `registry.json` that declares them.
 - Include paths must explicitly point to a `registry.json` file.
 - Do not use remote URLs, absolute paths, or parent traversal (`..`).
@@ -78,18 +75,18 @@ Example included file:
 
 ```json
 {
-  "items": [
-    {
-      "name": "button",
-      "type": "registry:ui",
-      "files": [
-        {
-          "path": "button.tsx",
-          "type": "registry:ui"
-        }
-      ]
-    }
-  ]
+	"items": [
+		{
+			"name": "button",
+			"type": "registry:ui",
+			"files": [
+				{
+					"path": "button.tsx",
+					"type": "registry:ui"
+				}
+			]
+		}
+	]
 }
 ```
 
@@ -103,31 +100,30 @@ Common item fields:
 
 ```json
 {
-  "name": "login-form",
-  "type": "registry:block",
-  "title": "Login Form",
-  "description": "A login form with email and password fields.",
-  "dependencies": ["zod"],
-  "registryDependencies": ["button", "input", "label"],
-  "files": [
-    {
-      "path": "blocks/login-form.tsx",
-      "type": "registry:block"
-    }
-  ],
-  "cssVars": {
-    "light": {
-      "brand": "oklch(0.62 0.18 250)"
-    },
-    "dark": {
-      "brand": "oklch(0.72 0.16 250)"
-    }
-  }
+	"name": "login-form",
+	"type": "registry:block",
+	"title": "Login Form",
+	"description": "A login form with email and password fields.",
+	"dependencies": ["zod"],
+	"registryDependencies": ["button", "input", "label"],
+	"files": [
+		{
+			"path": "blocks/login-form.tsx",
+			"type": "registry:block"
+		}
+	],
+	"cssVars": {
+		"light": {
+			"brand": "oklch(0.62 0.18 250)"
+		},
+		"dark": {
+			"brand": "oklch(0.72 0.16 250)"
+		}
+	}
 }
 ```
 
 Important fields:
-
 - `name`: the installable item name. It is not necessarily a file path.
 - `type`: one of the registry item types, such as `registry:ui`,
   `registry:block`, `registry:lib`, `registry:hook`, `registry:file`,
@@ -141,7 +137,6 @@ Important fields:
   additions.
 
 File rules:
-
 - File paths are relative to the declaring `registry.json`.
 - `registry:file` and `registry:page` files require a `target`.
 - Do not use remote file URLs in source registry file paths.
@@ -153,20 +148,19 @@ File rules:
 
 ```json
 {
-  "name": "login-form",
-  "type": "registry:block",
-  "registryDependencies": ["button", "@acme/input", "acme/ui/card#v1.2.0"],
-  "files": [
-    {
-      "path": "blocks/login-form.tsx",
-      "type": "registry:block"
-    }
-  ]
+	"name": "login-form",
+	"type": "registry:block",
+	"registryDependencies": ["button", "@acme/input", "acme/ui/card#v1.2.0"],
+	"files": [
+		{
+			"path": "blocks/login-form.tsx",
+			"type": "registry:block"
+		}
+	]
 }
 ```
 
 Dependency rules:
-
 - Bare names such as `"button"` mean official shadcn items.
 - Bare names never mean same-registry or same-repository items.
 - Namespaced dependencies use `@namespace/item-name`.
@@ -205,7 +199,6 @@ owner/repo/item-name[#ref]
 ```
 
 Rules:
-
 - The first two path segments are GitHub owner and repo.
 - All remaining path segments are the registry item name.
 - The source entrypoint is always root `registry.json`.
@@ -266,7 +259,6 @@ npx shadcn@latest registry validate owner/repo
 ```
 
 When working on registry implementation in the shadcn/ui codebase:
-
 - Keep address parsing pure and testable.
 - Do not add side effects to validators.
 - Preserve existing behavior for official shadcn, namespace, URL, and file

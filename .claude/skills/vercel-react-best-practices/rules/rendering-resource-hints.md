@@ -1,4 +1,5 @@
 ---
+
 title: Use React DOM Resource Hints
 impact: HIGH
 impactDescription: reduces load time for critical resources
@@ -10,7 +11,6 @@ tags: rendering, preload, preconnect, prefetch, resource-hints
 **Impact: HIGH (reduces load time for critical resources)**
 
 React DOM provides APIs to hint the browser about resources it will need. These are especially useful in server components to start loading resources before the client even receives the HTML.
-
 - **`prefetchDNS(href)`**: Resolve DNS for a domain you expect to connect to
 - **`preconnect(href)`**: Establish connection (DNS + TCP + TLS) to a server
 - **`preload(href, options)`**: Fetch a resource (stylesheet, font, script, image) you'll use soon
@@ -24,10 +24,10 @@ React DOM provides APIs to hint the browser about resources it will need. These 
 import { preconnect, prefetchDNS } from "react-dom";
 
 export default function App() {
-  prefetchDNS("https://analytics.example.com");
-  preconnect("https://api.example.com");
+	prefetchDNS("https://analytics.example.com");
+	preconnect("https://api.example.com");
 
-  return <main>{/* content */}</main>;
+	return <main>{/* content */}</main>;
 }
 ```
 
@@ -37,17 +37,21 @@ export default function App() {
 import { preload, preinit } from "react-dom";
 
 export default function RootLayout({ children }) {
-  // Preload font file
-  preload("/fonts/inter.woff2", { as: "font", type: "font/woff2", crossOrigin: "anonymous" });
+	// Preload font file
+	preload("/fonts/inter.woff2", {
+		as: "font",
+		type: "font/woff2",
+		crossOrigin: "anonymous",
+	});
 
-  // Fetch and apply critical stylesheet immediately
-  preinit("/styles/critical.css", { as: "style" });
+	// Fetch and apply critical stylesheet immediately
+	preinit("/styles/critical.css", { as: "style" });
 
-  return (
-    <html>
-      <body>{children}</body>
-    </html>
-  );
+	return (
+		<html>
+			<body>{children}</body>
+		</html>
+	);
 }
 ```
 
@@ -57,17 +61,17 @@ export default function RootLayout({ children }) {
 import { preloadModule, preinitModule } from "react-dom";
 
 function Navigation() {
-  const preloadDashboard = () => {
-    preloadModule("/dashboard.js", { as: "script" });
-  };
+	const preloadDashboard = () => {
+		preloadModule("/dashboard.js", { as: "script" });
+	};
 
-  return (
-    <nav>
-      <a href="/dashboard" onMouseEnter={preloadDashboard}>
-        Dashboard
-      </a>
-    </nav>
-  );
+	return (
+		<nav>
+			<a href="/dashboard" onMouseEnter={preloadDashboard}>
+				Dashboard
+			</a>
+		</nav>
+	);
 }
 ```
 

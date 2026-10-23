@@ -21,24 +21,24 @@ Radix uses `asChild` to replace the default element. Base uses `render`. Don't w
 
 ```tsx
 <DialogTrigger>
-  <div>
-    <Button>Open</Button>
-  </div>
-</DialogTrigger>
+	<div>
+		<Button>Open</Button>
+	</div>
+</DialogTrigger>;
 ```
 
 **Correct (radix):**
 
 ```tsx
 <DialogTrigger asChild>
-  <Button>Open</Button>
-</DialogTrigger>
+	<Button>Open</Button>
+</DialogTrigger>;
 ```
 
 **Correct (base):**
 
 ```tsx
-<DialogTrigger render={<Button />}>Open</DialogTrigger>
+<DialogTrigger render={<Button />}>Open</DialogTrigger>;
 ```
 
 This applies to all trigger and close components: `DialogTrigger`, `SheetTrigger`, `AlertDialogTrigger`, `DropdownMenuTrigger`, `PopoverTrigger`, `TooltipTrigger`, `CollapsibleTrigger`, `DialogClose`, `SheetClose`, `NavigationMenuLink`, `BreadcrumbLink`, `SidebarMenuButton`, `Badge`, `Item`.
@@ -52,23 +52,23 @@ When `render` changes an element to a non-button (`<a>`, `<span>`), add `nativeB
 **Incorrect (base):** missing `nativeButton={false}`.
 
 ```tsx
-<Button render={<a href="/docs" />}>Read the docs</Button>
+<Button render={<a href="/docs" />}>Read the docs</Button>;
 ```
 
 **Correct (base):**
 
 ```tsx
 <Button render={<a href="/docs" />} nativeButton={false}>
-  Read the docs
-</Button>
+	Read the docs
+</Button>;
 ```
 
 **Correct (radix):**
 
 ```tsx
 <Button asChild>
-  <a href="/docs">Read the docs</a>
-</Button>
+	<a href="/docs">Read the docs</a>
+</Button>;
 ```
 
 Same for triggers whose `render` is not a `Button`:
@@ -76,8 +76,8 @@ Same for triggers whose `render` is not a `Button`:
 ```tsx
 // base.
 <PopoverTrigger render={<InputGroupAddon />} nativeButton={false}>
-  Pick date
-</PopoverTrigger>
+	Pick date
+</PopoverTrigger>;
 ```
 
 ---
@@ -90,10 +90,10 @@ Same for triggers whose `render` is not a `Button`:
 
 ```tsx
 <Select>
-  <SelectTrigger>
-    <SelectValue placeholder="Select a fruit" />
-  </SelectTrigger>
-</Select>
+	<SelectTrigger>
+		<SelectValue placeholder="Select a fruit" />
+	</SelectTrigger>
+</Select>;
 ```
 
 **Correct (base):**
@@ -123,16 +123,16 @@ const items = [
 
 ```tsx
 <Select>
-  <SelectTrigger>
-    <SelectValue placeholder="Select a fruit" />
-  </SelectTrigger>
-  <SelectContent>
-    <SelectGroup>
-      <SelectItem value="apple">Apple</SelectItem>
-      <SelectItem value="banana">Banana</SelectItem>
-    </SelectGroup>
-  </SelectContent>
-</Select>
+	<SelectTrigger>
+		<SelectValue placeholder="Select a fruit" />
+	</SelectTrigger>
+	<SelectContent>
+		<SelectGroup>
+			<SelectItem value="apple">Apple</SelectItem>
+			<SelectItem value="banana">Banana</SelectItem>
+		</SelectGroup>
+	</SelectContent>
+</Select>;
 ```
 
 **Placeholder.** Base uses a `{ value: null }` item in the items array. Radix uses `<SelectValue placeholder="...">`.
@@ -157,24 +157,26 @@ Base supports `multiple`, render-function children on `SelectValue`, and object 
 
 ```tsx
 <Select items={items} multiple defaultValue={[]}>
-  <SelectTrigger>
-    <SelectValue>
-      {(value: string[]) => (value.length === 0 ? "Select fruits" : `${value.length} selected`)}
-    </SelectValue>
-  </SelectTrigger>
-  ...
-</Select>
+	<SelectTrigger>
+		<SelectValue>
+			{(value: string[]) =>
+				value.length === 0 ? "Select fruits" : `${value.length} selected`
+			}
+		</SelectValue>
+	</SelectTrigger>
+	...
+</Select>;
 ```
 
 **Correct (base — object values):**
 
 ```tsx
 <Select defaultValue={plans[0]} itemToStringValue={(plan) => plan.name}>
-  <SelectTrigger>
-    <SelectValue>{(value) => value.name}</SelectValue>
-  </SelectTrigger>
-  ...
-</Select>
+	<SelectTrigger>
+		<SelectValue>{(value) => value.name}</SelectValue>
+	</SelectTrigger>
+	...
+</Select>;
 ```
 
 ---
@@ -187,8 +189,8 @@ Base uses a `multiple` boolean prop. Radix uses `type="single"` or `type="multip
 
 ```tsx
 <ToggleGroup type="single" defaultValue="daily">
-  <ToggleGroupItem value="daily">Daily</ToggleGroupItem>
-</ToggleGroup>
+	<ToggleGroupItem value="daily">Daily</ToggleGroupItem>
+</ToggleGroup>;
 ```
 
 **Correct (base):**
@@ -244,19 +246,19 @@ Base accepts a plain number for a single thumb. Radix always requires an array.
 **Incorrect (base):**
 
 ```tsx
-<Slider defaultValue={[50]} max={100} step={1} />
+<Slider defaultValue={[50]} max={100} step={1} />;
 ```
 
 **Correct (base):**
 
 ```tsx
-<Slider defaultValue={50} max={100} step={1} />
+<Slider defaultValue={50} max={100} step={1} />;
 ```
 
 **Correct (radix):**
 
 ```tsx
-<Slider defaultValue={[50]} max={100} step={1} />
+<Slider defaultValue={[50]} max={100} step={1} />;
 ```
 
 Both use arrays for range sliders. Controlled `onValueChange` in base may need a cast:
@@ -281,8 +283,8 @@ Radix requires `type="single"` or `type="multiple"` and supports `collapsible`. 
 
 ```tsx
 <Accordion type="single" collapsible defaultValue="item-1">
-  <AccordionItem value="item-1">...</AccordionItem>
-</Accordion>
+	<AccordionItem value="item-1">...</AccordionItem>
+</Accordion>;
 ```
 
 **Correct (base):**
@@ -303,6 +305,6 @@ Radix requires `type="single"` or `type="multiple"` and supports `collapsible`. 
 
 ```tsx
 <Accordion type="single" collapsible defaultValue="item-1">
-  <AccordionItem value="item-1">...</AccordionItem>
-</Accordion>
+	<AccordionItem value="item-1">...</AccordionItem>
+</Accordion>;
 ```

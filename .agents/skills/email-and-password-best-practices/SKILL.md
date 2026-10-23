@@ -1,4 +1,5 @@
 ---
+
 name: email-and-password-best-practices
 description: Configure email verification, implement password reset flows, set password policies, and customise hashing algorithms for Better Auth email/password authentication. Use when users need to set up login, sign-in, sign-up, credential authentication, or password security with Better Auth.
 ---
@@ -23,15 +24,15 @@ import { betterAuth } from "better-auth";
 import { sendEmail } from "./email"; // your email sending function
 
 export const auth = betterAuth({
-  emailVerification: {
-    sendVerificationEmail: async ({ user, url, token }, request) => {
-      await sendEmail({
-        to: user.email,
-        subject: "Verify your email address",
-        text: `Click the link to verify your email: ${url}`,
-      });
-    },
-  },
+	emailVerification: {
+		sendVerificationEmail: async ({ user, url, token }, request) => {
+			await sendEmail({
+				to: user.email,
+				subject: "Verify your email address",
+				text: `Click the link to verify your email: ${url}`,
+			});
+		},
+	},
 });
 ```
 
@@ -43,9 +44,9 @@ For stricter security, enable `emailAndPassword.requireEmailVerification` to blo
 
 ```ts
 export const auth = betterAuth({
-  emailAndPassword: {
-    requireEmailVerification: true,
-  },
+	emailAndPassword: {
+		requireEmailVerification: true,
+	},
 });
 ```
 
@@ -61,7 +62,7 @@ Always use absolute URLs (including the origin) for callback URLs in sign-up and
 
 ```ts
 const { data, error } = await authClient.signUp.email({
-  callbackURL: "https://example.com/callback", // absolute URL with origin
+	callbackURL: "https://example.com/callback", // absolute URL with origin
 });
 ```
 
@@ -75,22 +76,22 @@ import { betterAuth } from "better-auth";
 import { sendEmail } from "./email"; // your email sending function
 
 export const auth = betterAuth({
-  emailAndPassword: {
-    enabled: true,
-    // Custom email sending function to send reset-password email
-    sendResetPassword: async ({ user, url, token }, request) => {
-      void sendEmail({
-        to: user.email,
-        subject: "Reset your password",
-        text: `Click the link to reset your password: ${url}`,
-      });
-    },
-    // Optional event hook
-    onPasswordReset: async ({ user }, request) => {
-      // your logic here
-      console.log(`Password for user ${user.email} has been reset.`);
-    },
-  },
+	emailAndPassword: {
+		enabled: true,
+		// Custom email sending function to send reset-password email
+		sendResetPassword: async ({ user, url, token }, request) => {
+			void sendEmail({
+				to: user.email,
+				subject: "Reset your password",
+				text: `Click the link to reset your password: ${url}`,
+			});
+		},
+		// Optional event hook
+		onPasswordReset: async ({ user }, request) => {
+			// your logic here
+			console.log(`Password for user ${user.email} has been reset.`);
+		},
+	},
 });
 ```
 
@@ -102,14 +103,14 @@ On serverless platforms, configure a background task handler:
 
 ```ts
 export const auth = betterAuth({
-  advanced: {
-    backgroundTasks: {
-      handler: (promise) => {
-        // Use platform-specific methods like waitUntil
-        waitUntil(promise);
-      },
-    },
-  },
+	advanced: {
+		backgroundTasks: {
+			handler: (promise) => {
+				// Use platform-specific methods like waitUntil
+				waitUntil(promise);
+			},
+		},
+	},
 });
 ```
 
@@ -119,10 +120,10 @@ Tokens expire after 1 hour by default. Configure with `resetPasswordTokenExpires
 
 ```ts
 export const auth = betterAuth({
-  emailAndPassword: {
-    enabled: true,
-    resetPasswordTokenExpiresIn: 60 * 30, // 30 minutes
-  },
+	emailAndPassword: {
+		enabled: true,
+		resetPasswordTokenExpiresIn: 60 * 30, // 30 minutes
+	},
 });
 ```
 
@@ -134,10 +135,10 @@ Enable `revokeSessionsOnPasswordReset` to invalidate all existing sessions on pa
 
 ```ts
 export const auth = betterAuth({
-  emailAndPassword: {
-    enabled: true,
-    revokeSessionsOnPasswordReset: true,
-  },
+	emailAndPassword: {
+		enabled: true,
+		revokeSessionsOnPasswordReset: true,
+	},
 });
 ```
 
@@ -147,11 +148,11 @@ Password length limits (configurable):
 
 ```ts
 export const auth = betterAuth({
-  emailAndPassword: {
-    enabled: true,
-    minPasswordLength: 12,
-    maxPasswordLength: 256,
-  },
+	emailAndPassword: {
+		enabled: true,
+		minPasswordLength: 12,
+		maxPasswordLength: 256,
+	},
 });
 ```
 
@@ -161,10 +162,10 @@ Call `requestPasswordReset` to send the reset link. Triggers the `sendResetPassw
 
 ```ts
 const data = await auth.api.requestPasswordReset({
-  body: {
-    email: "john.doe@example.com", // required
-    redirectTo: "https://example.com/reset-password",
-  },
+	body: {
+		email: "john.doe@example.com", // required
+		redirectTo: "https://example.com/reset-password",
+	},
 });
 ```
 
@@ -172,8 +173,8 @@ Or authClient:
 
 ```ts
 const { data, error } = await authClient.requestPasswordReset({
-  email: "john.doe@example.com", // required
-  redirectTo: "https://example.com/reset-password",
+	email: "john.doe@example.com", // required
+	redirectTo: "https://example.com/reset-password",
 });
 ```
 
@@ -192,21 +193,22 @@ import { hash, verify, type Options } from "@node-rs/argon2";
 import { betterAuth } from "better-auth";
 
 const argon2Options: Options = {
-  memoryCost: 65536, // 64 MiB
-  timeCost: 3, // 3 iterations
-  parallelism: 4, // 4 parallel lanes
-  outputLen: 32, // 32 byte output
-  algorithm: 2, // Argon2id variant
+	memoryCost: 65536, // 64 MiB
+	timeCost: 3, // 3 iterations
+	parallelism: 4, // 4 parallel lanes
+	outputLen: 32, // 32 byte output
+	algorithm: 2, // Argon2id variant
 };
 
 export const auth = betterAuth({
-  emailAndPassword: {
-    enabled: true,
-    password: {
-      hash: (password) => hash(password, argon2Options),
-      verify: ({ password, hash: storedHash }) => verify(storedHash, password, argon2Options),
-    },
-  },
+	emailAndPassword: {
+		enabled: true,
+		password: {
+			hash: (password) => hash(password, argon2Options),
+			verify: ({ password, hash: storedHash }) =>
+				verify(storedHash, password, argon2Options),
+		},
+	},
 });
 ```
 

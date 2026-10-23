@@ -82,7 +82,6 @@ ls <resolvedPaths.ui>/*.tsx | wc -l
 Count the component files on disk. Never quote a component count from memory.
 
 Then wire up the providers in the app root:
-
 - Wrap the app in `TooltipProvider`.
 - Base UI: wrap the app in `Toaster` from the `toast` component and call `toast.add({ title, description, type })`. Radix: render `<Toaster />` from `sonner`.
 
@@ -150,13 +149,13 @@ Every token without a shadcn slot gets a variable in `:root` (and `.dark` when i
 
 ```css
 :root {
-  --primary-active: #a9583e;
-  --surface-card: #efe9de;
+	--primary-active: #a9583e;
+	--surface-card: #efe9de;
 }
 
 @theme inline {
-  --color-primary-active: var(--primary-active);
-  --color-surface-card: var(--surface-card);
+	--color-primary-active: var(--primary-active);
+	--color-surface-card: var(--surface-card);
 }
 ```
 
@@ -175,14 +174,14 @@ A DESIGN.md radius scale rarely fits the `--radius` multipliers. Pin each step i
 
 ```css
 @theme inline {
-  /* DESIGN.md step → Tailwind class used by that component. */
-  --radius-sm: 4px; /* xs: accents. */
-  --radius-md: 6px; /* sm: menu items. */
-  --radius-lg: 8px; /* md: buttons, inputs. */
-  --radius-xl: 12px; /* lg: cards, dialogs. */
-  --radius-2xl: 16px; /* xl: toasts, hero containers. */
-  --radius-3xl: 16px;
-  --radius-4xl: 9999px; /* pill: badges. */
+	/* DESIGN.md step → Tailwind class used by that component. */
+	--radius-sm: 4px; /* xs: accents. */
+	--radius-md: 6px; /* sm: menu items. */
+	--radius-lg: 8px; /* md: buttons, inputs. */
+	--radius-xl: 12px; /* lg: cards, dialogs. */
+	--radius-2xl: 16px; /* xl: toasts, hero containers. */
+	--radius-3xl: 16px;
+	--radius-4xl: 9999px; /* pill: badges. */
 }
 ```
 
@@ -200,9 +199,9 @@ Override Tailwind's shadow scale in `@theme`, not `@theme inline`. Copy multi-la
 
 ```css
 @theme {
-  --shadow-xs: 0 0 #0000;
-  --shadow-sm: 0 1px 3px rgb(20 20 19 / 0.08);
-  --shadow-lg: 0 1px 3px rgb(20 20 19 / 0.08), 0 8px 24px rgb(20 20 19 / 0.06);
+	--shadow-xs: 0 0 #0000;
+	--shadow-sm: 0 1px 3px rgb(20 20 19 / 0.08);
+	--shadow-lg: 0 1px 3px rgb(20 20 19 / 0.08), 0 8px 24px rgb(20 20 19 / 0.06);
 }
 ```
 
@@ -220,10 +219,10 @@ npm install @fontsource-variable/inter @fontsource-variable/cormorant-garamond @
 @import "@fontsource-variable/jetbrains-mono";
 
 @theme inline {
-  --font-sans: "Inter Variable", -apple-system, system-ui, sans-serif;
-  --font-serif: "Cormorant Garamond Variable", Garamond, serif;
-  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
-  --font-heading: var(--font-sans);
+	--font-sans: "Inter Variable", -apple-system, system-ui, sans-serif;
+	--font-serif: "Cormorant Garamond Variable", Garamond, serif;
+	--font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+	--font-heading: var(--font-sans);
 }
 ```
 
@@ -235,18 +234,18 @@ Turn every typography token into a `type-*` utility. Don't use `--text-*` theme 
 
 ```css
 @utility type-display-lg {
-  font-family: var(--font-serif);
-  font-size: clamp(34px, 3vw + 16px, 48px);
-  font-weight: 500;
-  line-height: 1.1;
-  letter-spacing: -0.021em;
+	font-family: var(--font-serif);
+	font-size: clamp(34px, 3vw + 16px, 48px);
+	font-weight: 500;
+	line-height: 1.1;
+	letter-spacing: -0.021em;
 }
 
 @utility type-caption-upper {
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
+	font-size: 12px;
+	font-weight: 500;
+	letter-spacing: 1.5px;
+	text-transform: uppercase;
 }
 ```
 
@@ -261,24 +260,23 @@ Turn every typography token into a `type-*` utility. Don't use `--text-*` theme 
 ### Focus
 
 Match the documented focus treatment:
-
 - **Ring with alpha** (for example "3px coral at 15%"): replace `ring-ring/50` with the documented alpha on field components (`input`, `textarea`, `input-group`, `select`, `native-select`, `combobox`, `input-otp`).
 - **Solid outline with offset**: add an unlayered rule so it beats `outline-none`, and cancel the ring shadow:
 
 ```css
 :is(
-  button,
-  a[href],
-  [role="button"],
-  [role="tab"],
-  [role="checkbox"],
-  [role="radio"],
-  [role="switch"],
-  [role="slider"]
+	button,
+	a[href],
+	[role="button"],
+	[role="tab"],
+	[role="checkbox"],
+	[role="radio"],
+	[role="switch"],
+	[role="slider"]
 ):focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-  --tw-ring-shadow: 0 0 #0000;
+	outline: 2px solid var(--ring);
+	outline-offset: 2px;
+	--tw-ring-shadow: 0 0 #0000;
 }
 ```
 
@@ -332,7 +330,6 @@ Re-grep before editing (`grep -n "\bh-8\b\|size-8\b" <ui>/*.tsx`); other styles 
 Follow [design-system-page.md](./design-system-page.md). It sets the section outline, how to present each foundation, the component tiers and block anatomy, pinned state matrices, edge cases, do/don't pairs, and recipes.
 
 In short:
-
 1. Foundations first: color roles as contrast-checked pairs, palette, type specimen table, spacing, radius and elevation ladders.
 2. Components by tier: primitives get a variant × state matrix, size ladder and icon row. Composed components get a typical example, additions and edge cases. Overlays get real triggers.
 3. Then rendered do/don't pairs for the DESIGN.md's rules, the DESIGN.md's named recipes rebuilt from components, and one example screen.
@@ -366,7 +363,6 @@ It lists every component file that no showcase file imports. Fix the list until 
 ## Step 7: Verify
 
 Start the dev server and check it in a browser:
-
 1. App typecheck passes (see Step 2).
 2. No console errors.
 3. Loads at `scrollY === 0`. Anything else means a component is stealing scroll on mount.

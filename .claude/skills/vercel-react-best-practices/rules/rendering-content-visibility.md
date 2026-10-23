@@ -1,4 +1,5 @@
 ---
+
 title: CSS content-visibility for Long Lists
 impact: HIGH
 impactDescription: faster initial render
@@ -13,8 +14,8 @@ Apply `content-visibility: auto` to defer off-screen rendering.
 
 ```css
 .message-item {
-  content-visibility: auto;
-  contain-intrinsic-size: 0 80px;
+	content-visibility: auto;
+	contain-intrinsic-size: 0 80px;
 }
 ```
 
@@ -22,16 +23,16 @@ Apply `content-visibility: auto` to defer off-screen rendering.
 
 ```tsx
 function MessageList({ messages }: { messages: Message[] }) {
-  return (
-    <div className="overflow-y-auto h-screen">
-      {messages.map((msg) => (
-        <div key={msg.id} className="message-item">
-          <Avatar user={msg.author} />
-          <div>{msg.content}</div>
-        </div>
-      ))}
-    </div>
-  );
+	return (
+		<div className="overflow-y-auto h-screen">
+			{messages.map((msg) => (
+				<div key={msg.id} className="message-item">
+					<Avatar user={msg.author} />
+					<div>{msg.content}</div>
+				</div>
+			))}
+		</div>
+	);
 }
 ```
 

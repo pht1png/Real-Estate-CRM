@@ -1,4 +1,5 @@
 ---
+
 title: Calculate Derived State During Rendering
 impact: MEDIUM
 impactDescription: avoids redundant renders and state drift
@@ -13,15 +14,15 @@ If a value can be computed from current props/state, do not store it in state or
 
 ```tsx
 function Form() {
-  const [firstName, setFirstName] = useState("First");
-  const [lastName, setLastName] = useState("Last");
-  const [fullName, setFullName] = useState("");
+	const [firstName, setFirstName] = useState("First");
+	const [lastName, setLastName] = useState("Last");
+	const [fullName, setFullName] = useState("");
 
-  useEffect(() => {
-    setFullName(firstName + " " + lastName);
-  }, [firstName, lastName]);
+	useEffect(() => {
+		setFullName(firstName + " " + lastName);
+	}, [firstName, lastName]);
 
-  return <p>{fullName}</p>;
+	return <p>{fullName}</p>;
 }
 ```
 
@@ -29,11 +30,11 @@ function Form() {
 
 ```tsx
 function Form() {
-  const [firstName, setFirstName] = useState("First");
-  const [lastName, setLastName] = useState("Last");
-  const fullName = firstName + " " + lastName;
+	const [firstName, setFirstName] = useState("First");
+	const [lastName, setLastName] = useState("Last");
+	const fullName = firstName + " " + lastName;
 
-  return <p>{fullName}</p>;
+	return <p>{fullName}</p>;
 }
 ```
 

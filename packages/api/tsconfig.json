@@ -1,6 +1,6 @@
 {
-  "extends": "@Real-Estate-CRM/config/tsconfig.base.json",
-  "compilerOptions": {
-    "noEmit": true
-  }
+	"extends": "@Real-Estate-CRM/config/tsconfig.base.json",
+	"compilerOptions": {
+		"noEmit": true
+	}
 }

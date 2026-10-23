@@ -1,14 +1,15 @@
 ---
+
 name: vercel-composition-patterns
 description: React composition patterns that scale. Use when refactoring components with
-  boolean prop proliferation, building flexible component libraries, or
-  designing reusable APIs. Triggers on tasks involving compound components,
-  render props, context providers, or component architecture. Includes React 19
-  API changes.
+boolean prop proliferation, building flexible component libraries, or
+designing reusable APIs. Triggers on tasks involving compound components,
+render props, context providers, or component architecture. Includes React 19
+API changes.
 license: MIT
 metadata:
-  author: vercel
-  version: "1.0.0"
+author: vercel
+version: "1.0.0"
 ---
 
 # React Composition Patterns
@@ -21,7 +22,6 @@ agents to work with as they scale.
 ## When to Apply
 
 Reference these guidelines when:
-
 - Refactoring components with many boolean props
 - Building reusable component libraries
 - Designing flexible component APIs
@@ -64,7 +64,6 @@ Reference these guidelines when:
 ### 4. React 19 APIs (MEDIUM)
 
 > **⚠️ React 19+ only.** Skip this section if using React 18 or earlier.
-
 - `react19-no-forwardref` - Don't use `forwardRef`; use `use()` instead of `useContext()`
 
 ## How to Use
@@ -77,7 +76,6 @@ rules/state-context-interface.md
 ```
 
 Each rule file contains:
-
 - Brief explanation of why it matters
 - Incorrect code example with explanation
 - Correct code example with explanation

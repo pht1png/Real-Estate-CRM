@@ -1,4 +1,5 @@
 ---
+
 name: shadcn
 description: Manages shadcn components and projects — adding, searching, fixing, debugging, styling, and composing UI, including chat interfaces. Provides project context, component docs, and usage examples. Applies when working with shadcn/ui, component registries, presets, --preset codes, or any project with a components.json file. Also triggers for "shadcn init", "create an app with --preset", "switch to --preset", and for building a design system or applying a DESIGN.md or brand spec to shadcn/ui.
 user-invocable: false
@@ -150,7 +151,6 @@ These are the most common patterns that differentiate correct shadcn/ui code. Fo
 ## Key Fields
 
 The injected project context contains these key fields:
-
 - **`aliases`** → use the actual alias prefix for imports (e.g. `@/`, `~/`), never hardcode.
 - **`isRSC`** → when `true`, components using `useState`, `useEffect`, event handlers, or browser APIs need `"use client"` at the top of the file. Always reference this field when advising on the directive.
 - **`tailwindVersion`** → `"v4"` uses `@theme inline` blocks; `"v3"` uses `tailwind.config.js`.
@@ -197,7 +197,6 @@ npx shadcn@latest docs button dialog select
 ## Design Systems from DESIGN.md
 
 When the user asks for a design system from a `DESIGN.md` (or a brand spec), with or without a preset, follow [design-system.md](./design-system.md) end to end:
-
 1. `init --preset <code> --template <vite|next> --name <app> --no-monorepo -y`. Without a preset code, pick the closest style and pass `--base base --preset <style>`. Then `add --all -y`.
 2. Read the DESIGN.md frontmatter, Do's and Don'ts, and Known Gaps before editing.
 3. Map its tokens onto the shadcn variables in `tailwindCssFile`. Pin the radius scale, shadows, fonts and `type-*` utilities.
@@ -208,7 +207,6 @@ When the user asks for a design system from a `DESIGN.md` (or a brand spec), wit
 ## Updating Components
 
 When the user asks to update a component from upstream while keeping their local changes, use `--dry-run` and `--diff` to intelligently merge. **NEVER fetch raw files from GitHub manually — always use the CLI.**
-
 1. Run `npx shadcn@latest add <component> --dry-run` to see all files that would be affected.
 2. For each file, run `npx shadcn@latest add <component> --diff <file>` to see what changed upstream vs local.
 3. Decide per file based on the diff:

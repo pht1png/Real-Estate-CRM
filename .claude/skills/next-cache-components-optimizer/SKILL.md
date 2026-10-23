@@ -1,14 +1,15 @@
 ---
+
 name: next-cache-components-optimizer
 description: >
-  Optimize the meaningful UI available immediately from a Next.js route on an
-  initial load (hard navigation) or named client-side navigation (soft
-  navigation). Encode the goal as a failing @next/playwright instant() e2e and
-  work it to green, one verified route and entry point at a time; the shipped
-  test then guards against regression. Use when asked to grow a static shell,
-  fix a slow first paint or non-instant navigation, diagnose which Suspense
-  boundary blocks useful UI, or add instant() regression coverage. Requires
-  Next.js 16.3+ with Cache Components already adopted.
+Optimize the meaningful UI available immediately from a Next.js route on an
+initial load (hard navigation) or named client-side navigation (soft
+navigation). Encode the goal as a failing @next/playwright instant() e2e and
+work it to green, one verified route and entry point at a time; the shipped
+test then guards against regression. Use when asked to grow a static shell,
+fix a slow first paint or non-instant navigation, diagnose which Suspense
+boundary blocks useful UI, or add instant() regression coverage. Requires
+Next.js 16.3+ with Cache Components already adopted.
 ---
 
 # next-cache-components-optimizer
@@ -32,7 +33,6 @@ parity check, differential, and report.
 
 One thing here is fixed. The rest is yours. Read this before treating any
 command, platform, or env var below as a requirement.
-
 - **Invariant: the verification loop.** Maximizing the shell is worthless
   unless you can prove it. The proof is an automated check: under a lock that
   gates dynamic data, the static shell still commits. RED shows the gap, GREEN
@@ -58,7 +58,6 @@ command, platform, or env var below as a requirement.
 ## Two entry points, two instant UI contracts
 
 A route reaches the user two ways:
-
 - **Initial load (hard navigation)** commits the route's prerendered static
   shell; deferred parts stream in behind their loading skeletons (Suspense
   fallbacks, `loading.tsx`).
@@ -101,7 +100,6 @@ Work the navigation the user named, finish it, and stop. What matters is how you
 word and present the results, not how often you interrupt. The mechanics below —
 the rig, RED, GREEN, the gates — are your scaffolding; the user never needs to
 hear those words.
-
 - **Speak their language.** Describe the gap and the result in terms of what the
   user sees: "navigating to the dashboard waited on the charts query before
   anything painted; now the layout and skeletons paint instantly and the charts
@@ -145,7 +143,6 @@ Phases B and C build the test; only the locked test from C ships.
 ## P. PREREQUISITES: current Next.js with Cache Components
 
 The workflow depends on framework capabilities that ship with current Next.js:
-
 - **Next.js 16.3+ with `cacheComponents: true`** in `next.config.ts`. Without
   Cache Components there is no static shell to optimize.
 - **`@next/playwright`** on the same release line as the project's `next`; it
@@ -188,7 +185,6 @@ of this step; the loop does not assume a pre-existing suite.
 
 Stand up the rig described by `instant-nav.rig.md`. Two invariants hold on
 every platform:
-
 1. **Never measure on `next dev`.** It does not prefetch, and its lock is
    unreliable for blocking routes, so a dev `instant()` result is not a valid
    RED or GREEN.
@@ -277,7 +273,6 @@ here:
 | A result can be safely reused across requests                  | [Cache reusable work](https://nextjs.org/docs/app/guides/optimizing-the-static-shell#cache-reusable-work)                 |
 
 The guide's example covers the common implementation shapes:
-
 - [`params`, `searchParams`, and focused boundaries](https://nextjs.org/docs/app/guides/optimizing-the-static-shell#step-1-move-url-dependent-work-behind-suspense)
 - [authentication, `cookies()`, and `headers()`](https://nextjs.org/docs/app/guides/optimizing-the-static-shell#step-2-move-authentication-behind-suspense)
 - [cache placement and revalidation](https://nextjs.org/docs/app/guides/optimizing-the-static-shell#step-3-cache-the-reusable-plan-data)
@@ -321,7 +316,6 @@ The push-down is a mechanical transform, not a redesign. Afterward the route
 must render the same tree, data, ordering, empty and error states, redirects,
 and interactions as before; the only observable difference is that the shell
 now commits instantly. Verify:
-
 - **Same render output.** The moved `await`s compute and return the same
   values; after the stream, the route shows the same content as the base
   branch for the test user.
@@ -360,14 +354,13 @@ A green final state means nothing if the RED was never trustworthy. The
 test-trustworthiness items are the robustness checklist
 (`reference/red-test-robustness.md`); confirm them, then require these
 PR-specific items:
-
 - [ ] **Differential shown**: RED without the fix, GREEN with it, runs linked.
 - [ ] **Parity confirmed (E)**: same content, redirects, and state.
 - [ ] **Mutations verified when applicable**: after populating any cache whose
-      data can be updated, a mutation test confirms the next read returns the
-      expected data.
+  data can be updated, a mutation test confirms the next read returns the
+  expected data.
 - [ ] **Freshness preserved**: new cache scopes follow the data's existing or
-      explicitly chosen lifetime.
+  explicitly chosen lifetime.
 - [ ] **Existing loading UI reused (D1)**: no new page-mirroring skeleton.
 - [ ] **Shell matches the real render at supported viewports (D2)**.
 - [ ] **Baseline removed**: only the locked test from C remains.
@@ -412,7 +405,6 @@ rg -n "partialPrefetching|prefetch\s*=\s*['\"]partial['\"]" --glob 'next.config.
 If `partialPrefetching: true` is in config, the app is globally adopted. If only
 `prefetch = 'partial'` matches, treat those destination segments as adopted
 during an incremental rollout and keep checking any other target routes.
-
 - **Already adopted:** when the requested instant UI is URL-specific and the
   destination App Shell is already instant, continue with
   `next-partial-prefetching-optimizer`. It owns the per-link value and cost

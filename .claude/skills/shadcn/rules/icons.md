@@ -12,9 +12,9 @@ Add `data-icon="inline-start"` (prefix) or `data-icon="inline-end"` (suffix) to 
 
 ```tsx
 <Button>
-  <SearchIcon className="mr-2 size-4" />
-  Search
-</Button>
+	<SearchIcon className="mr-2 size-4" />
+	Search
+</Button>;
 ```
 
 **Correct:**
@@ -75,13 +75,13 @@ Use `icon={CheckIcon}`, not a string key to a lookup map.
 
 ```tsx
 const iconMap = {
-  check: CheckIcon,
-  alert: AlertIcon,
+	check: CheckIcon,
+	alert: AlertIcon,
 };
 
 function StatusBadge({ icon }: { icon: string }) {
-  const Icon = iconMap[icon];
-  return <Icon />;
+	const Icon = iconMap[icon];
+	return <Icon />;
 }
 
 <StatusBadge icon="check" />;
@@ -94,7 +94,7 @@ function StatusBadge({ icon }: { icon: string }) {
 import { CheckIcon } from "lucide-react";
 
 function StatusBadge({ icon: Icon }: { icon: React.ComponentType }) {
-  return <Icon />;
+	return <Icon />;
 }
 
 <StatusBadge icon={CheckIcon} />;

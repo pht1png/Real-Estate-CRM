@@ -1,12 +1,13 @@
 ---
+
 name: next-cache-components-adoption
 description: >
-  Turn on Cache Components in a Next.js app and resolve the blocking routes it
-  surfaces. Use when the user wants to enable, adopt, or migrate to Cache
-  Components, flip the `cacheComponents` flag, work through a flood of
-  blocking-prerender / instant validation errors, run the
-  `cache-components-instant-false` codemod, or decide between opting routes out
-  with `export const instant = false` and fixing them in place.
+Turn on Cache Components in a Next.js app and resolve the blocking routes it
+surfaces. Use when the user wants to enable, adopt, or migrate to Cache
+Components, flip the `cacheComponents` flag, work through a flood of
+blocking-prerender / instant validation errors, run the
+`cache-components-instant-false` codemod, or decide between opting routes out
+with `export const instant = false` and fixing them in place.
 ---
 
 # next-cache-components-adoption
@@ -44,7 +45,6 @@ Enable Cache Components on an app and walk it to a passing build. This skill seq
 There's one loop: walk the route tree top-down, one feature at a time, adopting each route against `next dev` + a browser. The build is a final check for each feature, not the working surface.
 
 The choice in step 1 is whether to opt every route out of validation first or fix routes as you go. Either way the loop is the same:
-
 - **With a quiet pre-step (Incremental).** Run the codemod, fix what it can't, and fully migrate routes that previously required static rendering. Other routes keep their opt-outs for follow-up PRs.
 - **Without (Direct).** Enable `cacheComponents` and start the loop on whatever the build flags first. Same loop, but every fix sits on one branch until adoption is complete.
 
@@ -59,7 +59,6 @@ When a fix introduces `"use cache"`, follow the Caching guide for [choosing a da
 Three classes of blocker come up, usually in this order:
 
 Whenever a fix introduces `<Suspense>`, follow the Streaming guide's [granular streaming pattern](https://nextjs.org/docs/app/guides/streaming#granular-streaming-with-suspense) and [guidance for preventing CLS](https://nextjs.org/docs/app/guides/streaming#cls-cumulative-layout-shift).
-
 1. **Request-time reads** (`cookies()`, `headers()`, `await params`, `await searchParams`). All four block when awaited at the top of a page or layout. `params` and `searchParams` often get missed because they're not framed as "request data" the way cookies and headers are. The fix is to push the read into a `<Suspense>`-wrapped child — and for `params`/`searchParams`, forward the promise into the child and await it there; don't `await` at the page top.
 2. **Sync-IO at module/render time** (`new Date()`, `Date.now()`, `Math.random()`, `crypto.randomUUID()`). These fail the build even with `instant = false` — the opt-out doesn't suppress them. If they're in a shared layout, they block every route under it. The codemod can't fix them; after running it, use each build error and its linked documentation to identify which reported calls to translate by hand (see the [incremental pre-step](#incremental)).
 3. **`"use cache"` files that read request data.** A file with a top-level `"use cache"` directive can't export `instant`; combining the two errors with `Only async functions are allowed to be exported in a "use cache" file.`, which means the directive was wrong for that route. Remove it before running the codemod.
@@ -69,7 +68,6 @@ Whenever a fix introduces `<Suspense>`, follow the Streaming guide's [granular s
 ### finding blocking routes
 
 Prefer `next dev` over `next build` while you work.
-
 - **`next dev`** — the working surface. Visit a route; its blocking errors surface in the dev overlay with full stack traces and fix cards linking the per-error docs. Work one route at a time — errors don't accumulate in one place. The route itself still returns HTTP 200, so read the overlay (or `.next-dev.log`), not status codes. A cleared overlay is one half of calling a route clean — the other half is browser verification (see [step 2](#step-2-the-inner-loop-remove-opt-outs-one-feature-at-a-time)) and a passing build for that route.
 - **`next build`** — detection only. The build is `next dev`'s authoritative check, not its replacement. Use it as the last gate on each feature in the loop (a passing build is part of the per-route success bar) and as the final verification across the whole app. In Incremental, the build also confirms the pre-step (codemod opted every route out, no shared layout still has a sync-IO blocker) before you ship that PR. Don't reach for the build instead of the dev loop while you're working a route — a passing compile doesn't tell you what ended up in the static shell and what streamed. By default the build stops at the first blocking route, so it's also poor for sizing the work. Two flags help when iterating: `--debug-build-paths` builds only the routes you name (comma-separated glob patterns of file paths relative to the project root, e.g. `--debug-build-paths="app/admin/**/page.tsx"` — not URL paths; `--debug-build-paths="app/(marketing)/about/page.tsx"` — not `/about`; `--debug-build-paths="app/admin"` matches nothing and silently builds zero routes), and `--debug-prerender` disables the early exit so the build continues past the first prerender failure, reports every blocking route, and prints a fuller stack trace that names the originating file and line.
 
@@ -80,7 +78,6 @@ Every blocking error has a docs page — open it. Both the dev overlay and the b
 A passing build or a cleared overlay isn't proof the route actually behaves — Cache Components is a runtime concern (a static shell with streamed data). Verify after every fix, not only at the end.
 
 In preference order:
-
 1. **[`next-dev-loop`](https://github.com/vercel/next.js/tree/canary/skills/next-dev-loop) — strongly preferred.** Cross-checks `/_next/mcp` against the live browser via `agent-browser` and surfaces both compile and runtime issues in one pass. The diagnostics (React tree, suspense boundaries, console + network) are richer than poking at `next dev` by hand.
 
    Install it before starting the loop. Don't wait until you hit something `next dev` alone can't explain. It ships alongside this skill, so check whether it is already available first, and install it only if it is not:
@@ -108,7 +105,6 @@ Ask the user, in terms of the PRs they want, not the size of the job. Never use 
 If there's no user to ask, default to **Incremental** and document the choice.
 
 Honor an explicit choice in the request. If the user asks to migrate incrementally and also asks you to complete the migration, establish and verify the incremental checkpoint before continuing to the remaining routes in the same task. “Complete” sets the stopping point; it does not change the chosen strategy.
-
 - **Incremental** — quiet pre-step + the loop. Run the codemod to opt every page and layout out of validation, get the build passing, stop and check in with the user (see [end of the pre-step](#end-of-the-pre-step-check-in)), then enter [step 2's loop](#step-2-the-inner-loop-remove-opt-outs-one-feature-at-a-time) and ship each feature as a follow-up PR.
 - **Direct** — skip the pre-step. Enable `cacheComponents` and go straight to [step 2's loop](#step-2-the-inner-loop-remove-opt-outs-one-feature-at-a-time); the build's blocking routes are the work queue.
 
@@ -141,7 +137,6 @@ Because the highest opt-out wins, remove them top-down (root layout first, then 
 Remove the opt-outs from the previously static routes and any shared segments that mask their validation. Resolve their errors and confirm they still prerender. A cached data call alone does not prove the route remains static.
 
 Next, run `next build` to surface blockers the codemod could not handle. The build is the proof, not the codemod run — a shared layout that calls `new Date()` / `Math.random()` directly still fails regardless of the opt-out (see [background](#background)). If the normal build reports a sync-IO error without locating the call, rerun that route with `next build --debug-prerender --debug-build-paths="app/path/to/page.tsx"`. For each sync-IO error it reports:
-
 1. **Sync-IO at module/render time.** Use the route, originating file and line, and `/docs/messages/` link in the build output to locate the error. If needed, grep the whole repo for `new Date()`, `Date.now()`, `Math.random()`, and `crypto.randomUUID()` (not only `app/**/layout.{js,jsx,ts,tsx}` — the read might live in any component imported by a layout). Do not change unreported matches. Apply the appropriate option from the linked error page, then add this comment above a temporary boundary introduced only to unblock the build:
 
    ```tsx
@@ -159,7 +154,6 @@ Synthetic routes like `/_not-found` have no user file — when they block, fix t
 ### end of the pre-step: check in
 
 Incremental only. The pre-step is the shippable PR. Record the passing checkpoint before starting step 2. Unless the user already asked you to continue through the full migration in the same task, stop and check in. Talk to the user in their language; don't say "Incremental" or other internal labels; talk about adoption, PRs, and what the app does now. Tell them:
-
 - What you did: turned on Cache Components, ran the codemod, migrated the previously static routes, fixed the remaining blockers, and confirmed the build passes.
 - What changed: the previously static routes still prerender. Other pages and layouts keep a `// TODO: Cache Components adoption` opt-out.
 - What to sanity-check: the previously static routes stay fully prerendered and prefetchable, and request-specific data on the deferred routes remains request-specific.
@@ -184,7 +178,6 @@ Use the **with-a-browser** loop unless a browser is genuinely unreachable. The [
 ### the loop, with a browser (preferred)
 
 Per route:
-
 - Remove the opt-out (Incremental) or target the failing route (Direct).
 - Reload in dev. Overlay clean? Skip to verify. Overlay still red? Fix.
 - Fix — fetch the docs page linked from the error (`https://nextjs.org/docs/messages/<slug>`), apply the recipe from there. The inline overlay text is a summary; the docs page is the source of truth.
@@ -196,7 +189,6 @@ Per route:
 Used when there's no way to drive a browser — CI, sandbox, the user has no `next dev` running and you can't start one. Weaker signal: confirms the build passes and the route prerenders, but not what ended up in the static shell vs streamed.
 
 Per route:
-
 - Remove the opt-out (Incremental) or target the failing route (Direct).
 - Rebuild with `--debug-build-paths app/<route>/**` (only that route) or `--debug-prerender` (full build, but past the first failure). Route passing? Move on. Still blocking? Fix.
 - Fix — fetch the docs page linked from the error (`https://nextjs.org/docs/messages/<slug>`), apply the recipe from there.
@@ -215,7 +207,6 @@ Keep a todo list of the feature's routes. When every route in the feature is cle
 ## step 3: verify the feature
 
 Checklist before checking in with the user:
-
 - `next build` completes without blocking-route errors.
 - No bare TODOs in the feature: `grep -rn "TODO: Cache Components adoption"` finds both the codemod's opt-out comments and the sync-IO unblocks from the pre-step. Any `instant = false` left behind is a deliberate, documented Block — comment rewritten to a reason (see [references/per-page-decisions.md](./references/per-page-decisions.md) → "when to leave a Block in place"). Any `await io()` or `await connection()` left behind has been reviewed and kept on purpose, not left over from the pre-step.
 - Each route visited in the browser: confirm the static shell renders first and every `<Suspense>` fallback resolves to its real content. Capture both states if you can — the fallback (mid-stream) and the final paint — so you have a streaming-experience demo to show the user. Throttle the network in the browser if streaming is too fast to observe.
@@ -223,7 +214,6 @@ Checklist before checking in with the user:
 - If runtime verification fails, reproduce the same route on the pre-adoption branch or with its opt-out restored. A failure that already exists is an environment or data problem, not an adoption regression.
 
 Then check in with the user. Same rule as the pre-step: speak their language. Don't say "feature-by-feature loop" or other internal labels; talk about the feature you adopted and what the user will see.
-
 - What you did: which routes you touched, and the user-visible result per route (e.g. "the post page now streams the article body behind a skeleton while the layout stays static").
 - What changed: opt-outs removed, fallbacks added, caching boundaries introduced.
 - Show, don't tell. Follow `next-dev-loop`'s browser handoff and drive the route live so the user sees the static shell → fallback → final content sequence. If live presentation is unavailable, attach the before/after screenshots you captured.
@@ -243,7 +233,6 @@ When the loop has run on every feature — every remaining `instant = false` sit
 ## further reading
 
 The work below is optional and lives in the docs — link the user to them and let them decide which to take on next. Don't walk these through inside this skill.
-
 - [Sweep for more instant navigations](./references/dev-only-validations.md) — an optional follow-up once adoption is done, never required. A passing build is not the last word, because dev validates every route on each page load (simulating both page loads and client navigations) and catches what the build's first-error exit and descendant shadowing skipped. Offer it as the smaller path to instant navigation for a user who doesn't want to adopt Partial Prefetching. Adopting Partial Prefetching (below) runs the same kind of loop and meets these insights anyway, so recommend both and let the user pick which, or whether. The reference is the loop to execute.
 - [`next-partial-prefetching-adoption`](https://github.com/vercel/next.js/tree/canary/skills/next-partial-prefetching-adoption) — the follow-up skill that adopts Partial Prefetching: it enables `partialPrefetching` and audits every `<Link prefetch={true}>` against a decision table (or adopts incrementally with the flag off, driven by the `instant-link-prefetch-partial` insight). It sequences this the same way this skill sequences Cache Components, but the insights are dev-only, so it's a browser click-through, not a build loop. Recommended after instant navigation, since those fixes feed directly into how much of each route the shell can prefetch. Concepts live in the [Adopting Partial Prefetching guide](https://nextjs.org/docs/app/guides/adopting-partial-prefetching).
 - [Prevent regressions with e2e tests](https://nextjs.org/docs/app/guides/instant-navigation#prevent-regressions-with-e2e-tests) — the `@next/playwright` [`instant()`](https://nextjs.org/docs/app/api-reference/file-conventions/route-segment-config/instant#testing-instant-navigation) helper asserts on the UI that's available immediately on navigation, so regressions surface in CI. Recommend it once a route is instant: `next-dev-loop` confirms it _now_; an `instant()` test keeps it that way.

@@ -10,18 +10,23 @@ import { getQueryClient, makeTRPCClient, TRPCProvider } from "@/utils/trpc";
 import { ThemeProvider } from "./theme-provider";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
-  const queryClient = getQueryClient();
-  const [trpcClient] = useState(makeTRPCClient);
+	const queryClient = getQueryClient();
+	const [trpcClient] = useState(makeTRPCClient);
 
-  return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-      <QueryClientProvider client={queryClient}>
-        <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
-          {children}
-        </TRPCProvider>
-        <ReactQueryDevtools />
-      </QueryClientProvider>
-      <Toaster richColors />
-    </ThemeProvider>
-  );
+	return (
+		<ThemeProvider
+			attribute="class"
+			defaultTheme="system"
+			enableSystem
+			disableTransitionOnChange
+		>
+			<QueryClientProvider client={queryClient}>
+				<TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
+					{children}
+				</TRPCProvider>
+				<ReactQueryDevtools />
+			</QueryClientProvider>
+			<Toaster richColors />
+		</ThemeProvider>
+	);
 }

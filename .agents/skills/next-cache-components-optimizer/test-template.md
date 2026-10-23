@@ -39,21 +39,21 @@ import { logIntoTestAccount, testUrl } from "../helpers";
 const SHELL_MARKER = '[data-testid="<b>-shell-marker"]';
 
 test.describe("instant nav: A -> B", () => {
-  test.beforeEach(async ({ page, browser }) => {
-    await logIntoTestAccount(page, browser);
-  });
+	test.beforeEach(async ({ page, browser }) => {
+		await logIntoTestAccount(page, browser);
+	});
 
-  test("B shell commits under instant()", async ({ page }) => {
-    await page.goto(testUrl("/"));
-    const trigger = page.getByRole("link", { name: "<Trigger>", exact: true });
-    await expect(trigger).toBeVisible({ timeout: 20000 });
+	test("B shell commits under instant()", async ({ page }) => {
+		await page.goto(testUrl("/"));
+		const trigger = page.getByRole("link", { name: "<Trigger>", exact: true });
+		await expect(trigger).toBeVisible({ timeout: 20000 });
 
-    await instant(page, async () => {
-      await trigger.click();
-      // static shell asserted under the lock; no timeout
-      await expect(page.locator(SHELL_MARKER)).toBeVisible();
-    });
-  });
+		await instant(page, async () => {
+			await trigger.click();
+			// static shell asserted under the lock; no timeout
+			await expect(page.locator(SHELL_MARKER)).toBeVisible();
+		});
+	});
 });
 ```
 
@@ -82,21 +82,21 @@ does NOT call `page.goto`:
 
 ```ts
 test.describe("instant initial load: B", () => {
-  test.beforeEach(async ({ page }) => {
-    await injectTestUserSession(page); // storageState only; must NOT call page.goto
-  });
+	test.beforeEach(async ({ page }) => {
+		await injectTestUserSession(page); // storageState only; must NOT call page.goto
+	});
 
-  test("B shell is served", async ({ page }) => {
-    const url = testUrl("/<b>");
-    await instant(
-      page,
-      async () => {
-        await page.goto(url);
-        await expect(page.locator(SHELL_MARKER)).toBeVisible();
-      },
-      { baseURL: new URL(url).origin },
-    );
-  });
+	test("B shell is served", async ({ page }) => {
+		const url = testUrl("/<b>");
+		await instant(
+			page,
+			async () => {
+				await page.goto(url);
+				await expect(page.locator(SHELL_MARKER)).toBeVisible();
+			},
+			{ baseURL: new URL(url).origin },
+		);
+	});
 });
 ```
 
@@ -111,9 +111,9 @@ the content is already present and `toHaveCount(0)` fails (see `reference/red-te
 ```ts
 // soft navigation
 await instant(page, async () => {
-  await trigger.click();
-  await expect(page.locator(SHELL_MARKER)).toBeVisible(); // shell present
-  await expect(page.getByTestId("<b>-content")).toHaveCount(0); // deferred data gated
+	await trigger.click();
+	await expect(page.locator(SHELL_MARKER)).toBeVisible(); // shell present
+	await expect(page.getByTestId("<b>-content")).toHaveCount(0); // deferred data gated
 });
 await expect(page.getByTestId("<b>-content")).toBeVisible(); // streams after release
 ```
@@ -149,26 +149,27 @@ which produces exactly the false RED the C-gate exists to prevent.
 
 ```ts
 // soft-nav baseline: mirror the soft-nav instant() test
-test("dev-only: navigating to <b> renders its shell (no lock)", async ({ page }) => {
-  await page.goto(testUrl("/"));
-  const trigger = page.getByRole("link", { name: "<Trigger>", exact: true });
-  await expect(trigger).toBeVisible({ timeout: 20000 });
-  await trigger.click();
-  await expect(page).toHaveURL(/\/<b>(\?|$)/); // confirm the real destination (no redirect away)
-  await expect(page.locator(SHELL_MARKER)).toBeVisible({ timeout: 15000 });
+test("dev-only: navigating to <b> renders its shell (no lock)", async ({
+	page,
+}) => {
+	await page.goto(testUrl("/"));
+	const trigger = page.getByRole("link", { name: "<Trigger>", exact: true });
+	await expect(trigger).toBeVisible({ timeout: 20000 });
+	await trigger.click();
+	await expect(page).toHaveURL(/\/<b>(\?|$)/); // confirm the real destination (no redirect away)
+	await expect(page.locator(SHELL_MARKER)).toBeVisible({ timeout: 15000 });
 });
 ```
 
 ```ts
 // initial-load baseline: mirror the initial-load instant() test (session pre-established)
 test("dev-only: <b> shell is served (no lock)", async ({ page }) => {
-  await page.goto(testUrl("/<b>"));
-  await expect(page.locator(SHELL_MARKER)).toBeVisible({ timeout: 15000 });
+	await page.goto(testUrl("/<b>"));
+	await expect(page.locator(SHELL_MARKER)).toBeVisible({ timeout: 15000 });
 });
 ```
 
 Notes:
-
 - Pick `SHELL_MARKER` as a sync element of the destination's static shell, never streamed data.
   Use a `data-testid` on a known static node rather than a guessed role/name.
 - Do not put a custom timeout, a `painted` boolean, or `isVisible({ timeout })` in the shipped

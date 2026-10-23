@@ -1,11 +1,12 @@
 ---
+
 name: next-dev-loop
 description: >
-  Verify Next.js runtime behavior after editing app code. Use this
-  skill to confirm a change actually works in a running app — not
-  just that it compiles or type-checks. Combines /_next/mcp
-  (Next.js's view) with agent-browser (the browser's view).
-  Requires a running `next dev`.
+Verify Next.js runtime behavior after editing app code. Use this
+skill to confirm a change actually works in a running app — not
+just that it compiles or type-checks. Combines /_next/mcp
+(Next.js's view) with agent-browser (the browser's view).
+Requires a running `next dev`.
 ---
 
 # next-dev-loop
@@ -15,7 +16,6 @@ confirm it actually works at runtime, not only that the types or
 the build are happy.
 
 You verify through two views of the same running app:
-
 - **`/_next/mcp`** — an HTTP endpoint Next.js exposes about itself.
   Knows framework-specific things: routes, segments, RSC, server
   actions, server logs, and errors as Next.js saw them. Call
@@ -39,7 +39,6 @@ These are hard floors, not soft preferences. If anything is missing,
 tell the user how to upgrade and stop. Don't fall back to grepping
 source or to a weaker probe — this skill assumes both views are live
 at the versions above.
-
 - Upgrade Next.js: `pnpm next upgrade` (or `npx next upgrade`).
   Docs: https://nextjs.org/docs/app/getting-started/upgrading
   (version-16 guide:
@@ -51,7 +50,6 @@ at the versions above.
 ## preflight
 
 Once per session, confirm both views are live.
-
 1. **Open `agent-browser` at the target URL, restoring saved
    login state when present.** First derive one stable session id for
    this checkout and use it for every `agent-browser` command:
@@ -112,7 +110,6 @@ search doesn't.
 ### after the edit — verify
 
 Four failure modes. Check each:
-
 - **Compiles** — `get_compilation_issues`.
 - **Runs without errors** — `/_next/mcp` (server and bubbled-up
   browser errors both surface here).

@@ -1,4 +1,5 @@
 ---
+
 title: Avoid Barrel File Imports
 impact: CRITICAL
 impactDescription: 200-800ms import cost, slow builds
@@ -28,9 +29,9 @@ import { Check, X, Menu } from "lucide-react";
 ```js
 // next.config.js - automatically optimizes barrel imports at build time
 module.exports = {
-  experimental: {
-    optimizePackageImports: ["lucide-react", "@mui/material"],
-  },
+	experimental: {
+		optimizePackageImports: ["lucide-react", "@mui/material"],
+	},
 };
 ```
 

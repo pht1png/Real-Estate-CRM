@@ -1,4 +1,5 @@
 ---
+
 title: Suppress Expected Hydration Mismatches
 impact: LOW-MEDIUM
 impactDescription: avoids noisy hydration warnings for known differences
@@ -13,7 +14,7 @@ In SSR frameworks (e.g., Next.js), some values are intentionally different on se
 
 ```tsx
 function Timestamp() {
-  return <span>{new Date().toLocaleString()}</span>;
+	return <span>{new Date().toLocaleString()}</span>;
 }
 ```
 
@@ -21,6 +22,6 @@ function Timestamp() {
 
 ```tsx
 function Timestamp() {
-  return <span suppressHydrationWarning>{new Date().toLocaleString()}</span>;
+	return <span suppressHydrationWarning>{new Date().toLocaleString()}</span>;
 }
 ```

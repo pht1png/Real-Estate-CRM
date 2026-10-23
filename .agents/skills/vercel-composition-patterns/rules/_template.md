@@ -1,4 +1,5 @@
 ---
+
 title: Rule Title Here
 impact: MEDIUM
 impactDescription: brief description of impact

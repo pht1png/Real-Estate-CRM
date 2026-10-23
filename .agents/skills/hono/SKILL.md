@@ -1,4 +1,5 @@
 ---
+
 name: hono
 description: Use when building Hono web applications or when the user asks about Hono APIs, routing, middleware, JSX, validation, testing, or streaming. TRIGGER when code imports from 'hono' or 'hono/*', or user mentions Hono. Use Hono CLI to inspect and test the app.
 ---
@@ -31,7 +32,6 @@ Follow the note at the top. It explains the JSON output contract and the workflo
 <!-- TODO at the Hono v5 GA: change `npm create hono@next` to `npm create hono@latest` here and in hono-jsx -->
 
 Notes:
-
 - `npx hono routes` lists the routes; `npx hono request /path` sends one request — no server needed. If the app is not at the default path (`src/index.ts`), pass the file to every command: `npx hono request / src/app.ts`. Do not pass credentials directly in CLI arguments; use environment variables for sensitive values.
 - Cloudflare bindings (KV, D1, R2, vars) reach `c.env` automatically — no server, no flag. In a project with `cloudflare.config.ts` (the `cf` CLI) and a Vite config, `request`, `batch`, and `snapshot` run through the Vite dev server by default, and `c.env` has the local bindings; `request` and `batch` default to Vite as well in a Vite project with no `src/index.*` (an app built by a Vite plugin; `snapshot` still needs the file), and `--runtime vite` selects it explicitly. In a project with a wrangler config, the app runs on Node.js with the real local bindings loaded; for the full Workers runtime there, add `--runtime workerd` (pass no file argument; the entry is `main` in the wrangler config). `--trace`, `--watch`, and a file argument run the app on Node.js, where `c.env` is empty in a `cf` project.
 - `routes` and `snapshot` also load apps that import `cloudflare:workers` (Durable Objects); the import is stubbed while the routes are read.
@@ -61,8 +61,8 @@ const app = new Hono();
 
 // With TypeScript generics
 type AppEnv = {
-  Bindings: Env; // generated from the bindings config — see "Environment (Cloudflare Workers)"
-  Variables: { user: User };
+	Bindings: Env; // generated from the bindings config — see "Environment (Cloudflare Workers)"
+	Variables: { user: User };
 };
 const app = new Hono<AppEnv>();
 ```
@@ -86,13 +86,13 @@ app.on(["PUT", "DELETE"], "/path", handler); // multiple methods
 ```ts
 // Path parameters
 app.get("/user/:name", (c) => {
-  const name = c.req.param("name");
-  return c.json({ name });
+	const name = c.req.param("name");
+	return c.json({ name });
 });
 
 // Multiple params
 app.get("/posts/:id/comments/:commentId", (c) => {
-  const { id, commentId } = c.req.param();
+	const { id, commentId } = c.req.param();
 });
 
 // Optional parameters
@@ -103,14 +103,14 @@ app.get("/wild/*/card", (c) => c.text("Wildcard"));
 
 // Regexp constraints
 app.get("/post/:date{[0-9]+}/:title{[a-z]+}", (c) => {
-  const { date, title } = c.req.param();
+	const { date, title } = c.req.param();
 });
 
 // Chained routes
 app
-  .get("/endpoint", (c) => c.text("GET"))
-  .post((c) => c.text("POST"))
-  .delete((c) => c.text("DELETE"));
+	.get("/endpoint", (c) => c.text("GET"))
+	.post((c) => c.text("POST"))
+	.delete((c) => c.text("DELETE"));
 ```
 
 ### Route Grouping
@@ -134,8 +134,8 @@ app.get("/users", (c) => c.json([])); // GET /api/users
 app.notFound((c) => c.json({ message: "Not Found" }, 404));
 
 app.onError((err, c) => {
-  console.error(err);
-  return c.json({ message: "Internal Server Error" }, 500);
+	console.error(err);
+	return c.json({ message: "Internal Server Error" }, 500);
 });
 ```
 
@@ -188,15 +188,15 @@ import { bindings, defineConfig } from "cf/config";
 import * as entrypoint from "./src/index.ts" with { type: "cf-worker" };
 
 export default defineConfig({
-  worker: {
-    name: "my-app",
-    compatibilityDate: "2026-10-06",
-    entrypoint,
-    env: {
-      MY_KV: bindings.kv(),
-      MY_VAR: bindings.text("my-variable"),
-    },
-  },
+	worker: {
+		name: "my-app",
+		compatibilityDate: "2026-10-06",
+		entrypoint,
+		env: {
+			MY_KV: bindings.kv(),
+			MY_VAR: bindings.text("my-variable"),
+		},
+	},
 });
 ```
 
@@ -212,9 +212,9 @@ Scripts are `cf dev`, `cf build`, and `cf deploy`. Such a project has no wrangle
 const app = new Hono<{ Bindings: CloudflareBindings }>();
 
 app.get("/", async (c) => {
-  const value = await c.env.MY_KV.get("key");
-  const db = c.env.MY_DB;
-  c.executionCtx.waitUntil(promise);
+	const value = await c.env.MY_KV.get("key");
+	const db = c.env.MY_DB;
+	c.executionCtx.waitUntil(promise);
 });
 ```
 
@@ -310,19 +310,19 @@ app.post("/api/*", basicAuth({ username: "admin", password: "secret" }));
 ```ts
 // Inline
 app.use(async (c, next) => {
-  const start = Date.now();
-  await next();
-  const elapsed = Date.now() - start;
-  c.res.headers.set("X-Response-Time", `${elapsed}ms`);
+	const start = Date.now();
+	await next();
+	const elapsed = Date.now() - start;
+	c.res.headers.set("X-Response-Time", `${elapsed}ms`);
 });
 
 // Reusable with createMiddleware
 import { createMiddleware } from "hono/factory";
 
 const auth = createMiddleware(async (c, next) => {
-  const token = c.req.header("Authorization");
-  if (!token) return c.json({ error: "Unauthorized" }, 401);
-  await next();
+	const token = c.req.header("Authorization");
+	if (!token) return c.json({ error: "Unauthorized" }, 401);
+	await next();
 });
 
 app.use("/api/*", auth);
@@ -338,9 +338,9 @@ Request → mw1 before → mw2 before → handler → mw2 after → mw1 after �
 
 ```ts
 app.use(async (c, next) => {
-  // before handler
-  await next();
-  // after handler
+	// before handler
+	await next();
+	// after handler
 });
 ```
 
@@ -357,13 +357,13 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 
 const schema = z.object({
-  title: z.string().min(1),
-  body: z.string(),
+	title: z.string().min(1),
+	body: z.string(),
 });
 
 app.post("/posts", zValidator("json", schema), (c) => {
-  const data = c.req.valid("json"); // fully typed
-  return c.json(data, 201);
+	const data = c.req.valid("json"); // fully typed
+	return c.json(data, 201);
 });
 ```
 
@@ -376,8 +376,8 @@ import * as v from "valibot";
 const schema = v.object({ name: v.string(), age: v.number() });
 
 app.post("/users", sValidator("json", schema), (c) => {
-  const data = c.req.valid("json");
-  return c.json(data, 201);
+	const data = c.req.valid("json");
+	return c.json(data, 201);
 });
 ```
 
@@ -393,10 +393,10 @@ In `tsconfig.json`:
 
 ```json
 {
-  "compilerOptions": {
-    "jsx": "react-jsx",
-    "jsxImportSource": "hono/jsx"
-  }
+	"compilerOptions": {
+		"jsx": "react-jsx",
+		"jsxImportSource": "hono/jsx"
+	}
 }
 ```
 
@@ -410,26 +410,26 @@ Or use pragma: `/** @jsxImportSource hono/jsx */`
 import type { PropsWithChildren } from "hono/jsx";
 
 const Layout = (props: PropsWithChildren) => (
-  <html>
-    <head>
-      <title>My App</title>
-    </head>
-    <body>{props.children}</body>
-  </html>
+	<html>
+		<head>
+			<title>My App</title>
+		</head>
+		<body>{props.children}</body>
+	</html>
 );
 
 const UserCard = ({ name }: { name: string }) => (
-  <div class="card">
-    <h2>{name}</h2>
-  </div>
+	<div class="card">
+		<h2>{name}</h2>
+	</div>
 );
 
 app.get("/", (c) => {
-  return c.html(
-    <Layout>
-      <UserCard name="Alice" />
-    </Layout>,
-  );
+	return c.html(
+		<Layout>
+			<UserCard name="Alice" />
+		</Layout>,
+	);
 });
 ```
 
@@ -441,14 +441,14 @@ Use `jsxRenderer` middleware for layouts. For details, see https://hono.dev/docs
 
 ```tsx
 const UserList = async () => {
-  const users = await fetchUsers();
-  return (
-    <ul>
-      {users.map((u) => (
-        <li>{u.name}</li>
-      ))}
-    </ul>
-  );
+	const users = await fetchUsers();
+	return (
+		<ul>
+			{users.map((u) => (
+				<li>{u.name}</li>
+			))}
+		</ul>
+	);
 };
 ```
 
@@ -456,10 +456,10 @@ const UserList = async () => {
 
 ```tsx
 const Items = () => (
-  <>
-    <li>Item 1</li>
-    <li>Item 2</li>
-  </>
+	<>
+		<li>Item 1</li>
+		<li>Item 2</li>
+	</>
 );
 ```
 
@@ -472,35 +472,35 @@ import { stream, streamText, streamSSE } from "hono/streaming";
 
 // Basic stream
 app.get("/stream", (c) => {
-  return stream(c, async (stream) => {
-    stream.onAbort(() => console.log("Aborted"));
-    await stream.write(new Uint8Array([0x48, 0x65]));
-    await stream.pipe(readableStream);
-  });
+	return stream(c, async (stream) => {
+		stream.onAbort(() => console.log("Aborted"));
+		await stream.write(new Uint8Array([0x48, 0x65]));
+		await stream.pipe(readableStream);
+	});
 });
 
 // Text stream
 app.get("/stream-text", (c) => {
-  return streamText(c, async (stream) => {
-    await stream.writeln("Hello");
-    await stream.sleep(1000);
-    await stream.write("World");
-  });
+	return streamText(c, async (stream) => {
+		await stream.writeln("Hello");
+		await stream.sleep(1000);
+		await stream.write("World");
+	});
 });
 
 // Server-Sent Events
 app.get("/sse", (c) => {
-  return streamSSE(c, async (stream) => {
-    let id = 0;
-    while (true) {
-      await stream.writeSSE({
-        data: JSON.stringify({ time: new Date().toISOString() }),
-        event: "time-update",
-        id: String(id++),
-      });
-      await stream.sleep(1000);
-    }
-  });
+	return streamSSE(c, async (stream) => {
+		let id = 0;
+		while (true) {
+			await stream.writeSSE({
+				data: JSON.stringify({ time: new Date().toISOString() }),
+				event: "time-update",
+				id: String(id++),
+			});
+			await stream.sleep(1000);
+		}
+	});
 });
 ```
 
@@ -518,9 +518,9 @@ expect(await res.json()).toEqual({ posts: [] });
 
 // POST with JSON
 const res = await app.request("/posts", {
-  method: "POST",
-  body: JSON.stringify({ title: "Hello" }),
-  headers: { "Content-Type": "application/json" },
+	method: "POST",
+	body: JSON.stringify({ title: "Hello" }),
+	headers: { "Content-Type": "application/json" },
 });
 
 // POST with FormData
@@ -529,7 +529,11 @@ formData.append("name", "Alice");
 const res = await app.request("/users", { method: "POST", body: formData });
 
 // With mock env (Cloudflare Workers bindings)
-const res = await app.request("/api/data", {}, { KV: mockKV, DATABASE: mockDB });
+const res = await app.request(
+	"/api/data",
+	{},
+	{ KV: mockKV, DATABASE: mockDB },
+);
 
 // Using Request object
 const req = new Request("http://localhost/api", { method: "DELETE" });
@@ -547,12 +551,12 @@ Type-safe API client using shared types between server and client.
 ```ts
 // Server: routes MUST be chained to preserve types
 const route = app
-  .post("/posts", zValidator("json", schema), (c) => {
-    return c.json({ ok: true }, 201);
-  })
-  .get("/posts", (c) => {
-    return c.json({ posts: [] });
-  });
+	.post("/posts", zValidator("json", schema), (c) => {
+		return c.json({ ok: true }, 201);
+	})
+	.get("/posts", (c) => {
+		return c.json({ posts: [] });
+	});
 export type AppType = typeof route;
 
 // Client: use hc() with the exported type
@@ -609,11 +613,13 @@ const app = factory.createApp();
 
 // Create middleware (AppEnv is inherited, no need to pass generics)
 const mw = factory.createMiddleware(async (c, next) => {
-  await next();
+	await next();
 });
 
 // Create handlers separately (preserves type inference)
-const handlers = factory.createHandlers(logger(), (c) => c.json({ message: "Hello" }));
+const handlers = factory.createHandlers(logger(), (c) =>
+	c.json({ message: "Hello" }),
+);
 app.get("/api", ...handlers);
 ```
 

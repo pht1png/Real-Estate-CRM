@@ -2,14 +2,11 @@ import { describe, expect, test } from "bun:test";
 
 import { ENV } from "./env.server";
 import app from "./index";
+import { createUser, PASSWORD } from "./test-support";
 
 const webOrigin = ENV.CORS_ORIGIN;
 const foreignOrigin = "https://evil.example";
-const credentials = {
-	name: "Somchai Test",
-	email: "somchai@example.com",
-	password: "correct-horse-battery",
-};
+const credentials = { email: "somchai@example.com", password: PASSWORD };
 
 function authRequest(path: string, body: unknown, origin = webOrigin) {
 	return app.request(path, {
@@ -55,8 +52,9 @@ describe("CORS", () => {
 });
 
 describe("auth across origins", () => {
-	test("sign-up sets an HttpOnly, SameSite=Lax session cookie", async () => {
-		const res = await authRequest("/api/auth/sign-up/email", credentials);
+	test("sign-in sets an HttpOnly, SameSite=Lax session cookie", async () => {
+		await createUser(credentials.email);
+		const res = await authRequest("/api/auth/sign-in/email", credentials);
 		expect(res.status).toBe(200);
 
 		const cookie = sessionCookie(res);
@@ -67,7 +65,7 @@ describe("auth across origins", () => {
 	});
 
 	test("the session cookie authorises tRPC; no cookie is rejected", async () => {
-		await authRequest("/api/auth/sign-up/email", credentials);
+		await createUser(credentials.email);
 		const signIn = await authRequest("/api/auth/sign-in/email", {
 			email: credentials.email,
 			password: credentials.password,
@@ -92,8 +90,9 @@ describe("auth across origins", () => {
 
 	// Better Auth validates Origin when cookies are present (the CSRF case).
 	test("a cookie-bearing request from an untrusted origin is refused", async () => {
-		const signUp = await authRequest("/api/auth/sign-up/email", credentials);
-		const cookie = sessionCookie(signUp).split(";")[0] ?? "";
+		await createUser(credentials.email);
+		const signIn = await authRequest("/api/auth/sign-in/email", credentials);
+		const cookie = sessionCookie(signIn).split(";")[0] ?? "";
 
 		const forged = await app.request("/api/auth/sign-out", {
 			method: "POST",

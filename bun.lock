@@ -27,6 +27,7 @@
         "@hono/trpc-server": "^0.4.2",
         "@trpc/server": "catalog:",
         "better-auth": "catalog:",
+        "drizzle-orm": "catalog:",
         "hono": "^4.13.7",
         "varlock": "catalog:",
         "zod": "catalog:",
@@ -81,6 +82,7 @@
         "@Real-Estate-CRM/db": "workspace:*",
         "@trpc/client": "catalog:",
         "@trpc/server": "catalog:",
+        "drizzle-orm": "catalog:",
         "zod": "catalog:",
       },
       "devDependencies": {

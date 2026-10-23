@@ -1,14 +1,13 @@
 ---
-
 name: next-partial-prefetching-adoption
 description: >
-Turn on Partial Prefetching in a Next.js app and work through the
-insights it surfaces. Use when the user wants to enable or adopt
-Partial Prefetching, flip the `partialPrefetching` flag, opt routes
-in with `export const prefetch = 'partial'`, audit
-`Link prefetch={true}` behavior, preserve existing prefetched UI
-with `instant()` tests, or resolve the
-instant-link-prefetch-partial and instant-shell-url-data insights.
+  Turn on Partial Prefetching in a Next.js app and work through the
+  insights it surfaces. Use when the user wants to enable or adopt
+  Partial Prefetching, flip the `partialPrefetching` flag, opt routes
+  in with `export const prefetch = 'partial'`, audit
+  `Link prefetch={true}` behavior, preserve existing prefetched UI
+  with `instant()` tests, or resolve the
+  instant-link-prefetch-partial and instant-shell-url-data insights.
 ---
 
 # next-partial-prefetching-adoption
@@ -57,6 +56,7 @@ Every insight has a docs page — open it. Fetch the linked page for every disti
 ## step 1: audit `<Link prefetch={true}>` navigations (before enabling)
 
 Keep the global flag **off** through this audit and the legacy baseline in step 2. Enabling it earlier would remove the legacy behavior the migration needs to measure. If the flag is already on in unshipped work, use the pre-flag commit for the audit and baseline. When the user is available, ask how to ship it in the language of PRs:
+
 - **One branch** — the whole audit in one change, with the flag enabled and the codemod run at the end (step 4).
 - **Route by route** — each adopted destination ships as its own PR. The insight still fires for the destinations you haven't reached, a live worklist, and step 4 comes after the last one.
 
@@ -74,6 +74,7 @@ Before writing tests or editing destinations, follow the guide's [migration guid
 Group equivalent navigations. Summarize what will be ready immediately and what will stream. When a proposal is ambiguous, show the navigation in the running app and ask the user to confirm it. If they are unavailable, follow the guide and record the assumption.
 
 After the target UI is settled, inspect the existing test setup. The `instant()` helper comes from the separate [`@next/playwright`](https://nextjs.org/docs/app/guides/instant-navigation#prevent-regressions-with-e2e-tests) package, not `next/experimental/testmode/playwright`.
+
 - **Applicable production-mode suite:** use test-backed preservation by default. Reuse the project's `@next/playwright` tests, production scripts, authentication, and existing `instant-nav.rig.md`. Follow the guide's [prefetched UI test workflow](https://nextjs.org/docs/app/guides/adopting-partial-prefetching#verify-prefetched-ui-with-tests) and make the complete flag-off suite green before adoption. The unchanged assertions drive the migration and stay as regression coverage.
 - **No applicable production-mode suite:** set up the production-mode rig in **`rig-template.md`** using the project's package manager and test conventions. This is part of test-backed adoption and does not require a user to be present.
 - **Rig cannot run reliably:** work through **`rig-template.md`** setup and liveness checks. Fall back to manual preservation only for a concrete blocker the repository cannot resolve, such as unavailable credentials or an inaccessible production environment. Record the blocker and the deferred test coverage; do not claim test-backed verification.
@@ -118,6 +119,7 @@ When restoring the target changes caching or invalidation, follow the project's 
 ## step 4: enable the flag
 
 Once every audited destination has `prefetch = 'partial'`, finish in two moves.
+
 1. **Enable the flag globally.** Set `partialPrefetching: true` in `next.config.ts` (alongside `cacheComponents: true`). Every route is adopted now, so every link is good.
 2. **Strip the redundant `prefetch = 'partial'` exports.** Run the first-party `remove-partial-prefetch` codemod rather than a text find-and-replace. It removes every `export const prefetch = 'partial'`, including exports below a `TODO(per-link-prefetch)` marker, and removes its generated Partial Prefetching guide comment. The TODO marker and its Optimizing prefetching guide link stay for step 7. Other values such as `prefetch = 'force-disabled'` stay in place.
 
@@ -146,6 +148,7 @@ These fixes rarely involve the user — each insight names the offending read an
 ## step 6: verify
 
 Checklist before checking in with the user:
+
 - **An empty sweep is expected when Cache Components adoption finished cleanly.** A quiet log is success, not a missing signal. If you deliberately probe the validation path, use a `generateStaticParams` route with `params` read inside `<Suspense>` but before the URL-specific leaf boundary; other shapes may surface `blocking-prerender-*` instead.
 - The App Shells are real: for each route you changed, confirm the first paint after a navigation shows the intended shared content, not an empty shell or a stuck fallback. A `<Suspense>` around the whole page body passes validation with an empty shell, which defeats the point.
 - The insights validate shell _structure_, not that a prefetch actually happened. Confirm on the production run (automatic prefetching runs only in production) that navigating a changed link lands on the shared shell instantly.
@@ -156,6 +159,7 @@ Checklist before checking in with the user:
 - `next build` still passes.
 
 Then check in with the user. Speak their language — no insight slugs or step labels.
+
 - What you did: which links you audited, which destinations you adopted, and what each link now prefetches.
 - What changed: dropped props, `use cache` boundaries added, and which routes carry a `TODO(per-link-prefetch)` marker for later.
 - Demo against a production run. Automatic prefetching runs only in production, so `next dev` won't show the result — run `next build` and `next start`, and hand the user that URL. That run needs the app's real environment (database, auth, secrets), and a partial or stale install or leftover generated artifacts can fail the build for reasons unrelated to the adoption. Set the expectation up front that verification is a complete, credentialed production run, not a quick check.

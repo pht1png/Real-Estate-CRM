@@ -8,6 +8,7 @@ spend a few minutes verifying the RED is trustworthy first.
 ## The deciding question
 
 > **Does the marker render WITHOUT the lock, as the test user?**
+
 - **No**: the test is red because the marker or page is not there for that user or environment. A
   marker bug, not an instant-navigation bug. Fix the marker. (This is the most common case.)
 - **Yes**: the marker exists and is reachable; a red under the lock is a genuine "not instant".
@@ -72,6 +73,7 @@ These are illustrative failures from real optimization runs; each was red for a 
 none was an instant-navigation problem. One app's drift surface might be dominated by feature flags and
 plans; another's by auth state, an empty database, or locale. The taxonomy lists every wrong
 reason; the rig file's DRIFT list says which rows apply to your app.
+
 - **Guessed selector + empty state**: the marker was a button picked by a guessed accessible name
   that no element actually had, on a list page whose CI account had no rows. → checks 7, 9. Fix: a
   `data-testid` on a real static-shell node.
@@ -101,6 +103,7 @@ The test does not measure how fast a navigation is. `instant()` gates dynamic da
 of the static shell can be asserted; the signal is presence, not speed. Under the lock, an instant
 route's shell is present, and a blocking route's content never commits, regardless of wait time.
 Therefore:
+
 - The shipped assertion is `await expect(SHELL_MARKER).toBeVisible()` under the lock. Do not add a
   custom timeout or a `painted` boolean.
 - A custom short timeout (e.g. `3000`) implies a race against a clock that does not exist. It adds
@@ -132,6 +135,7 @@ the cookie is ignored, the navigation runs normally, and the `instant()` test pa
 green `instant()` test is only meaningful if the lock engaged.
 
 Two defenses; use both:
+
 1. **Confirm the API is exposed on the target.** Wire the flag to the platform's preview/staging
    condition or an explicit environment variable; the rig file records the project's spelling
    (SKILL.md phases 0 and A). Do not trust a pass from a build where it is not set.

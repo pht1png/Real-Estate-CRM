@@ -114,6 +114,7 @@ npx shadcn@latest add button --diff globals.css
 ```
 
 **When to use dry-run:**
+
 - When the user asks "what files will this add?" or "what will this change?" — use `--dry-run`.
 - Before overwriting existing components — use `--diff` to preview the changes first.
 - When the user wants to inspect component source code without installing — use `--view`.
@@ -270,6 +271,7 @@ All templates support monorepo scaffolding via the `--monorepo` flag. When passe
 ## Presets
 
 Three ways to specify a preset via `--preset`:
+
 1. **Named:** `--preset nova` or `--preset lyra`
 2. **Code:** `--preset a2r6bw` (version-prefixed base62 string, e.g. `a2r6bw` or `b0`)
 3. **URL:** `--preset "https://ui.shadcn.com/init?base=radix&style=nova&..."`
@@ -280,6 +282,7 @@ Three ways to specify a preset via `--preset`:
 ## Switching Presets
 
 Ask the user first: **overwrite**, **merge**, or **skip** existing components?
+
 - **Overwrite / Re-install** → `npx shadcn@latest apply --preset <code>`. Overwrites all detected component files with the new preset styles. Use when the user hasn't customized components.
 - **Merge** → `npx shadcn@latest init --preset <code> --force --no-reinstall`, then run `npx shadcn@latest info` to get the list of installed components and use the [smart merge workflow](./SKILL.md#updating-components) to update them one by one, preserving local changes. Use when the user has customized components.
 - **Skip** → `npx shadcn@latest init --preset <code> --force --no-reinstall`. Only updates config and CSS variables, leaves existing components as-is.

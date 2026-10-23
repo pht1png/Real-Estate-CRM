@@ -1,5 +1,4 @@
 ---
-
 name: better-auth-best-practices
 description: Configure Better Auth server and client, set up database adapters, manage sessions, add plugins, and handle environment variables. Use when users mention Better Auth, betterauth, auth.ts, or need to set up TypeScript authentication with email/password, OAuth, or plugin configuration.
 ---
@@ -9,6 +8,7 @@ description: Configure Better Auth server and client, set up database adapters, 
 ## Documentation Version
 
 Use documentation that matches the Better Auth version installed in the project. APIs and plugin names can differ across maintained release lines.
+
 1. Prefer a version explicitly named by the user.
 2. Otherwise, inspect the resolved `better-auth` version in the lockfile, falling back to the package manifest when no lockfile is available.
 3. When the Better Auth MCP is available, call `get_doc` with `/llms.txt` to resolve that package version to a documentation identifier. Pass the identifier to every `search_docs` call and pass result paths to `get_doc` unchanged.
@@ -88,11 +88,13 @@ CLI looks for `auth.ts` in: `./`, `./lib`, `./utils`, or under `./src`. Use `--c
 ## Session Management
 
 **Storage priority:**
+
 1. If `secondaryStorage` defined → sessions go there (not DB)
 2. Set `session.storeSessionInDatabase: true` to also persist to DB
 3. No database + `cookieCache` → fully stateless mode
 
 **Cookie cache strategies:**
+
 - `compact` (default) - Base64url + HMAC. Smallest.
 - `jwt` - Standard JWT. Readable but signed.
 - `jwe` - Encrypted. Maximum security.
@@ -122,6 +124,7 @@ CLI looks for `auth.ts` in: `./`, `./lib`, `./utils`, or under `./src`. Use `--c
 ## Security
 
 **In `advanced`:**
+
 - `useSecureCookies` - Force HTTPS cookies
 - `disableCSRFCheck` - ⚠️ Security risk
 - `disableOriginCheck` - ⚠️ Security risk

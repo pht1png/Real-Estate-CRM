@@ -1,5 +1,4 @@
 ---
-
 title: Hoist RegExp Creation
 impact: LOW-MEDIUM
 impactDescription: avoids recreation

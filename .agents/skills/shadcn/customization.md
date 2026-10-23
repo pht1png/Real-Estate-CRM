@@ -55,7 +55,7 @@ Class-based toggle via `.dark` on the root element. In Next.js, use `next-themes
 import { ThemeProvider } from "next-themes";
 
 <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-	{children}
+  {children}
 </ThemeProvider>;
 ```
 
@@ -91,20 +91,20 @@ Add variables to the file at `tailwindCssFile` from `npx shadcn@latest info` (ty
 ```css
 /* 1. Define in the global CSS file. */
 :root {
-	--warning: oklch(0.84 0.16 84);
-	--warning-foreground: oklch(0.28 0.07 46);
+  --warning: oklch(0.84 0.16 84);
+  --warning-foreground: oklch(0.28 0.07 46);
 }
 .dark {
-	--warning: oklch(0.41 0.11 46);
-	--warning-foreground: oklch(0.99 0.02 95);
+  --warning: oklch(0.41 0.11 46);
+  --warning-foreground: oklch(0.99 0.02 95);
 }
 ```
 
 ```css
 /* 2a. Register with Tailwind v4 (@theme inline). */
 @theme inline {
-	--color-warning: var(--warning);
-	--color-warning-foreground: var(--warning-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
 }
 ```
 
@@ -113,21 +113,20 @@ When `tailwindVersion` is `"v3"` (check via `npx shadcn@latest info`), register 
 ```js
 // 2b. Register with Tailwind v3 (tailwind.config.js).
 module.exports = {
-	theme: {
-		extend: {
-			colors: {
-				warning: "oklch(var(--warning) / <alpha-value>)",
-				"warning-foreground":
-					"oklch(var(--warning-foreground) / <alpha-value>)",
-			},
-		},
-	},
+  theme: {
+    extend: {
+      colors: {
+        warning: "oklch(var(--warning) / <alpha-value>)",
+        "warning-foreground": "oklch(var(--warning-foreground) / <alpha-value>)",
+      },
+    },
+  },
 };
 ```
 
 ```tsx
 // 3. Use in components.
-<div className="bg-warning text-warning-foreground">Warning</div>;
+<div className="bg-warning text-warning-foreground">Warning</div>
 ```
 
 ---
@@ -150,14 +149,14 @@ Prefer these approaches in order:
 
 ```tsx
 <Button variant="outline" size="sm">
-	Click
-</Button>;
+  Click
+</Button>
 ```
 
 ### 2. Tailwind classes via `className`
 
 ```tsx
-<Card className="mx-auto max-w-md">...</Card>;
+<Card className="mx-auto max-w-md">...</Card>
 ```
 
 ### 3. Add a new variant
@@ -175,21 +174,21 @@ Compose shadcn/ui primitives into higher-level components:
 
 ```tsx
 export function ConfirmDialog({ title, description, onConfirm, children }) {
-	return (
-		<AlertDialog>
-			<AlertDialogTrigger asChild>{children}</AlertDialogTrigger>
-			<AlertDialogContent>
-				<AlertDialogHeader>
-					<AlertDialogTitle>{title}</AlertDialogTitle>
-					<AlertDialogDescription>{description}</AlertDialogDescription>
-				</AlertDialogHeader>
-				<AlertDialogFooter>
-					<AlertDialogCancel>Cancel</AlertDialogCancel>
-					<AlertDialogAction onClick={onConfirm}>Confirm</AlertDialogAction>
-				</AlertDialogFooter>
-			</AlertDialogContent>
-		</AlertDialog>
-	);
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>{children}</AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription>{description}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>Confirm</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
 }
 ```
 

@@ -17,20 +17,21 @@ Always use `FieldGroup` + `Field` — never raw `div` with `space-y-*`:
 
 ```tsx
 <FieldGroup>
-	<Field>
-		<FieldLabel htmlFor="email">Email</FieldLabel>
-		<Input id="email" type="email" />
-	</Field>
-	<Field>
-		<FieldLabel htmlFor="password">Password</FieldLabel>
-		<Input id="password" type="password" />
-	</Field>
-</FieldGroup>;
+  <Field>
+    <FieldLabel htmlFor="email">Email</FieldLabel>
+    <Input id="email" type="email" />
+  </Field>
+  <Field>
+    <FieldLabel htmlFor="password">Password</FieldLabel>
+    <Input id="password" type="password" />
+  </Field>
+</FieldGroup>
 ```
 
 Use `Field orientation="horizontal"` for settings pages. Use `FieldLabel className="sr-only"` for visually hidden labels.
 
 **Choosing form controls:**
+
 - Simple text input → `Input`
 - Dropdown with predefined options → `Select`
 - Searchable dropdown → `Combobox`
@@ -51,8 +52,8 @@ Never use raw `Input` or `Textarea` inside an `InputGroup`.
 
 ```tsx
 <InputGroup>
-	<Input placeholder="Search..." />
-</InputGroup>;
+  <Input placeholder="Search..." />
+</InputGroup>
 ```
 
 **Correct:**
@@ -61,7 +62,7 @@ Never use raw `Input` or `Textarea` inside an `InputGroup`.
 import { InputGroup, InputGroupInput } from "@/components/ui/input-group";
 
 <InputGroup>
-	<InputGroupInput placeholder="Search..." />
+  <InputGroupInput placeholder="Search..." />
 </InputGroup>;
 ```
 
@@ -75,29 +76,25 @@ Never place a `Button` directly inside or adjacent to an `Input` with custom pos
 
 ```tsx
 <div className="relative">
-	<Input placeholder="Search..." className="pr-10" />
-	<Button className="absolute right-0 top-0" size="icon">
-		<SearchIcon />
-	</Button>
-</div>;
+  <Input placeholder="Search..." className="pr-10" />
+  <Button className="absolute right-0 top-0" size="icon">
+    <SearchIcon />
+  </Button>
+</div>
 ```
 
 **Correct:**
 
 ```tsx
-import {
-	InputGroup,
-	InputGroupInput,
-	InputGroupAddon,
-} from "@/components/ui/input-group";
+import { InputGroup, InputGroupInput, InputGroupAddon } from "@/components/ui/input-group";
 
 <InputGroup>
-	<InputGroupInput placeholder="Search..." />
-	<InputGroupAddon>
-		<Button size="icon">
-			<SearchIcon data-icon="inline-start" />
-		</Button>
-	</InputGroupAddon>
+  <InputGroupInput placeholder="Search..." />
+  <InputGroupAddon>
+    <Button size="icon">
+      <SearchIcon data-icon="inline-start" />
+    </Button>
+  </InputGroupAddon>
 </InputGroup>;
 ```
 
@@ -131,9 +128,9 @@ const [selected, setSelected] = useState("daily")
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 <ToggleGroup spacing={2}>
-	<ToggleGroupItem value="daily">Daily</ToggleGroupItem>
-	<ToggleGroupItem value="weekly">Weekly</ToggleGroupItem>
-	<ToggleGroupItem value="monthly">Monthly</ToggleGroupItem>
+  <ToggleGroupItem value="daily">Daily</ToggleGroupItem>
+  <ToggleGroupItem value="weekly">Weekly</ToggleGroupItem>
+  <ToggleGroupItem value="monthly">Monthly</ToggleGroupItem>
 </ToggleGroup>;
 ```
 
@@ -141,13 +138,13 @@ Combine with `Field` for labelled toggle groups:
 
 ```tsx
 <Field orientation="horizontal">
-	<FieldTitle id="theme-label">Theme</FieldTitle>
-	<ToggleGroup aria-labelledby="theme-label" spacing={2}>
-		<ToggleGroupItem value="light">Light</ToggleGroupItem>
-		<ToggleGroupItem value="dark">Dark</ToggleGroupItem>
-		<ToggleGroupItem value="system">System</ToggleGroupItem>
-	</ToggleGroup>
-</Field>;
+  <FieldTitle id="theme-label">Theme</FieldTitle>
+  <ToggleGroup aria-labelledby="theme-label" spacing={2}>
+    <ToggleGroupItem value="light">Light</ToggleGroupItem>
+    <ToggleGroupItem value="dark">Dark</ToggleGroupItem>
+    <ToggleGroupItem value="system">System</ToggleGroupItem>
+  </ToggleGroup>
+</Field>
 ```
 
 > **Note:** `defaultValue` and `type`/`multiple` props differ between base and radix. See [base-vs-radix.md](./base-vs-radix.md#togglegroup).
@@ -160,17 +157,17 @@ Use `FieldSet` + `FieldLegend` for related checkboxes, radios, or switches — n
 
 ```tsx
 <FieldSet>
-	<FieldLegend variant="label">Preferences</FieldLegend>
-	<FieldDescription>Select all that apply.</FieldDescription>
-	<FieldGroup className="gap-3">
-		<Field orientation="horizontal">
-			<Checkbox id="dark" />
-			<FieldLabel htmlFor="dark" className="font-normal">
-				Dark mode
-			</FieldLabel>
-		</Field>
-	</FieldGroup>
-</FieldSet>;
+  <FieldLegend variant="label">Preferences</FieldLegend>
+  <FieldDescription>Select all that apply.</FieldDescription>
+  <FieldGroup className="gap-3">
+    <Field orientation="horizontal">
+      <Checkbox id="dark" />
+      <FieldLabel htmlFor="dark" className="font-normal">
+        Dark mode
+      </FieldLabel>
+    </Field>
+  </FieldGroup>
+</FieldSet>
 ```
 
 ---

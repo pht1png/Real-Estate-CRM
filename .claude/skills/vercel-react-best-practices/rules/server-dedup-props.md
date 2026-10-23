@@ -1,5 +1,4 @@
 ---
-
 title: Avoid Duplicate Serialization in RSC Props
 impact: LOW
 impactDescription: reduces network payload by avoiding duplicate serialization
@@ -16,7 +15,7 @@ RSC→client serialization deduplicates by object reference, not value. Same ref
 
 ```tsx
 // RSC: sends 6 strings (2 arrays × 3 items)
-<ClientList usernames={usernames} usernamesOrdered={usernames.toSorted()} />;
+<ClientList usernames={usernames} usernamesOrdered={usernames.toSorted()} />
 ```
 
 **Correct (sends 3 strings):**
@@ -33,6 +32,7 @@ const sorted = useMemo(() => [...usernames].sort(), [usernames]);
 **Nested deduplication behavior:**
 
 Deduplication works recursively. Impact varies by data type:
+
 - `string[]`, `number[]`, `boolean[]`: **HIGH impact** - array + all primitives fully duplicated
 - `object[]`: **LOW impact** - array duplicated, but nested objects deduplicated by reference
 
@@ -45,6 +45,7 @@ users={[{id:1},{id:2}]} sorted={users.toSorted()} // sends 2 arrays + 2 unique o
 ```
 
 **Operations breaking deduplication (create new references):**
+
 - Arrays: `.toSorted()`, `.filter()`, `.map()`, `.slice()`, `[...arr]`
 - Objects: `{...obj}`, `Object.assign()`, `structuredClone()`, `JSON.parse(JSON.stringify())`
 

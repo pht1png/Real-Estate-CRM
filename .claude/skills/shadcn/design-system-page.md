@@ -125,6 +125,7 @@ Show motion only if the DESIGN.md defines durations or easings: a table of token
 ### Block anatomy
 
 Each component block, in this order. Skip the parts that don't apply:
+
 1. **Name and one line on when to use it.** Take the wording from the DESIGN.md recipe when there is one.
 2. **Typical example** in real content.
 3. **Variants** in priority order (primary before secondary before ghost), each with a one-line "when".
@@ -143,14 +144,14 @@ Pin interaction states with a `data-preview` attribute. Override the hover, focu
 
 ```css
 @custom-variant hover {
-	@media (hover: hover) {
-		&:hover {
-			@slot;
-		}
-	}
-	&[data-preview~="hover"] {
-		@slot;
-	}
+  @media (hover: hover) {
+    &:hover {
+      @slot;
+    }
+  }
+  &[data-preview~="hover"] {
+    @slot;
+  }
 }
 @custom-variant focus-visible (&:focus-visible, &[data-preview~="focus"]);
 @custom-variant active (&:active, &[data-preview~="active"]);
@@ -177,16 +178,16 @@ The columns are default, hover, focus, active and disabled. Add `loading` with S
 
 ```tsx
 <StateMatrix
-	rows={["input"] as const}
-	states={["default", "hover", "focus", "disabled", "invalid"]}
-	render={(_, state) => (
-		<Input
-			placeholder="you@company.com"
-			aria-invalid={state === "invalid" || undefined}
-			{...previewState(state)}
-		/>
-	)}
-/>;
+  rows={["input"] as const}
+  states={["default", "hover", "focus", "disabled", "invalid"]}
+  render={(_, state) => (
+    <Input
+      placeholder="you@company.com"
+      aria-invalid={state === "invalid" || undefined}
+      {...previewState(state)}
+    />
+  )}
+/>
 ```
 
 If the DESIGN.md says a state doesn't change ("primary darkens on press only"), leave that column identical. The matrix shows the spec is followed.
@@ -216,15 +217,15 @@ Pick the two to four DESIGN.md rules that are easiest to break and render each a
 
 ```tsx
 <div className="grid gap-4 md:grid-cols-2">
-	<Example title="Do">
-		<Button>Get started</Button>
-		<Button variant="outline">Contact sales</Button>
-	</Example>
-	<Example title="Don't">
-		<Button>Get started</Button>
-		<Button>Contact sales</Button>
-	</Example>
-</div>;
+  <Example title="Do">
+    <Button>Get started</Button>
+    <Button variant="outline">Contact sales</Button>
+  </Example>
+  <Example title="Don't">
+    <Button>Get started</Button>
+    <Button>Contact sales</Button>
+  </Example>
+</div>
 ```
 
 Caption each with the rule in one line, for example "One primary action per group." Mark Don't with `destructive` text, not a new color.

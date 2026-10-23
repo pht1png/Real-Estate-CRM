@@ -21,6 +21,8 @@
 			"!**/.nuxt",
 			"!bts.jsonc",
 			"!docs",
+			"!.agents",
+			"!.claude",
 			"!**/.expo",
 			"!**/.wrangler",
 			"!**/.alchemy",

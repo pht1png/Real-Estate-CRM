@@ -7,6 +7,7 @@ drive the audited Links. Discover this setup once, record it in
 
 Read an existing `instant-nav.rig.md` before creating one. Inspect the
 repository before asking the user:
+
 - `package.json` scripts for build, start, and end-to-end tests
 - `playwright.config.*` for `baseURL`, `webServer`, projects, and authentication
 - `next.config.*` for existing `experimental` options
@@ -38,18 +39,18 @@ An `instant()` test against a production build requires
 Gate it so real production builds do not expose the API:
 
 ```ts filename="next.config.ts" highlight={3,8-10}
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next'
 
-const exposeTestingApi = process.env.EXPOSE_TESTING_API === "1";
+const exposeTestingApi = process.env.EXPOSE_TESTING_API === '1'
 
 const nextConfig: NextConfig = {
-	cacheComponents: true,
-	experimental: {
-		exposeTestingApiInProductionBuild: exposeTestingApi,
-	},
-};
+  cacheComponents: true,
+  experimental: {
+    exposeTestingApiInProductionBuild: exposeTestingApi,
+  },
+}
 
-export default nextConfig;
+export default nextConfig
 ```
 
 Merge the option into an existing `experimental` object instead of replacing
@@ -99,6 +100,7 @@ or a hover-only overlay.
 ### Test context
 
 Record the state required to reach the audited Links and destination UI:
+
 - Use `public; no authentication` when the navigation is public.
 - Otherwise record the test account and login mechanism, including a fixture,
   `storageState`, API login, or seeded session.
@@ -119,6 +121,7 @@ only after checking the test context.
 ### Iteration loop
 
 Record the complete loop the agent can repeat without rediscovering commands:
+
 - Local: build with the testing API, start the new artifact, run the focused
   suite, stop the server, edit, and repeat.
 - Remote: push, wait for the measured artifact, verify it matches `HEAD`, run
@@ -170,6 +173,7 @@ reason, such as `TEST USER: public; no authentication` or
 ## Check the rig before writing the baseline
 
 Before recording the legacy prefetched UI:
+
 1. Build with the testing API condition enabled.
 2. Start or locate that exact artifact and confirm the base URL responds.
 3. Run one focused `instant()` smoke test through a real `<Link>` navigation.

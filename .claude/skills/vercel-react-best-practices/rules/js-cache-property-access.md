@@ -1,5 +1,4 @@
 ---
-
 title: Cache Property Access in Loops
 impact: LOW-MEDIUM
 impactDescription: reduces lookups
@@ -14,7 +13,7 @@ Cache object property lookups in hot paths.
 
 ```typescript
 for (let i = 0; i < arr.length; i++) {
-	process(obj.config.settings.value);
+  process(obj.config.settings.value);
 }
 ```
 
@@ -24,6 +23,6 @@ for (let i = 0; i < arr.length; i++) {
 const value = obj.config.settings.value;
 const len = arr.length;
 for (let i = 0; i < len; i++) {
-	process(value);
+  process(value);
 }
 ```

@@ -1,5 +1,4 @@
 ---
-
 title: Minimize Serialization at RSC Boundaries
 impact: HIGH
 impactDescription: reduces data transfer size
@@ -14,13 +13,13 @@ The React Server/Client boundary serializes all object properties into strings a
 
 ```tsx
 async function Page() {
-	const user = await fetchUser(); // 50 fields
-	return <Profile user={user} />;
+  const user = await fetchUser(); // 50 fields
+  return <Profile user={user} />;
 }
 
 ("use client");
 function Profile({ user }: { user: User }) {
-	return <div>{user.name}</div>; // uses 1 field
+  return <div>{user.name}</div>; // uses 1 field
 }
 ```
 
@@ -28,12 +27,12 @@ function Profile({ user }: { user: User }) {
 
 ```tsx
 async function Page() {
-	const user = await fetchUser();
-	return <Profile name={user.name} />;
+  const user = await fetchUser();
+  return <Profile name={user.name} />;
 }
 
 ("use client");
 function Profile({ name }: { name: string }) {
-	return <div>{name}</div>;
+  return <div>{name}</div>;
 }
 ```

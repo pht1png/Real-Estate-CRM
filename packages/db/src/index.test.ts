@@ -5,15 +5,14 @@ import { user } from "./schema";
 import { testDb as db } from "./test-setup";
 
 describe("database baseline", () => {
-	test("migrations create the auth tables with timestamptz columns", async () => {
-		const { rows } = await db.execute<{ data_type: string }>(
-			sql`select data_type from information_schema.columns
-				where table_schema = 'public' and column_name = 'created_at'`,
+	test("every timestamp column is timestamptz", async () => {
+		const { rows } = await db.execute<{ column: string }>(
+			sql`select table_name || '.' || column_name as column
+				from information_schema.columns
+				where table_schema = 'public'
+					and data_type = 'timestamp without time zone'`,
 		);
-		expect(rows.length).toBe(4);
-		for (const { data_type } of rows) {
-			expect(data_type).toBe("timestamp with time zone");
-		}
+		expect(rows).toEqual([]);
 	});
 
 	test("interactive transaction commits and rolls back", async () => {

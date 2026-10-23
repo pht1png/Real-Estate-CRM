@@ -2,6 +2,10 @@ import type { Database } from "@Real-Estate-CRM/db";
 import * as schema from "@Real-Estate-CRM/db/schema/auth";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
 import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins/organization";
+import { twoFactor } from "better-auth/plugins/two-factor";
+
+import { ac, roles } from "./permissions";
 
 export type AuthConfig = {
 	BETTER_AUTH_URL: string;
@@ -43,7 +47,16 @@ export function createAuth(
 				crossSubDomainCookies: { enabled: true, domain: env.COOKIE_DOMAIN },
 			}),
 		},
-		plugins: [],
+		plugins: [
+			organization({
+				ac,
+				roles,
+				creatorRole: "owner",
+				allowUserToCreateOrganization: false,
+				disableOrganizationDeletion: true,
+			}),
+			twoFactor({ issuer: "Real Estate CRM" }),
+		],
 	});
 }
 

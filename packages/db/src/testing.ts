@@ -52,7 +52,11 @@ export async function prepareTestDatabase(db: Database, url: string) {
 	}
 }
 
-/** Empties every table in the public schema. Migration history is kept. */
+/**
+ * Empties every table in the public schema. Migration history is kept.
+ * Triggers are off for this transaction only, so the append-only audit_log can
+ * be reset between tests (requires the superuser of the local/CI test DB).
+ */
 export async function truncateAll(db: Database, url: string) {
 	assertTestDatabase(url);
 	const { rows } = await db.execute<{ tablename: string }>(
@@ -62,7 +66,10 @@ export async function truncateAll(db: Database, url: string) {
 	const tables = rows
 		.map(({ tablename }) => `"public"."${tablename}"`)
 		.join(", ");
-	await db.execute(
-		sql.raw(`truncate table ${tables} restart identity cascade`),
-	);
+	await db.transaction(async (tx) => {
+		await tx.execute(sql`set local session_replication_role = replica`);
+		await tx.execute(
+			sql.raw(`truncate table ${tables} restart identity cascade`),
+		);
+	});
 }

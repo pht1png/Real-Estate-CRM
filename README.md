@@ -26,17 +26,24 @@ First, install the dependencies:
 bun install
 ```
 
-## Database Setup
+## Local Setup
 
-This project uses PostgreSQL with Drizzle ORM.
-1. Make sure you have a PostgreSQL database set up.
-2. Update your `apps/server/.env` file with your PostgreSQL connection details.
-
-3. Apply the schema to your database:
+1. Copy the env examples and set a secret (`openssl rand -base64 32`) in `apps/server/.env`:
 
 ```bash
-bun run db:push
+cp apps/server/.env.example apps/server/.env
+cp apps/web/.env.example apps/web/.env
 ```
+
+2. Start PostgreSQL in Docker (Docker Desktop must be running) and apply the migrations:
+
+```bash
+bun run db:start
+bun run db:migrate
+```
+
+Schema changes: edit `packages/db/src/schema/`, run `bun run db:generate`, review and commit the
+generated migration, then `bun run db:migrate`. Never edit an applied migration; `db:push` is not used.
 
 Then, run the development server:
 
@@ -108,12 +115,17 @@ Real-Estate-CRM/
 - `bun run dev:web`: Start only the web application
 - `bun run dev:server`: Start only the server
 - `bun run check-types`: Check TypeScript types across all apps
-- `bun run db:push`: Push schema changes to database
-- `bun run db:generate`: Generate database client/types
-- `bun run db:migrate`: Run database migrations
+- `bun run db:start` / `db:stop`: Start / stop PostgreSQL in Docker
+- `bun run db:generate`: Generate a migration from schema changes (commit it)
+- `bun run db:migrate`: Apply migrations
 - `bun run db:studio`: Open database studio UI
-- `bun run check`: Run Biome formatting and linting
+- `bun run lint`: Biome lint and format check (no writes; used in CI)
+- `bun run check`: Biome fix (format, organise imports, safe fixes)
+- `bun run test`: `bun test` suites against the Docker test DB (`Real-Estate-CRM_test`, created
+  automatically; settings in `apps/server/.env.test`)
+- `bun run test:e2e`: Playwright (Chromium + WebKit). Starts its own API on :3100 and a production
+  build of the web app on :3101. First run: `cd apps/web && bunx playwright install chromium webkit`
 
 ## Better Auth Schema Generation
 
-After changing auth plugins or schema options, run `bun run auth:generate` from the project root. The script runs the Better Auth CLI through `varlock run` from the owning app directory, loading the auth instance from `src/services.ts`. Review the schema changes, then use your ORM's migration workflow to apply them.
+After changing auth plugins or schema options, run `bun run auth:generate` from the project root. The script runs the Better Auth CLI through `varlock run` from the owning app directory, loading the auth instance from `src/services.ts`. Review the schema changes, re-apply `{ withTimezone: true }` to its timestamp columns, then run `bun run db:generate` and `bun run db:migrate`.

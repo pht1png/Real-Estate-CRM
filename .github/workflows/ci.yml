@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: Real-Estate-CRM
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+
+      - run: bun install --frozen-lockfile
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Typecheck
+        run: bun run check-types
+
+      # Proves the committed migrations apply cleanly with drizzle-kit.
+      # DATABASE_URL is set only here: tests read the *_test URL from apps/server/.env.test.
+      - name: Apply migrations
+        run: bun run db:migrate
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/Real-Estate-CRM
+
+      - name: Unit and service tests
+        run: bun run test
+
+      - name: Install Playwright browsers
+        working-directory: apps/web
+        run: bunx playwright install --with-deps chromium webkit
+
+      - name: End-to-end tests
+        run: bun run test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 7

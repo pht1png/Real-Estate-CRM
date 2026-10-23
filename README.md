@@ -45,6 +45,15 @@ bun run db:migrate
 Schema changes: edit `packages/db/src/schema/`, run `bun run db:generate`, review and commit the
 generated migration, then `bun run db:migrate`. Never edit an applied migration; `db:push` is not used.
 
+Next, create a company and its owner. There is no public sign-up; everyone else is invited from Settings → Members. With `EMAIL_PROVIDER=log`, emails are printed to the console:
+
+```bash
+bun run org:create --name "My Company" --owner-email you@example.com
+```
+
+The owner gets a link to choose a password. If that email already has an account, they sign in
+(sign out and in again to land in the new company).
+
 Then, run the development server:
 
 ```bash

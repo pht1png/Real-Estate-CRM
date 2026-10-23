@@ -29,6 +29,7 @@ export default defineConfig({
 				PORT: "3100",
 				BETTER_AUTH_URL: serverUrl,
 				CORS_ORIGIN: webUrl,
+				WEB_URL: webUrl,
 			},
 			reuseExistingServer: false,
 		},

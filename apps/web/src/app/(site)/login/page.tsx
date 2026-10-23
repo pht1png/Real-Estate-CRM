@@ -1,16 +1,13 @@
-"use client";
+import { getTranslations } from "next-intl/server";
 
-import { useState } from "react";
-
+import { AuthCard } from "@/components/auth-card";
 import SignInForm from "@/components/sign-in-form";
-import SignUpForm from "@/components/sign-up-form";
 
-export default function LoginPage() {
-	const [showSignIn, setShowSignIn] = useState(false);
-
-	return showSignIn ? (
-		<SignInForm onSwitchToSignUp={() => setShowSignIn(false)} />
-	) : (
-		<SignUpForm onSwitchToSignIn={() => setShowSignIn(true)} />
+export default async function LoginPage() {
+	const t = await getTranslations("signIn");
+	return (
+		<AuthCard title={t("title")}>
+			<SignInForm />
+		</AuthCard>
 	);
 }

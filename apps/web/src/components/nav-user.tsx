@@ -21,15 +21,18 @@ import {
 	useSidebar,
 } from "@Real-Estate-CRM/ui/components/sidebar";
 import {
-	BadgeCheckIcon,
-	BellIcon,
 	ChevronsUpDownIcon,
-	CreditCardIcon,
+	LanguagesIcon,
 	LogOutIcon,
-	SparklesIcon,
+	ShieldCheckIcon,
 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
+import { useTransition } from "react";
 
+import { setLocale } from "@/i18n/actions";
+import { locales } from "@/i18n/config";
 import { authClient } from "@/lib/auth-client";
 
 function initials(name: string) {
@@ -52,6 +55,11 @@ export function NavUser({
 }) {
 	const { isMobile } = useSidebar();
 	const router = useRouter();
+	const t = useTranslations("nav");
+	const tl = useTranslations("language");
+	const locale = useLocale();
+	const otherLocale = locales.find((l) => l !== locale) ?? "th";
+	const [, startTransition] = useTransition();
 	return (
 		<SidebarMenu>
 			<SidebarMenuItem>
@@ -95,24 +103,20 @@ export function NavUser({
 						</DropdownMenuGroup>
 						<DropdownMenuSeparator />
 						<DropdownMenuGroup>
-							<DropdownMenuItem>
-								<SparklesIcon />
-								Upgrade to Pro
+							<DropdownMenuItem render={<Link href="/settings/security" />}>
+								<ShieldCheckIcon />
+								{t("security")}
 							</DropdownMenuItem>
-						</DropdownMenuGroup>
-						<DropdownMenuSeparator />
-						<DropdownMenuGroup>
-							<DropdownMenuItem>
-								<BadgeCheckIcon />
-								Account
-							</DropdownMenuItem>
-							<DropdownMenuItem>
-								<CreditCardIcon />
-								Billing
-							</DropdownMenuItem>
-							<DropdownMenuItem>
-								<BellIcon />
-								Notifications
+							<DropdownMenuItem
+								onClick={() =>
+									startTransition(async () => {
+										await setLocale(otherLocale);
+										router.refresh();
+									})
+								}
+							>
+								<LanguagesIcon />
+								{tl(otherLocale)}
 							</DropdownMenuItem>
 						</DropdownMenuGroup>
 						<DropdownMenuSeparator />
@@ -121,14 +125,14 @@ export function NavUser({
 								authClient.signOut({
 									fetchOptions: {
 										onSuccess: () => {
-											router.push("/");
+											router.push("/login");
 										},
 									},
 								});
 							}}
 						>
 							<LogOutIcon />
-							Log out
+							{t("signOut")}
 						</DropdownMenuItem>
 					</DropdownMenuContent>
 				</DropdownMenu>

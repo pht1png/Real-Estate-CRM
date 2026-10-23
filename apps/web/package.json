@@ -5,13 +5,14 @@
 	"scripts": {
 		"dev": "next dev --port 3001",
 		"build": "next build",
-		"check-types": "tsc --noEmit",
+		"check-types": "next typegen && tsc --noEmit",
 		"test:e2e": "playwright test",
 		"start": "next start",
 		"env:generate": "varlock codegen"
 	},
 	"dependencies": {
 		"@Real-Estate-CRM/api": "workspace:*",
+		"@Real-Estate-CRM/auth": "workspace:*",
 		"@Real-Estate-CRM/ui": "workspace:*",
 		"@swc/helpers": "^0.5.23",
 		"@tanstack/react-form": "^1.33.5",
@@ -24,9 +25,11 @@
 		"better-auth": "catalog:",
 		"lucide-react": "catalog:",
 		"next": "^16.3.4",
+		"next-intl": "^4.14.9",
 		"next-themes": "catalog:",
 		"react": "catalog:",
 		"react-dom": "catalog:",
+		"react-qr-code": "^2.2.0",
 		"sonner": "catalog:",
 		"varlock": "catalog:",
 		"zod": "catalog:"

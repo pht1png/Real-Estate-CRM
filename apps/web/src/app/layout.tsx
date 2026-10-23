@@ -1,35 +1,35 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { IBM_Plex_Sans_Thai } from "next/font/google";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getTranslations } from "next-intl/server";
 
 import "../index.css";
 import Providers from "@/components/providers";
 
-const geistSans = Geist({
-	variable: "--font-geist-sans",
-	subsets: ["latin"],
+// Covers Thai and Latin; wired to Tailwind's font-sans via --font-app.
+const plexThai = IBM_Plex_Sans_Thai({
+	variable: "--font-app",
+	subsets: ["thai", "latin"],
+	weight: ["400", "500", "600", "700"],
 });
 
-const geistMono = Geist_Mono({
-	variable: "--font-geist-mono",
-	subsets: ["latin"],
-});
+export async function generateMetadata(): Promise<Metadata> {
+	const t = await getTranslations("app");
+	return { title: t("name") };
+}
 
-export const metadata: Metadata = {
-	title: "Real-Estate-CRM",
-	description: "Real-Estate-CRM",
-};
-
-export default function RootLayout({
+export default async function RootLayout({
 	children,
 }: Readonly<{
 	children: React.ReactNode;
 }>) {
+	const locale = await getLocale();
 	return (
-		<html lang="en" suppressHydrationWarning>
-			<body
-				className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-			>
-				<Providers>{children}</Providers>
+		<html lang={locale} suppressHydrationWarning>
+			<body className={`${plexThai.variable} antialiased`}>
+				<NextIntlClientProvider>
+					<Providers>{children}</Providers>
+				</NextIntlClientProvider>
 			</body>
 		</html>
 	);

@@ -7,148 +7,15 @@ import {
 	SidebarHeader,
 	SidebarRail,
 } from "@Real-Estate-CRM/ui/components/sidebar";
-import {
-	AudioLinesIcon,
-	BookOpenIcon,
-	BotIcon,
-	FrameIcon,
-	GalleryVerticalEndIcon,
-	MapIcon,
-	PieChartIcon,
-	Settings2Icon,
-	TerminalIcon,
-	TerminalSquareIcon,
-} from "lucide-react";
+import { FolderKanbanIcon, SunIcon, TagsIcon, UsersIcon } from "lucide-react";
+import { useTranslations } from "next-intl";
 import type * as React from "react";
-import { NavMain } from "@/components/nav-main";
-import { NavProjects } from "@/components/nav-projects";
-import { NavUser } from "@/components/nav-user";
-import { TeamSwitcher } from "@/components/team-switcher";
 
-// Placeholder navigation until organizations (M1) and projects (M2) exist.
-const data = {
-	teams: [
-		{
-			name: "Acme Inc",
-			logo: <GalleryVerticalEndIcon />,
-			plan: "Enterprise",
-		},
-		{
-			name: "Acme Corp.",
-			logo: <AudioLinesIcon />,
-			plan: "Startup",
-		},
-		{
-			name: "Evil Corp.",
-			logo: <TerminalIcon />,
-			plan: "Free",
-		},
-	],
-	navMain: [
-		{
-			title: "Playground",
-			url: "#",
-			icon: <TerminalSquareIcon />,
-			isActive: true,
-			items: [
-				{
-					title: "History",
-					url: "#",
-				},
-				{
-					title: "Starred",
-					url: "#",
-				},
-				{
-					title: "Settings",
-					url: "#",
-				},
-			],
-		},
-		{
-			title: "Models",
-			url: "#",
-			icon: <BotIcon />,
-			items: [
-				{
-					title: "Genesis",
-					url: "#",
-				},
-				{
-					title: "Explorer",
-					url: "#",
-				},
-				{
-					title: "Quantum",
-					url: "#",
-				},
-			],
-		},
-		{
-			title: "Documentation",
-			url: "#",
-			icon: <BookOpenIcon />,
-			items: [
-				{
-					title: "Introduction",
-					url: "#",
-				},
-				{
-					title: "Get Started",
-					url: "#",
-				},
-				{
-					title: "Tutorials",
-					url: "#",
-				},
-				{
-					title: "Changelog",
-					url: "#",
-				},
-			],
-		},
-		{
-			title: "Settings",
-			url: "#",
-			icon: <Settings2Icon />,
-			items: [
-				{
-					title: "General",
-					url: "#",
-				},
-				{
-					title: "Team",
-					url: "#",
-				},
-				{
-					title: "Billing",
-					url: "#",
-				},
-				{
-					title: "Limits",
-					url: "#",
-				},
-			],
-		},
-	],
-	projects: [
-		{
-			name: "Design Engineering",
-			url: "#",
-			icon: <FrameIcon />,
-		},
-		{
-			name: "Sales & Marketing",
-			url: "#",
-			icon: <PieChartIcon />,
-		},
-		{
-			name: "Travel",
-			url: "#",
-			icon: <MapIcon />,
-		},
-	],
-};
+import { useCan } from "@/hooks/use-me";
+
+import { NavGroup, type NavItem } from "./nav-main";
+import { NavUser } from "./nav-user";
+import { OrgSwitcher } from "./org-switcher";
 
 export function AppSidebar({
 	user,
@@ -156,14 +23,52 @@ export function AppSidebar({
 }: React.ComponentProps<typeof Sidebar> & {
 	user: React.ComponentProps<typeof NavUser>["user"];
 }) {
+	const t = useTranslations("nav");
+	const can = useCan();
+
+	const main: NavItem[] = [
+		{ title: t("today"), href: "/dashboard", icon: <SunIcon /> },
+	];
+	const settings: NavItem[] = [
+		...(can({ member: ["create"] })
+			? [
+					{
+						title: t("members"),
+						href: "/settings/members",
+						icon: <UsersIcon />,
+					} as const,
+				]
+			: []),
+		...(can({ project: ["create"] })
+			? [
+					{
+						title: t("projects"),
+						href: "/settings/projects",
+						icon: <FolderKanbanIcon />,
+					} as const,
+				]
+			: []),
+		...(can({ roleLabel: ["update"] })
+			? [
+					{
+						title: t("roles"),
+						href: "/settings/roles",
+						icon: <TagsIcon />,
+					} as const,
+				]
+			: []),
+	];
+
 	return (
 		<Sidebar collapsible="icon" {...props}>
 			<SidebarHeader>
-				<TeamSwitcher teams={data.teams} />
+				<OrgSwitcher />
 			</SidebarHeader>
 			<SidebarContent>
-				<NavMain items={data.navMain} />
-				<NavProjects projects={data.projects} />
+				<NavGroup label={t("main")} items={main} />
+				{settings.length > 0 && (
+					<NavGroup label={t("settings")} items={settings} />
+				)}
 			</SidebarContent>
 			<SidebarFooter>
 				<NavUser user={user} />

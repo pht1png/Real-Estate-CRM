@@ -33,7 +33,6 @@
 		"check-types": "turbo run check-types",
 		"dev:web": "turbo run dev -F web --",
 		"dev:server": "turbo run dev -F server --",
-		"db:push": "turbo run db:push -F @Real-Estate-CRM/db --",
 		"db:studio": "turbo run db:studio -F @Real-Estate-CRM/db --",
 		"db:generate": "turbo run db:generate -F @Real-Estate-CRM/db --",
 		"db:migrate": "turbo run db:migrate -F @Real-Estate-CRM/db --",

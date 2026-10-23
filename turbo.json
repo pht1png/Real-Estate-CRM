@@ -23,17 +23,18 @@
 			"persistent": true,
 			"passThroughEnv": ["*"]
 		},
-		"db:push": {
-			"cache": false,
-			"interactive": true
+		"test": {
+			"cache": false
+		},
+		"test:e2e": {
+			"cache": false
 		},
 		"db:generate": {
 			"cache": false,
 			"interactive": true
 		},
 		"db:migrate": {
-			"cache": false,
-			"interactive": true
+			"cache": false
 		},
 		"db:studio": {
 			"cache": false,

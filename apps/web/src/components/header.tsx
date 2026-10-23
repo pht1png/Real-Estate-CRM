@@ -1,33 +1,17 @@
-"use client";
-import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 
+import { LanguageSwitcher } from "./language-switcher";
 import { ModeToggle } from "./mode-toggle";
-import UserMenu from "./user-menu";
 
-export default function Header() {
-	const links = [
-		{ to: "/", label: "Home" },
-		{ to: "/dashboard", label: "Dashboard" },
-	] as const;
-
+export default async function Header() {
+	const t = await getTranslations("app");
 	return (
-		<div>
-			<div className="flex flex-row items-center justify-between px-2 py-1">
-				<nav className="flex gap-4 text-lg">
-					{links.map(({ to, label }) => {
-						return (
-							<Link key={to} href={to}>
-								{label}
-							</Link>
-						);
-					})}
-				</nav>
-				<div className="flex items-center gap-2">
-					<ModeToggle />
-					<UserMenu />
-				</div>
+		<header className="flex items-center justify-between border-b px-4 py-2">
+			<span className="font-medium">{t("name")}</span>
+			<div className="flex items-center gap-2">
+				<LanguageSwitcher />
+				<ModeToggle />
 			</div>
-			<hr />
-		</div>
+		</header>
 	);
 }

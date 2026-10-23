@@ -1,142 +1,93 @@
-import { Button } from "@Real-Estate-CRM/ui/components/button";
-import { Input } from "@Real-Estate-CRM/ui/components/input";
-import { Label } from "@Real-Estate-CRM/ui/components/label";
+"use client";
+
+import { FieldGroup } from "@Real-Estate-CRM/ui/components/field";
 import { useForm } from "@tanstack/react-form";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import z from "zod";
 
 import { authClient } from "@/lib/auth-client";
 
-import Loader from "./loader";
+import { TextField } from "./form/text-field";
+import { SubmitButton } from "./submit-button";
 
+/**
+ * Email + password sign-in. `onSignedIn` runs after a full sign-in (e.g. to
+ * accept an invitation); otherwise the user lands on the dashboard. With
+ * two-step login on, the auth client redirects to /two-factor instead.
+ */
 export default function SignInForm({
-	onSwitchToSignUp,
+	defaultEmail = "",
+	submitLabel,
+	onSignedIn,
 }: {
-	onSwitchToSignUp: () => void;
+	defaultEmail?: string;
+	submitLabel?: string;
+	onSignedIn?: () => Promise<void> | void;
 }) {
+	const t = useTranslations("signIn");
+	const tv = useTranslations("validation");
 	const router = useRouter();
-	const { isPending } = authClient.useSession();
 
 	const form = useForm({
-		defaultValues: {
-			email: "",
-			password: "",
-		},
-		onSubmit: async ({ value }) => {
-			await authClient.signIn.email(
-				{
-					email: value.email,
-					password: value.password,
-				},
-				{
-					onSuccess: () => {
-						router.push("/dashboard");
-						toast.success("Sign in successful");
-					},
-					onError: (error) => {
-						toast.error(error.error.message || error.error.statusText);
-					},
-				},
-			);
-		},
+		defaultValues: { email: defaultEmail, password: "" },
 		validators: {
 			onSubmit: z.object({
-				email: z.email("Invalid email address"),
-				password: z.string().min(8, "Password must be at least 8 characters"),
+				email: z.email(tv("email")),
+				password: z.string().min(8, tv("password")),
 			}),
+		},
+		onSubmit: async ({ value }) => {
+			const { data, error } = await authClient.signIn.email(value);
+			if (error) {
+				toast.error(t("failed"));
+				return;
+			}
+			if (data && "twoFactorRedirect" in data && data.twoFactorRedirect) return;
+			if (onSignedIn) await onSignedIn();
+			else router.push("/dashboard");
 		},
 	});
 
-	if (isPending) {
-		return <Loader />;
-	}
-
 	return (
-		<div className="mx-auto mt-10 w-full max-w-md p-6">
-			<h1 className="mb-6 text-center text-3xl font-bold">Welcome Back</h1>
-
-			<form
-				onSubmit={(e) => {
-					e.preventDefault();
-					e.stopPropagation();
-					form.handleSubmit();
-				}}
-				className="space-y-4"
-			>
-				<div>
-					<form.Field name="email">
-						{(field) => (
-							<div className="space-y-2">
-								<Label htmlFor={field.name}>Email</Label>
-								<Input
-									id={field.name}
-									name={field.name}
-									type="email"
-									value={field.state.value}
-									onBlur={field.handleBlur}
-									onChange={(e) => field.handleChange(e.target.value)}
-								/>
-								{field.state.meta.errors.map((error) => (
-									<p key={error?.message} className="text-red-500">
-										{error?.message}
-									</p>
-								))}
-							</div>
-						)}
-					</form.Field>
-				</div>
-
-				<div>
-					<form.Field name="password">
-						{(field) => (
-							<div className="space-y-2">
-								<Label htmlFor={field.name}>Password</Label>
-								<Input
-									id={field.name}
-									name={field.name}
-									type="password"
-									value={field.state.value}
-									onBlur={field.handleBlur}
-									onChange={(e) => field.handleChange(e.target.value)}
-								/>
-								{field.state.meta.errors.map((error) => (
-									<p key={error?.message} className="text-red-500">
-										{error?.message}
-									</p>
-								))}
-							</div>
-						)}
-					</form.Field>
-				</div>
-
-				<form.Subscribe
-					selector={(state) => ({
-						canSubmit: state.canSubmit,
-						isSubmitting: state.isSubmitting,
-					})}
-				>
-					{({ canSubmit, isSubmitting }) => (
-						<Button
-							type="submit"
-							className="w-full"
-							disabled={!canSubmit || isSubmitting}
-						>
-							{isSubmitting ? "Submitting..." : "Sign In"}
-						</Button>
+		<form
+			noValidate
+			onSubmit={(e) => {
+				e.preventDefault();
+				form.handleSubmit();
+			}}
+		>
+			<FieldGroup>
+				<form.Field name="email">
+					{(field) => (
+						<TextField
+							field={field}
+							label={t("email")}
+							type="email"
+							autoComplete="email"
+						/>
 					)}
-				</form.Subscribe>
-			</form>
-
-			<div className="mt-4 text-center">
-				<Button
-					variant="link"
-					onClick={onSwitchToSignUp}
-					className="text-indigo-600 hover:text-indigo-800"
+				</form.Field>
+				<form.Field name="password">
+					{(field) => (
+						<TextField
+							field={field}
+							label={t("password")}
+							type="password"
+							autoComplete="current-password"
+						/>
+					)}
+				</form.Field>
+				<SubmitButton form={form}>{submitLabel ?? t("submit")}</SubmitButton>
+				<Link
+					href="/forgot-password"
+					className="text-muted-foreground text-center text-sm underline-offset-4 hover:underline"
 				>
-					Need an account? Sign Up
-				</Button>
-			</div>
-		</div>
+					{t("forgot")}
+				</Link>
+			</FieldGroup>
+		</form>
 	);
 }

@@ -1,0 +1,160 @@
+{
+	"app": {
+		"name": "Real Estate CRM"
+	},
+	"common": {
+		"save": "Save",
+		"saving": "Saving…",
+		"cancel": "Cancel",
+		"create": "Create",
+		"remove": "Remove",
+		"rename": "Rename",
+		"loading": "Loading…",
+		"you": "You",
+		"genericError": "Something went wrong. Please try again."
+	},
+	"language": {
+		"label": "Language",
+		"th": "ไทย",
+		"en": "English"
+	},
+	"roles": {
+		"owner": "Owner",
+		"admin": "Admin",
+		"executive": "Executive",
+		"sales_manager": "Sales manager",
+		"salesperson": "Salesperson"
+	},
+	"validation": {
+		"email": "Enter a valid email address",
+		"password": "Password must be at least 8 characters",
+		"name": "Name must be at least 2 characters",
+		"code": "Enter the 6-digit code"
+	},
+	"signIn": {
+		"title": "Sign in",
+		"email": "Email",
+		"password": "Password",
+		"submit": "Sign in",
+		"forgot": "Forgot password?",
+		"failed": "Email or password is incorrect"
+	},
+	"forgotPassword": {
+		"title": "Reset your password",
+		"description": "Enter your email and we'll send you a link to choose a new password.",
+		"submit": "Send link",
+		"sent": "If an account exists for that email, a link is on its way.",
+		"back": "Back to sign in"
+	},
+	"resetPassword": {
+		"title": "Choose a new password",
+		"newPassword": "New password",
+		"submit": "Save password",
+		"invalidLink": "This link is invalid or has expired. Request a new one.",
+		"done": "Password saved. Sign in with your new password."
+	},
+	"twoFactor": {
+		"title": "Two-step login",
+		"description": "Enter the 6-digit code from your authenticator app.",
+		"code": "Code",
+		"backupDescription": "Enter one of your backup codes.",
+		"backupCode": "Backup code",
+		"useBackup": "Use a backup code",
+		"useApp": "Use the authenticator app",
+		"submit": "Verify",
+		"invalid": "That code didn't work. Try again."
+	},
+	"invitation": {
+		"title": "Join your team",
+		"newAccountDescription": "Create your account with the email address the invitation was sent to.",
+		"existingDescription": "Sign in to accept the invitation.",
+		"name": "Your name",
+		"createAndJoin": "Create account and join",
+		"signInAndJoin": "Sign in and join",
+		"haveAccount": "Already have an account? Sign in",
+		"needAccount": "New here? Create an account",
+		"failed": "We couldn't accept this invitation. It may have expired or been cancelled — ask your admin for a new one.",
+		"joined": "Welcome aboard!"
+	},
+	"nav": {
+		"main": "Sales",
+		"today": "Today",
+		"settings": "Settings",
+		"members": "Members",
+		"projects": "Projects",
+		"roles": "Role labels",
+		"security": "Security",
+		"signOut": "Sign out",
+		"organizations": "Companies"
+	},
+	"today": {
+		"title": "Today",
+		"welcome": "Welcome, {name}",
+		"summary": "{role} at {organization}",
+		"comingSoon": "Your leads, follow-ups and visits for today will appear here."
+	},
+	"noOrganization": {
+		"title": "No company access",
+		"description": "Your account isn't a member of any company yet. Ask your admin to invite you."
+	},
+	"members": {
+		"title": "Members",
+		"description": "Invite people to your company and choose their role. Assign projects on the Projects page.",
+		"inviteTitle": "Invite a member",
+		"email": "Email",
+		"role": "Role",
+		"invite": "Send invitation",
+		"invited": "Invitation sent to {email}",
+		"name": "Name",
+		"projects": "Projects",
+		"allProjects": "All projects",
+		"noProjects": "No projects",
+		"actions": "Actions",
+		"pendingTitle": "Pending invitations",
+		"expires": "Expires",
+		"cancelInvitation": "Cancel invitation",
+		"noPending": "No pending invitations",
+		"roleChanged": "Role updated",
+		"removeTitle": "Remove {name}?",
+		"removeDescription": "They will lose access to this company immediately.",
+		"removed": "Member removed"
+	},
+	"projects": {
+		"title": "Projects",
+		"description": "Projects define who sees which leads. Full project setup (office hours, units) comes later.",
+		"name": "Project name",
+		"create": "Add project",
+		"created": "Project added",
+		"empty": "No projects yet",
+		"members": "Team",
+		"membersTitle": "Team for {project}",
+		"membersDescription": "Sales managers and salespeople only see projects they're assigned to.",
+		"renamed": "Project renamed",
+		"noScopedMembers": "No sales managers or salespeople yet"
+	},
+	"roleLabels": {
+		"title": "Role labels",
+		"description": "Rename roles to match your company, e.g. “Head of sales”. Leave empty to use the default.",
+		"role": "Role",
+		"label": "Label",
+		"saved": "Role labels saved"
+	},
+	"security": {
+		"title": "Security",
+		"twoFactorTitle": "Two-step login",
+		"twoFactorDescription": "Ask for a code from an authenticator app (Google Authenticator, Microsoft Authenticator…) when you sign in.",
+		"on": "On",
+		"off": "Off",
+		"enable": "Turn on",
+		"disable": "Turn off",
+		"password": "Current password",
+		"scan": "Scan this QR code with your authenticator app, then enter the 6-digit code.",
+		"manualKey": "Can't scan? Enter this key: {key}",
+		"verify": "Verify and turn on",
+		"backupTitle": "Backup codes",
+		"backupHint": "Keep these somewhere safe. Each code works once if you lose your phone.",
+		"enabled": "Two-step login is on",
+		"disabled": "Two-step login is off",
+		"wrongPassword": "Password is incorrect"
+	}
+}

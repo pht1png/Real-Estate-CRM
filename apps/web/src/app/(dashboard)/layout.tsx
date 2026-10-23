@@ -1,9 +1,3 @@
-import {
-	Breadcrumb,
-	BreadcrumbItem,
-	BreadcrumbList,
-	BreadcrumbPage,
-} from "@Real-Estate-CRM/ui/components/breadcrumb";
 import { Separator } from "@Real-Estate-CRM/ui/components/separator";
 import {
 	SidebarInset,
@@ -13,8 +7,11 @@ import {
 import { TooltipProvider } from "@Real-Estate-CRM/ui/components/tooltip";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 
 import { AppSidebar } from "@/components/app-sidebar";
+import { AuthCard } from "@/components/auth-card";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { authClient } from "@/lib/auth-client";
 
 export default async function DashboardLayout({
@@ -33,6 +30,20 @@ export default async function DashboardLayout({
 		redirect("/login");
 	}
 
+	if (!session.session.activeOrganizationId) {
+		const t = await getTranslations("noOrganization");
+		return (
+			<div className="flex min-h-svh flex-col">
+				<div className="flex justify-end p-2">
+					<LanguageSwitcher />
+				</div>
+				<AuthCard title={t("title")} description={t("description")}>
+					{null}
+				</AuthCard>
+			</div>
+		);
+	}
+
 	const { name, email, image } = session.user;
 
 	return (
@@ -40,23 +51,16 @@ export default async function DashboardLayout({
 			<SidebarProvider>
 				<AppSidebar user={{ name, email, image: image ?? null }} />
 				<SidebarInset>
-					<header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-						<div className="flex items-center gap-2 px-4">
-							<SidebarTrigger className="-ml-1" />
-							<Separator
-								orientation="vertical"
-								className="mr-2 data-vertical:h-4 data-vertical:self-auto"
-							/>
-							<Breadcrumb>
-								<BreadcrumbList>
-									<BreadcrumbItem>
-										<BreadcrumbPage>Dashboard</BreadcrumbPage>
-									</BreadcrumbItem>
-								</BreadcrumbList>
-							</Breadcrumb>
-						</div>
+					<header className="flex h-14 shrink-0 items-center gap-2 px-4">
+						<SidebarTrigger className="-ml-1" />
+						<Separator
+							orientation="vertical"
+							className="mr-2 data-vertical:h-4 data-vertical:self-auto"
+						/>
 					</header>
-					<div className="flex flex-1 flex-col gap-4 p-4 pt-0">{children}</div>
+					<main className="flex flex-1 flex-col gap-6 p-4 pt-0">
+						{children}
+					</main>
 				</SidebarInset>
 			</SidebarProvider>
 		</TooltipProvider>

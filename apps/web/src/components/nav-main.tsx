@@ -1,66 +1,42 @@
 "use client";
 
 import {
-	Collapsible,
-	CollapsibleContent,
-	CollapsibleTrigger,
-} from "@Real-Estate-CRM/ui/components/collapsible";
-import {
 	SidebarGroup,
 	SidebarGroupLabel,
 	SidebarMenu,
 	SidebarMenuButton,
 	SidebarMenuItem,
-	SidebarMenuSub,
-	SidebarMenuSubButton,
-	SidebarMenuSubItem,
 } from "@Real-Estate-CRM/ui/components/sidebar";
-import { ChevronRightIcon } from "lucide-react";
+import type { Route } from "next";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
-export function NavMain({
+export type NavItem = { title: string; href: Route; icon: React.ReactNode };
+
+/** A labelled sidebar group of links; the current page is highlighted. */
+export function NavGroup({
+	label,
 	items,
 }: {
-	items: {
-		title: string;
-		url: string;
-		icon?: React.ReactNode;
-		isActive?: boolean;
-		items?: {
-			title: string;
-			url: string;
-		}[];
-	}[];
+	label: string;
+	items: NavItem[];
 }) {
+	const pathname = usePathname();
 	return (
 		<SidebarGroup>
-			<SidebarGroupLabel>Platform</SidebarGroupLabel>
+			<SidebarGroupLabel>{label}</SidebarGroupLabel>
 			<SidebarMenu>
 				{items.map((item) => (
-					<Collapsible
-						key={item.title}
-						defaultOpen={item.isActive}
-						className="group/collapsible"
-						render={<SidebarMenuItem />}
-					>
-						<CollapsibleTrigger
-							render={<SidebarMenuButton tooltip={item.title} />}
+					<SidebarMenuItem key={item.href}>
+						<SidebarMenuButton
+							tooltip={item.title}
+							isActive={pathname === item.href}
+							render={<Link href={item.href} />}
 						>
 							{item.icon}
 							<span>{item.title}</span>
-							<ChevronRightIcon className="ml-auto transition-transform duration-200 group-data-open/collapsible:rotate-90" />
-						</CollapsibleTrigger>
-						<CollapsibleContent>
-							<SidebarMenuSub>
-								{item.items?.map((subItem) => (
-									<SidebarMenuSubItem key={subItem.title}>
-										<SidebarMenuSubButton render={<a href={subItem.url} />}>
-											<span>{subItem.title}</span>
-										</SidebarMenuSubButton>
-									</SidebarMenuSubItem>
-								))}
-							</SidebarMenuSub>
-						</CollapsibleContent>
-					</Collapsible>
+						</SidebarMenuButton>
+					</SidebarMenuItem>
 				))}
 			</SidebarMenu>
 		</SidebarGroup>

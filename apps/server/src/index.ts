@@ -6,7 +6,7 @@ import { logger } from "hono/logger";
 
 import { createContext } from "./context";
 import { ENV } from "./env.server";
-import { auth } from "./services";
+import { auth, logEmailSender } from "./services";
 
 const app = new Hono();
 
@@ -37,5 +37,10 @@ app.use(
 app.get("/", (c) => {
 	return c.text("OK");
 });
+
+// Lets e2e tests follow links from emails sent by the log sender.
+if (ENV.NODE_ENV === "test") {
+	app.get("/__test/outbox", (c) => c.json(logEmailSender.outbox));
+}
 
 export default app;

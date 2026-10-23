@@ -1,0 +1,22 @@
+{
+  "name": "@Real-Estate-CRM/api",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@Real-Estate-CRM/auth": "workspace:*",
+    "@Real-Estate-CRM/db": "workspace:*",
+    "@trpc/client": "catalog:",
+    "@trpc/server": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@Real-Estate-CRM/config": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

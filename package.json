@@ -1,0 +1,72 @@
+{
+  "name": "Real-Estate-CRM",
+  "private": true,
+  "workspaces": {
+    "packages": [
+      "apps/*",
+      "packages/*"
+    ],
+    "catalog": {
+      "zod": "^4.5.4",
+      "typescript": "^6.0.3",
+      "@types/bun": "^1.4.3",
+      "varlock": "1.18.0",
+      "@trpc/server": "^11.19.0",
+      "better-auth": "1.7.10",
+      "lucide-react": "^1.41.0",
+      "next-themes": "^0.4.6",
+      "react": "^19.2.8",
+      "react-dom": "^19.2.8",
+      "sonner": "^2.0.8",
+      "@trpc/client": "^11.19.0",
+      "@tailwindcss/postcss": "^4.3.3",
+      "@types/react": "^19.2.18",
+      "@types/react-dom": "^19.2.7",
+      "tailwindcss": "^4.3.3",
+      "drizzle-orm": "1.0.0-rc.4"
+    }
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "check-types": "turbo run check-types",
+    "dev:web": "turbo run dev -F web --",
+    "dev:server": "turbo run dev -F server --",
+    "db:push": "turbo run db:push -F @Real-Estate-CRM/db --",
+    "db:studio": "turbo run db:studio -F @Real-Estate-CRM/db --",
+    "db:generate": "turbo run db:generate -F @Real-Estate-CRM/db --",
+    "db:migrate": "turbo run db:migrate -F @Real-Estate-CRM/db --",
+    "db:start": "turbo run db:start -F @Real-Estate-CRM/db --",
+    "db:watch": "turbo run db:watch -F @Real-Estate-CRM/db --",
+    "db:stop": "turbo run db:stop -F @Real-Estate-CRM/db --",
+    "db:down": "turbo run db:down -F @Real-Estate-CRM/db --",
+    "env:generate": "varlock codegen --path ./apps/web/ && varlock codegen --path ./apps/server/ && varlock codegen --path ./packages/db/",
+    "postinstall": "varlock codegen --path ./apps/web/ && varlock codegen --path ./apps/server/ && varlock codegen --path ./packages/db/",
+    "auth:generate": "cd apps/server && bun run auth:generate",
+    "check": "biome check --write .",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@Real-Estate-CRM/config": "workspace:*",
+    "@biomejs/biome": "^2.6.2",
+    "@types/bun": "catalog:",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0",
+    "turbo": "^2.11.7",
+    "typescript": "catalog:",
+    "varlock": "catalog:"
+  },
+  "overrides": {
+    "@next/env": "npm:@varlock/nextjs-integration@1.2.2"
+  },
+  "lint-staged": {
+    "*.{js,ts,cjs,mjs,d.cts,d.mts,jsx,tsx,json,jsonc}": [
+      "biome check --write ."
+    ]
+  },
+  "packageManager": "bun@1.4.3"
+}

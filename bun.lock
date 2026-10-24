@@ -45,6 +45,7 @@
       "dependencies": {
         "@Real-Estate-CRM/api": "workspace:*",
         "@Real-Estate-CRM/auth": "workspace:*",
+        "@Real-Estate-CRM/db": "workspace:*",
         "@Real-Estate-CRM/ui": "workspace:*",
         "@swc/helpers": "^0.5.23",
         "@tanstack/react-form": "^1.33.5",

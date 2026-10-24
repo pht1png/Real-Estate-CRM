@@ -37,6 +37,8 @@ import {
 } from "@Real-Estate-CRM/ui/components/table";
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { Route } from "next";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -125,7 +127,14 @@ export function ProjectsSettings() {
 							<TableBody>
 								{projects.data?.map((p) => (
 									<TableRow key={p.id}>
-										<TableCell className="font-medium">{p.name}</TableCell>
+										<TableCell className="font-medium">
+											<Link
+												href={`/settings/projects/${p.id}` as Route}
+												className="underline-offset-4 hover:underline"
+											>
+												{p.name}
+											</Link>
+										</TableCell>
 										<TableCell className="flex justify-end gap-2">
 											<RenameProjectDialog project={p} />
 											<ProjectTeamDialog project={p} />

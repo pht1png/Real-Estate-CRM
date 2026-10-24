@@ -11,33 +11,13 @@ import {
 	unique,
 	uuid,
 } from "drizzle-orm/pg-core";
-
+import {
+	defaultOfficeHours,
+	type OfficeHours,
+	projectTypes,
+} from "../constants";
 import { member, organization, user } from "./auth";
 import { createdAt, updatedAt } from "./columns";
-
-export const projectTypes = ["condo", "low_rise", "mixed"] as const;
-export type ProjectType = (typeof projectTypes)[number];
-
-export const weekdays = [
-	"mon",
-	"tue",
-	"wed",
-	"thu",
-	"fri",
-	"sat",
-	"sun",
-] as const;
-export type Weekday = (typeof weekdays)[number];
-
-/** One open–close interval per weekday ("HH:MM", project time zone); null = closed. */
-export type OfficeHours = Record<
-	Weekday,
-	{ open: string; close: string } | null
->;
-
-export const defaultOfficeHours: OfficeHours = Object.fromEntries(
-	weekdays.map((d) => [d, { open: "09:00", close: "18:00" }]),
-) as OfficeHours;
 
 export const project = pgTable(
 	"project",

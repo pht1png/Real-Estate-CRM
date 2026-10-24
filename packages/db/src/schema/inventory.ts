@@ -15,25 +15,10 @@ import {
 	unique,
 	uuid,
 } from "drizzle-orm/pg-core";
-
+import { facings, sectionKinds, unitStatuses } from "../constants";
 import { user } from "./auth";
 import { createdAt, updatedAt } from "./columns";
 import { project } from "./tenancy";
-
-export const sectionKinds = ["phase", "zone", "building"] as const;
-export type SectionKind = (typeof sectionKinds)[number];
-
-export const facings = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
-export type Facing = (typeof facings)[number];
-
-export const unitStatuses = [
-	"available",
-	"blocked",
-	"deposited",
-	"contracted",
-	"transferred",
-] as const;
-export type UnitStatus = (typeof unitStatuses)[number];
 
 const inList = (values: readonly string[]) =>
 	sql.raw(values.map((v) => `'${v}'`).join(", "));

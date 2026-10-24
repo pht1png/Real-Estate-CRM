@@ -5,7 +5,6 @@ import {
 	SidebarTrigger,
 } from "@Real-Estate-CRM/ui/components/sidebar";
 import { TooltipProvider } from "@Real-Estate-CRM/ui/components/tooltip";
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
@@ -13,19 +12,14 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { AuthCard } from "@/components/auth-card";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { QuickCapture } from "@/components/quick-capture";
-import { authClient } from "@/lib/auth-client";
+import { getServerSession } from "@/lib/session";
 
 export default async function DashboardLayout({
 	children,
 }: Readonly<{
 	children: React.ReactNode;
 }>) {
-	const session = await authClient.getSession({
-		fetchOptions: {
-			headers: await headers(),
-			throw: true,
-		},
-	});
+	const session = await getServerSession();
 
 	if (!session?.user) {
 		redirect("/login");

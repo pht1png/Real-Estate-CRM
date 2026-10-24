@@ -1,10 +1,15 @@
+import {
+	createAuth,
+	createBackgroundTasks,
+	createLogEmailSender,
+} from "@Real-Estate-CRM/auth";
 import { auditLog, member } from "@Real-Estate-CRM/db/schema/index";
 import { describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
 import { ENV } from "./env.server";
 import { createOrganizationWithOwner } from "./operator";
-import { auth, db } from "./services";
+import { auth, background, db } from "./services";
 import {
 	addMember,
 	callerFor,
@@ -174,10 +179,16 @@ describe("organizations", () => {
 	});
 
 	test("org:create makes a company and owner who sets a password and signs in", async () => {
-		const result = await createOrganizationWithOwner(db, auth, ENV.WEB_URL, {
-			name: "Baan Suan Developments",
-			ownerEmail: "Owner@BaanSuan.example",
-		});
+		const result = await createOrganizationWithOwner(
+			db,
+			auth,
+			background,
+			ENV.WEB_URL,
+			{
+				name: "Baan Suan Developments",
+				ownerEmail: "Owner@BaanSuan.example",
+			},
+		);
 		expect(result.hasPassword).toBe(false);
 
 		const setup = lastEmailTo("owner@baansuan.example");
@@ -244,4 +255,35 @@ describe("two-step login", () => {
 		expect(second.status).toBe(200);
 		expect(cookiesFrom(second)).toMatch(/session_token=[^;]/);
 	});
+});
+
+describe("rate limiting", () => {
+	test("more than 5 sign-in attempts a minute from one client are refused", async () => {
+		// Better Auth enables limits only in production; force them on here.
+		const limited = createAuth(ENV, db, createLogEmailSender(), {
+			background: createBackgroundTasks(),
+			rateLimit: true,
+		});
+		const org = await createOrg();
+		const { user: u } = await addMember(org.id, "salesperson");
+		const attempt = () =>
+			limited.handler(
+				new Request(`${ENV.BETTER_AUTH_URL}/api/auth/sign-in/email`, {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						Origin: ENV.CORS_ORIGIN,
+					},
+					body: JSON.stringify({ email: u.email, password: "wrong-password" }),
+				}),
+			);
+		const statuses: number[] = [];
+		for (let i = 0; i < 6; i++) {
+			statuses.push((await attempt()).status);
+			// Stay under the built-in 3-per-10-seconds burst rule.
+			if (i === 2) await Bun.sleep(10_500);
+		}
+		expect(statuses.slice(0, 5).every((s) => s === 401)).toBe(true);
+		expect(statuses[5]).toBe(429);
+	}, 30_000);
 });

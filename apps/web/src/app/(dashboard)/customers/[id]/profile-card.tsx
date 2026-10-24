@@ -11,6 +11,16 @@ import {
 	CardTitle,
 } from "@Real-Estate-CRM/ui/components/card";
 import {
+	Dialog,
+	DialogClose,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+} from "@Real-Estate-CRM/ui/components/dialog";
+import {
 	Field,
 	FieldGroup,
 	FieldLabel,
@@ -168,19 +178,45 @@ export function ProfileCard({ customer }: { customer: CustomerDetail }) {
 									<Badge variant="secondary">{t("primary")}</Badge>
 								)}
 								{editable && customer.phones.length > 1 && (
-									<Button
-										variant="ghost"
-										size="icon-sm"
-										aria-label={`${tc("remove")} ${p.display}`}
-										onClick={() =>
-											removePhone.mutate({
-												customerId: customer.id,
-												phone: p.phoneE164,
-											})
-										}
-									>
-										<XIcon />
-									</Button>
+									<Dialog>
+										<DialogTrigger
+											render={
+												<Button
+													variant="ghost"
+													size="icon-sm"
+													aria-label={`${tc("remove")} ${p.display}`}
+												/>
+											}
+										>
+											<XIcon />
+										</DialogTrigger>
+										<DialogContent>
+											<DialogHeader>
+												<DialogTitle>
+													{t("removePhoneTitle", { phone: p.display })}
+												</DialogTitle>
+												<DialogDescription>
+													{t("removePhoneDescription")}
+												</DialogDescription>
+											</DialogHeader>
+											<DialogFooter>
+												<DialogClose render={<Button variant="outline" />}>
+													{tc("cancel")}
+												</DialogClose>
+												<DialogClose
+													render={<Button variant="destructive" />}
+													onClick={() =>
+														removePhone.mutate({
+															customerId: customer.id,
+															phone: p.phoneE164,
+														})
+													}
+												>
+													{tc("remove")}
+												</DialogClose>
+											</DialogFooter>
+										</DialogContent>
+									</Dialog>
 								)}
 							</li>
 						))}

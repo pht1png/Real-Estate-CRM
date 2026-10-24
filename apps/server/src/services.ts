@@ -1,5 +1,6 @@
 import {
 	createAuth,
+	createBackgroundTasks,
 	createLogEmailSender,
 	createResendEmailSender,
 	type EmailSender,
@@ -29,9 +30,19 @@ function createEmailSender(): EmailSender {
 /** Dev/test outbox; exposed at /__test/outbox only when NODE_ENV=test. */
 export const logEmailSender = createLogEmailSender();
 
+// Production must run on https: otherwise auth cookies silently lose `Secure`.
+if (
+	ENV.NODE_ENV === "production" &&
+	!ENV.BETTER_AUTH_URL.startsWith("https://")
+) {
+	throw new Error("BETTER_AUTH_URL must use https in production");
+}
+
 export const db = createDb(ENV);
 export const email = createEmailSender();
-export const auth = createAuth(ENV, db, email);
+/** Emails go out after the response; scripts flush before exiting. */
+export const background = createBackgroundTasks();
+export const auth = createAuth(ENV, db, email, { background });
 
 /** Local folder storage, also used to verify signed /files/local URLs. */
 export const localStorage = createLocalStorage({

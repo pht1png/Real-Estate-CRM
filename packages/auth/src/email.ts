@@ -110,3 +110,25 @@ export function resetPasswordEmail(to: string, url: string) {
 		{ th: "ตั้งรหัสผ่านใหม่", en: "Reset password", url },
 	);
 }
+
+/**
+ * Work that must not delay the HTTP response (sending email), so response
+ * timing can't reveal whether an account exists. Scripts call `flush()` before
+ * exiting; failures are logged, never thrown at the caller.
+ */
+export function createBackgroundTasks() {
+	const pending = new Set<Promise<unknown>>();
+	return {
+		run(task: () => Promise<unknown>) {
+			const promise: Promise<unknown> = task()
+				.catch((error) => console.error("[background] task failed", error))
+				.finally(() => pending.delete(promise));
+			pending.add(promise);
+		},
+		async flush() {
+			await Promise.all([...pending]);
+		},
+	};
+}
+
+export type BackgroundTasks = ReturnType<typeof createBackgroundTasks>;

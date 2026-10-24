@@ -12,6 +12,7 @@ import { and, asc, eq, gt, notInArray, sql } from "drizzle-orm";
 
 import {
 	accountSetupEmail,
+	type BackgroundTasks,
 	type EmailSender,
 	invitationEmail,
 	resetPasswordEmail,
@@ -26,14 +27,24 @@ export type AuthConfig = {
 	WEB_URL: string;
 	/** Parent domain shared by web and API in production, e.g. `example.com`. */
 	COOKIE_DOMAIN?: string | undefined;
+	/** Header the host sets to the real client IP (e.g. `fly-client-ip`); used for rate limits. */
+	CLIENT_IP_HEADER?: string | undefined;
+	/** Comma-separated proxy IPs/CIDRs whose X-Forwarded-For entries are trusted. */
+	TRUSTED_PROXIES?: string | undefined;
 };
 
 export function createAuth(
 	env: AuthConfig,
 	database: Database,
 	email: EmailSender,
-	desktopOrigins: readonly string[] = [],
+	options: {
+		background: BackgroundTasks;
+		desktopOrigins?: readonly string[];
+		/** Force rate limiting on (Better Auth enables it only in production); for tests. */
+		rateLimit?: boolean;
+	},
 ) {
+	const { background, desktopOrigins = [] } = options;
 	// Web and API are same-site (localhost ports, or app./api. subdomains), so
 	// SameSite=Lax is enough; Secure follows the API's scheme so http dev works.
 	const secure = new URL(env.BETTER_AUTH_URL).protocol === "https:";
@@ -66,22 +77,36 @@ export function createAuth(
 		emailAndPassword: {
 			enabled: true,
 			revokeSessionsOnPasswordReset: true,
+			// After the response: the extra lookup and the send would otherwise make
+			// requests for existing accounts measurably slower (account enumeration).
 			sendResetPassword: async ({ user, url }) => {
-				// Owners created by `org:create` have no password yet: same flow, setup wording.
-				const [credential] = await database
-					.select({ id: schema.account.id })
-					.from(schema.account)
-					.where(
-						and(
-							eq(schema.account.userId, user.id),
-							eq(schema.account.providerId, "credential"),
-						),
+				background.run(async () => {
+					// Owners created by `org:create` have no password yet: same flow, setup wording.
+					const [credential] = await database
+						.select({ id: schema.account.id })
+						.from(schema.account)
+						.where(
+							and(
+								eq(schema.account.userId, user.id),
+								eq(schema.account.providerId, "credential"),
+							),
+						);
+					await email.send(
+						credential
+							? resetPasswordEmail(user.email, url)
+							: accountSetupEmail(user.email, url),
 					);
-				await email.send(
-					credential
-						? resetPasswordEmail(user.email, url)
-						: accountSetupEmail(user.email, url),
-				);
+				});
+			},
+		},
+		rateLimit: {
+			...(options.rateLimit !== undefined && { enabled: options.rateLimit }),
+			// Better Auth already limits sign-in/up (3 per 10 s), reset requests and
+			// two-step codes; add a per-minute cap on password guessing. Keys are
+			// relative to /api/auth. Storage: memory for now — Redis before
+			// deployment (docs/deployment-checklist.md).
+			customRules: {
+				"/sign-in/email": { window: 60, max: 5 },
 			},
 		},
 		hooks: {
@@ -138,6 +163,16 @@ export function createAuth(
 			// tests exercise the same protection as production.
 			disableOriginCheck: false,
 			useSecureCookies: secure,
+			// Behind a host's proxy the client IP must come from a header it controls,
+			// or every visitor shares one rate-limit bucket.
+			ipAddress: {
+				...(env.CLIENT_IP_HEADER && {
+					ipAddressHeaders: [env.CLIENT_IP_HEADER],
+				}),
+				...(env.TRUSTED_PROXIES && {
+					trustedProxies: env.TRUSTED_PROXIES.split(",").map((p) => p.trim()),
+				}),
+			},
 			defaultCookieAttributes: {
 				sameSite: "lax",
 				secure,
@@ -157,11 +192,13 @@ export function createAuth(
 				invitationExpiresIn: 60 * 60 * 24 * 7,
 				cancelPendingInvitationsOnReInvite: true,
 				sendInvitationEmail: async ({ id, email: to, organization }) => {
-					await email.send(
-						invitationEmail(
-							to,
-							organization.name,
-							`${webUrl}/accept-invitation/${id}`,
+					background.run(() =>
+						email.send(
+							invitationEmail(
+								to,
+								organization.name,
+								`${webUrl}/accept-invitation/${id}`,
+							),
 						),
 					);
 				},

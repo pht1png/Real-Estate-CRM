@@ -3,7 +3,7 @@ import { parseArgs } from "node:util";
 
 import { ENV } from "../env.server";
 import { createOrganizationWithOwner } from "../operator";
-import { auth, db } from "../services";
+import { auth, background, db } from "../services";
 
 const { values } = parseArgs({
 	options: {
@@ -21,11 +21,17 @@ if (!values.name || !values["owner-email"]) {
 }
 
 try {
-	const result = await createOrganizationWithOwner(db, auth, ENV.WEB_URL, {
-		name: values.name,
-		ownerEmail: values["owner-email"],
-		ownerName: values["owner-name"],
-	});
+	const result = await createOrganizationWithOwner(
+		db,
+		auth,
+		background,
+		ENV.WEB_URL,
+		{
+			name: values.name,
+			ownerEmail: values["owner-email"],
+			ownerName: values["owner-name"],
+		},
+	);
 	console.info(
 		`Created organization ${result.slug} (${result.organizationId}).`,
 		result.hasPassword

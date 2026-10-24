@@ -1,4 +1,4 @@
-import type { Auth } from "@Real-Estate-CRM/auth";
+import type { Auth, BackgroundTasks } from "@Real-Estate-CRM/auth";
 import type { Database } from "@Real-Estate-CRM/db";
 import { insertAudit } from "@Real-Estate-CRM/db/audit";
 import {
@@ -33,6 +33,7 @@ function slugify(name: string) {
 export async function createOrganizationWithOwner(
 	db: Database,
 	auth: Auth,
+	background: BackgroundTasks,
 	webUrl: string,
 	input: CreateOrganizationInput,
 ) {
@@ -108,6 +109,8 @@ export async function createOrganizationWithOwner(
 				redirectTo: `${webUrl.replace(/\/$/, "")}/reset-password`,
 			},
 		});
+		// The email goes out after the reset response; wait for it before returning.
+		await background.flush();
 	}
 	return result;
 }

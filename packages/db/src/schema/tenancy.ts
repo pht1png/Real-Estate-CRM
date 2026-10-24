@@ -1,27 +1,24 @@
 import { defineRelationsPart, sql } from "drizzle-orm";
 import {
+	check,
 	foreignKey,
 	index,
+	integer,
 	jsonb,
 	pgTable,
 	primaryKey,
 	text,
-	timestamp,
 	unique,
 	uuid,
 } from "drizzle-orm/pg-core";
-
+import {
+	defaultOfficeHours,
+	type OfficeHours,
+	projectTypes,
+} from "../constants";
 import { member, organization, user } from "./auth";
+import { createdAt, updatedAt } from "./columns";
 
-const createdAt = () =>
-	timestamp("created_at", { withTimezone: true }).defaultNow().notNull();
-const updatedAt = () =>
-	timestamp("updated_at", { withTimezone: true })
-		.defaultNow()
-		.$onUpdate(() => new Date())
-		.notNull();
-
-/** Minimal in M1 (scopes need it); M2 adds office hours, closed dates, commission, tags. */
 export const project = pgTable(
 	"project",
 	{
@@ -30,6 +27,17 @@ export const project = pgTable(
 			.notNull()
 			.references(() => organization.id),
 		name: text("name").notNull(),
+		type: text("type", { enum: projectTypes }).notNull().default("condo"),
+		/** IANA zone for office hours, closed dates and "working day". */
+		timeZone: text("time_zone").notNull().default("Asia/Bangkok"),
+		officeHours: jsonb("office_hours")
+			.$type<OfficeHours>()
+			.notNull()
+			.default(defaultOfficeHours),
+		/** Commission in basis points: 150 = 1.50 % of net price. */
+		commissionBps: integer("commission_bps").notNull().default(0),
+		/** Allowed tags for this project's units. */
+		unitTags: text("unit_tags").array().notNull().default(sql`'{}'::text[]`),
 		createdAt: createdAt(),
 		updatedAt: updatedAt(),
 	},
@@ -38,6 +46,14 @@ export const project = pgTable(
 		unique("project_organization_name_unique").on(
 			table.organizationId,
 			table.name,
+		),
+		check(
+			"project_type_check",
+			sql`${table.type} in ('condo', 'low_rise', 'mixed')`,
+		),
+		check(
+			"project_commission_bps_check",
+			sql`${table.commissionBps} between 0 and 10000`,
 		),
 	],
 );

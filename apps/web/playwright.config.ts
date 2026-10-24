@@ -6,6 +6,8 @@ const webUrl = "http://localhost:3101";
 
 export default defineConfig({
 	testDir: "./e2e",
+	// Whole journeys (sign-up, invitations, imports) across several pages.
+	timeout: 60_000,
 	fullyParallel: true,
 	forbidOnly: !!process.env.CI,
 	retries: process.env.CI ? 1 : 0,

@@ -6,6 +6,7 @@ import { logger } from "hono/logger";
 
 import { createContext } from "./context";
 import { ENV } from "./env.server";
+import { files } from "./files";
 import { auth, logEmailSender } from "./services";
 
 const app = new Hono();
@@ -33,6 +34,8 @@ app.use(
 		},
 	}),
 );
+
+app.route("/files", files);
 
 app.get("/", (c) => {
 	return c.text("OK");

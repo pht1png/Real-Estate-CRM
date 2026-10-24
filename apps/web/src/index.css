@@ -1,1 +1,41 @@
 @import "@Real-Estate-CRM/ui/globals.css";
+
+/* Unit status colours for the unit grid (background + readable foreground). */
+:root {
+	--unit-available: oklch(0.93 0.07 155);
+	--unit-available-foreground: oklch(0.32 0.09 155);
+	--unit-blocked: oklch(0.92 0.01 260);
+	--unit-blocked-foreground: oklch(0.4 0.02 260);
+	--unit-deposited: oklch(0.93 0.08 85);
+	--unit-deposited-foreground: oklch(0.38 0.09 70);
+	--unit-contracted: oklch(0.91 0.06 250);
+	--unit-contracted-foreground: oklch(0.35 0.12 260);
+	--unit-transferred: oklch(0.9 0.05 300);
+	--unit-transferred-foreground: oklch(0.35 0.11 300);
+}
+
+.dark {
+	--unit-available: oklch(0.35 0.07 155);
+	--unit-available-foreground: oklch(0.92 0.06 155);
+	--unit-blocked: oklch(0.3 0.01 260);
+	--unit-blocked-foreground: oklch(0.82 0.01 260);
+	--unit-deposited: oklch(0.38 0.07 80);
+	--unit-deposited-foreground: oklch(0.93 0.07 85);
+	--unit-contracted: oklch(0.34 0.08 255);
+	--unit-contracted-foreground: oklch(0.91 0.05 250);
+	--unit-transferred: oklch(0.34 0.07 300);
+	--unit-transferred-foreground: oklch(0.9 0.05 300);
+}
+
+@theme inline {
+	--color-unit-available: var(--unit-available);
+	--color-unit-available-foreground: var(--unit-available-foreground);
+	--color-unit-blocked: var(--unit-blocked);
+	--color-unit-blocked-foreground: var(--unit-blocked-foreground);
+	--color-unit-deposited: var(--unit-deposited);
+	--color-unit-deposited-foreground: var(--unit-deposited-foreground);
+	--color-unit-contracted: var(--unit-contracted);
+	--color-unit-contracted-foreground: var(--unit-contracted-foreground);
+	--color-unit-transferred: var(--unit-transferred);
+	--color-unit-transferred-foreground: var(--unit-transferred-foreground);
+}

@@ -7,7 +7,13 @@ import {
 	SidebarHeader,
 	SidebarRail,
 } from "@Real-Estate-CRM/ui/components/sidebar";
-import { FolderKanbanIcon, SunIcon, TagsIcon, UsersIcon } from "lucide-react";
+import {
+	Building2Icon,
+	FolderKanbanIcon,
+	SunIcon,
+	TagsIcon,
+	UsersIcon,
+} from "lucide-react";
 import { useTranslations } from "next-intl";
 import type * as React from "react";
 
@@ -28,6 +34,15 @@ export function AppSidebar({
 
 	const main: NavItem[] = [
 		{ title: t("today"), href: "/dashboard", icon: <SunIcon /> },
+		...(can({ unit: ["read"] })
+			? [
+					{
+						title: t("units"),
+						href: "/units",
+						icon: <Building2Icon />,
+					} as const,
+				]
+			: []),
 	];
 	const settings: NavItem[] = [
 		...(can({ member: ["create"] })

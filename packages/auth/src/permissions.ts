@@ -14,6 +14,8 @@ export const statements = {
 	roleLabel: ["update"],
 	team: ["read"],
 	audit: ["read"],
+	// M2: manage = sections, unit types, import; price / block also for managers in scope.
+	unit: ["read", "manage", "price", "block"],
 } as const;
 
 export const ac = createAccessControl(statements);
@@ -24,14 +26,18 @@ const settings = {
 	roleLabel: ["update"],
 	team: ["read"],
 	audit: ["read"],
+	unit: ["read", "manage", "price", "block"],
 } as const;
 
 export const roles = {
 	owner: ac.newRole({ ...ownerAc.statements, ...settings }),
 	admin: ac.newRole({ ...adminAc.statements, ...settings }),
-	executive: ac.newRole({ team: ["read"], audit: ["read"] }),
-	sales_manager: ac.newRole({ team: ["read"] }),
-	salesperson: ac.newRole({}),
+	executive: ac.newRole({ team: ["read"], audit: ["read"], unit: ["read"] }),
+	sales_manager: ac.newRole({
+		team: ["read"],
+		unit: ["read", "price", "block"],
+	}),
+	salesperson: ac.newRole({ unit: ["read"] }),
 };
 
 export type RoleName = keyof typeof roles;

@@ -57,3 +57,7 @@ next-env.d.ts
 
 !.env.schema
 /src/env.ts
+
+# Local uploads
+.storage/
+.storage-test/

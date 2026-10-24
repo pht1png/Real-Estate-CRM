@@ -6,4 +6,5 @@ export const relations = {
 	...defineRelations(schema),
 	...schema.authRelations,
 	...schema.tenancyRelations,
+	...schema.inventoryRelations,
 };

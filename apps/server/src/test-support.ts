@@ -13,7 +13,7 @@ import {
 
 import { ENV } from "./env.server";
 import app from "./index";
-import { auth, db, logEmailSender } from "./services";
+import { auth, db, logEmailSender, storage } from "./services";
 
 export const PASSWORD = "correct-horse-battery";
 export const webOrigin = ENV.CORS_ORIGIN;
@@ -114,7 +114,7 @@ export async function callerFor(cookie: string) {
 	const session = await auth.api.getSession({
 		headers: new Headers({ Cookie: cookie }),
 	});
-	return createCallerFactory(appRouter)({ db, session });
+	return createCallerFactory(appRouter)({ db, session, files: storage });
 }
 
 export async function callerAs(

@@ -2,8 +2,8 @@ import { expect, test } from "@playwright/test";
 
 import {
 	createOrganization,
+	joinFromInvitation,
 	linkFromOutbox,
-	PASSWORD,
 	setUpOwner,
 	uniqueEmail,
 } from "./support";
@@ -47,14 +47,14 @@ test("admin sets up a project and imports units; price change and block; salespe
 
 	// General: commission.
 	await page.getByLabel("ค่าคอมมิชชั่น (% ของราคาสุทธิ)").fill("1.5");
-	await page.getByRole("button", { name: "บันทึก" }).click();
+	await page.getByRole("button", { name: "บันทึก", exact: true }).click();
 	await expect(page.getByText("บันทึกแล้ว").first()).toBeVisible();
 
 	// Office hours: closed on Wednesdays.
 	await page.getByRole("tab", { name: "เวลาทำการ" }).click();
 	await page.getByRole("checkbox", { name: "วันพุธ" }).click();
 	await expect(page.getByText("ปิดทำการ")).toBeVisible();
-	await page.getByRole("button", { name: "บันทึก" }).click();
+	await page.getByRole("button", { name: "บันทึก", exact: true }).click();
 	await expect(page.getByText("บันทึกแล้ว").first()).toBeVisible();
 
 	// Closed date, shown in the Buddhist era (2026 → 2569).
@@ -75,7 +75,7 @@ test("admin sets up a project and imports units; price change and block; salespe
 		buffer: PNG,
 	});
 	await expect(dialog.getByRole("img", { name: "แปลนห้อง" })).toBeVisible();
-	await dialog.getByRole("button", { name: "บันทึก" }).click();
+	await dialog.getByRole("button", { name: "บันทึก", exact: true }).click();
 	await expect(
 		page.getByRole("cell", { name: "1 Bedroom", exact: true }),
 	).toBeVisible();
@@ -125,13 +125,7 @@ test("admin sets up a project and imports units; price change and block; salespe
 
 	const salesContext = await browser.newContext();
 	const sales = await salesContext.newPage();
-	await sales.goto(invitation);
-	await sales.waitForLoadState("networkidle");
-	await sales.getByLabel("ชื่อของคุณ").fill("Somsak Sales");
-	await sales.getByLabel("อีเมล").fill(salesEmail);
-	await sales.getByLabel("รหัสผ่าน").fill(PASSWORD);
-	await sales.getByRole("button", { name: "สร้างบัญชีและเข้าร่วม" }).click();
-	await expect(sales).toHaveURL(/\/dashboard$/);
+	await joinFromInvitation(sales, invitation, "Somsak Sales", salesEmail);
 
 	await page.getByRole("link", { name: "โครงการ" }).click();
 	await page.getByRole("button", { name: "ทีม" }).click();

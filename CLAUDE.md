@@ -15,6 +15,9 @@ before every task. If code and brief disagree, stop and ask.
   email senders. `packages/db` — schema (`src/schema/`), migrations, `audit.ts`, test helpers
   (`testing.ts`). `packages/ui` — shared shadcn/ui primitives and hooks.
 - Server tests use `apps/server/src/test-support.ts` (seed orgs/members, sign in, tRPC callers).
+  Playwright helpers live in `apps/web/e2e/support.ts`: use `fillAndSubmit` for forms reached by a
+  full page load (typing can beat hydration), and keep `import type` out of spec files (it breaks
+  Playwright's loader; put typed helpers in `support.ts`).
 - Env: varlock `.env.schema` per app is the source of truth (`.env.example` lists keys only);
   `bun run env:generate` after editing a schema. Tests load `apps/server/.env.test`.
 

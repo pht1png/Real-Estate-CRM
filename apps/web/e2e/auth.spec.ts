@@ -2,6 +2,8 @@ import { expect, test } from "@playwright/test";
 
 import {
 	createOrganization,
+	fillAndSubmit,
+	joinFromInvitation,
 	linkFromOutbox,
 	PASSWORD,
 	setUpOwner,
@@ -48,13 +50,7 @@ test("owner sets up a project and invites a salesperson, who joins with limited 
 	// The salesperson creates their account from the invitation, in their own browser.
 	const salesContext = await browser.newContext();
 	const sales = await salesContext.newPage();
-	await sales.goto(invitationLink);
-	await sales.waitForLoadState("networkidle");
-	await sales.getByLabel("ชื่อของคุณ").fill("Malee Sales");
-	await sales.getByLabel("อีเมล").fill(salesEmail);
-	await sales.getByLabel("รหัสผ่าน").fill(PASSWORD);
-	await sales.getByRole("button", { name: "สร้างบัญชีและเข้าร่วม" }).click();
-	await expect(sales).toHaveURL(/\/dashboard$/);
+	await joinFromInvitation(sales, invitationLink, "Malee Sales", salesEmail);
 	await expect(sales.getByText("พนักงานขาย ที่ Baan Suan Co")).toBeVisible();
 	// No settings for a salesperson.
 	await expect(sales.getByRole("link", { name: "สมาชิก" })).toHaveCount(0);
@@ -100,9 +96,10 @@ test("two-step login: turn it on, then sign in with an authenticator code", asyn
 	await expect(page).toHaveURL(/\/login$/);
 	await signIn(page, email);
 	await expect(page).toHaveURL(/\/two-factor$/);
-	// Full page load: let the form hydrate before typing.
-	await page.waitForLoadState("networkidle");
-	await page.getByLabel("รหัส", { exact: true }).fill(totp(secret));
-	await page.getByRole("button", { name: "ยืนยัน", exact: true }).click();
-	await expect(page).toHaveURL(/\/dashboard$/);
+	await fillAndSubmit(
+		page,
+		[[page.getByLabel("รหัส", { exact: true }), () => totp(secret)]],
+		page.getByRole("button", { name: "ยืนยัน", exact: true }),
+		/\/dashboard$/,
+	);
 });

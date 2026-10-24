@@ -1,5 +1,6 @@
 "use client";
 
+import type { Permissions } from "@Real-Estate-CRM/auth/permissions";
 import {
 	Sidebar,
 	SidebarContent,
@@ -9,7 +10,11 @@ import {
 } from "@Real-Estate-CRM/ui/components/sidebar";
 import {
 	Building2Icon,
+	ContactIcon,
 	FolderKanbanIcon,
+	MegaphoneIcon,
+	SignpostIcon,
+	SlidersHorizontalIcon,
 	SunIcon,
 	TagsIcon,
 	UsersIcon,
@@ -32,47 +37,63 @@ export function AppSidebar({
 	const t = useTranslations("nav");
 	const can = useCan();
 
-	const main: NavItem[] = [
+	// Each entry shows only for roles with its permission (the server enforces it too).
+	const visible = (items: (NavItem & { permission?: Permissions })[]) =>
+		items.filter((i) => !i.permission || can(i.permission));
+
+	const main = visible([
 		{ title: t("today"), href: "/dashboard", icon: <SunIcon /> },
-		...(can({ unit: ["read"] })
-			? [
-					{
-						title: t("units"),
-						href: "/units",
-						icon: <Building2Icon />,
-					} as const,
-				]
-			: []),
-	];
-	const settings: NavItem[] = [
-		...(can({ member: ["create"] })
-			? [
-					{
-						title: t("members"),
-						href: "/settings/members",
-						icon: <UsersIcon />,
-					} as const,
-				]
-			: []),
-		...(can({ project: ["create"] })
-			? [
-					{
-						title: t("projects"),
-						href: "/settings/projects",
-						icon: <FolderKanbanIcon />,
-					} as const,
-				]
-			: []),
-		...(can({ roleLabel: ["update"] })
-			? [
-					{
-						title: t("roles"),
-						href: "/settings/roles",
-						icon: <TagsIcon />,
-					} as const,
-				]
-			: []),
-	];
+		{
+			title: t("customers"),
+			href: "/customers",
+			icon: <ContactIcon />,
+			permission: { lead: ["read"] },
+		},
+		{
+			title: t("units"),
+			href: "/units",
+			icon: <Building2Icon />,
+			permission: { unit: ["read"] },
+		},
+	]);
+	const settings = visible([
+		{
+			title: t("members"),
+			href: "/settings/members",
+			icon: <UsersIcon />,
+			permission: { member: ["create"] },
+		},
+		{
+			title: t("projects"),
+			href: "/settings/projects",
+			icon: <FolderKanbanIcon />,
+			permission: { project: ["create"] },
+		},
+		{
+			title: t("sources"),
+			href: "/settings/sources",
+			icon: <SignpostIcon />,
+			permission: { leadSource: ["manage"] },
+		},
+		{
+			title: t("campaigns"),
+			href: "/settings/campaigns",
+			icon: <MegaphoneIcon />,
+			permission: { campaign: ["manage"] },
+		},
+		{
+			title: t("rules"),
+			href: "/settings/rules",
+			icon: <SlidersHorizontalIcon />,
+			permission: { rules: ["update"] },
+		},
+		{
+			title: t("roles"),
+			href: "/settings/roles",
+			icon: <TagsIcon />,
+			permission: { roleLabel: ["update"] },
+		},
+	]);
 
 	return (
 		<Sidebar collapsible="icon" {...props}>

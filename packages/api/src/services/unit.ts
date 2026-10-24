@@ -188,6 +188,9 @@ export async function updateUnitPrice(
 			oldPriceSatang: row.listPriceSatang,
 			newPriceSatang: input.newPriceSatang,
 			changedByUserId: tenant.userId,
+			// Time of the change itself (after the row lock), not the transaction start,
+			// so concurrent edits are listed in the order they were applied.
+			changedAt: sql`clock_timestamp()`,
 			reason: input.reason,
 		});
 		await writeAudit(tx, tenant, {

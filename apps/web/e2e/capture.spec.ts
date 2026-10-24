@@ -36,12 +36,17 @@ test("walk-in on a phone: duplicate check, owned at once; manager pools a lead; 
 	const m = malee.page;
 	await m.reload();
 	await openCapture(m);
+	// Saving an empty form says what is missing instead of a silently disabled button.
+	await m.getByRole("button", { name: "บันทึกลูกค้า", exact: true }).click();
+	await expect(
+		m.getByRole("alert").filter({ hasText: "กรุณากรอก" }),
+	).toContainText("เบอร์โทร");
 	await choose(m, "โครงการ", "Hillside");
 	await m.getByLabel("เบอร์โทร").fill("081-234-5678");
 	await m.getByLabel("ชื่อลูกค้า").fill("Khun Somchai");
 	await choose(m, "แหล่งที่มา", "Walk-in");
 	await m.getByRole("checkbox", { name: /ยินยอมรับข้อมูลการตลาด/ }).click();
-	await m.getByRole("button", { name: "บันทึก", exact: true }).click();
+	await m.getByRole("button", { name: "บันทึกลูกค้า", exact: true }).click();
 	await expect(m.getByText("บันทึกลูกค้าใหม่แล้ว")).toBeVisible();
 	await expect(m.getByRole("heading", { name: "Khun Somchai" })).toBeVisible();
 
@@ -55,7 +60,7 @@ test("walk-in on a phone: duplicate check, owned at once; manager pools a lead; 
 	await expect(s.getByText("Hillside · ใหม่ · Malee Sales")).toBeVisible();
 	await expect(s.getByLabel("ชื่อลูกค้า")).toHaveValue("Khun Somchai");
 	await choose(s, "แหล่งที่มา", "Walk-in");
-	await s.getByRole("button", { name: "บันทึก", exact: true }).click();
+	await s.getByRole("button", { name: "บันทึกลูกค้า", exact: true }).click();
 	await expect(s.getByText("เพิ่มความสนใจให้ลูกค้าเดิมแล้ว")).toBeVisible();
 
 	// His own interest in full; Malee's only as a summary line.
@@ -74,7 +79,7 @@ test("walk-in on a phone: duplicate check, owned at once; manager pools a lead; 
 	await expect(owner.getByLabel("ผู้ดูแล", { exact: true })).toContainText(
 		"พูลของโครงการ",
 	);
-	await owner.getByRole("button", { name: "บันทึก", exact: true }).click();
+	await owner.getByRole("button", { name: "บันทึกลูกค้า", exact: true }).click();
 	await expect(owner.getByText("บันทึกลูกค้าใหม่แล้ว")).toBeVisible();
 
 	// Malee sees the pool lead in her customer list.

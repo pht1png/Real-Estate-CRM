@@ -395,6 +395,14 @@
 			"re_enquiry_kept": "Re-enquiry: stays with the current owner",
 			"re_enquiry_pooled": "Re-enquiry: back in the project pool",
 			"re_enquiry_logged": "Re-enquiry logged on the existing deal"
+		},
+		"missing": "Please fill in: {fields}",
+		"required": "Required",
+		"errors": {
+			"FORBIDDEN": "You are not allowed to log enquiries for this project.",
+			"NOT_FOUND": "The project, source or campaign is no longer available. Refresh and try again.",
+			"BAD_REQUEST": "Some details are not valid. Check the phone number and dates.",
+			"default": "Saving failed. Please try again."
 		}
 	},
 	"customers": {
@@ -452,7 +460,9 @@
 		"notePlaceholder": "What happened?",
 		"saved": "Saved",
 		"by": "{name} · {date}",
-		"system": "System"
+		"system": "System",
+		"removePhoneTitle": "Remove {phone}?",
+		"removePhoneDescription": "The number is removed from this customer. Other numbers stay."
 	},
 	"sources": {
 		"title": "Sources",

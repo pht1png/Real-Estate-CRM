@@ -1,6 +1,6 @@
 import type { Context as ApiContext } from "@Real-Estate-CRM/api/context";
 import type { Context as HonoContext } from "hono";
-import { auth, db } from "./services";
+import { auth, db, storage } from "./services";
 
 export type CreateContextOptions = {
 	context: HonoContext;
@@ -15,6 +15,7 @@ export async function createContext({
 	return {
 		db,
 		session,
+		files: storage,
 	};
 }
 

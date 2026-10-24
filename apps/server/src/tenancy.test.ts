@@ -37,7 +37,9 @@ describe("permissions", () => {
 			"FORBIDDEN",
 		);
 		// Allowed: their own scoped project list.
-		expect(await caller.project.list()).toEqual([{ id: p.id, name: p.name }]);
+		expect(await caller.project.list()).toEqual([
+			{ id: p.id, name: p.name, type: "condo" },
+		]);
 	});
 
 	test("a sales manager sees only members sharing their projects", async () => {

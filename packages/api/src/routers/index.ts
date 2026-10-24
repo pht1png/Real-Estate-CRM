@@ -9,11 +9,19 @@ import {
 	router,
 } from "../index";
 import {
+	addClosedDate,
+	closedDateInput,
 	createProject,
 	createProjectInput,
+	getProject,
 	listProjects,
+	projectIdInput,
+	removeClosedDate,
+	removeClosedDateInput,
 	renameProject,
 	renameProjectInput,
+	updateProject,
+	updateProjectInput,
 } from "../services/project";
 import {
 	assignProjectScope,
@@ -28,6 +36,7 @@ import {
 	updateRoleLabelInput,
 } from "../services/role-label";
 import { listMembersInScope } from "../services/team";
+import { sectionRouter, unitRouter, unitTypeRouter } from "./inventory";
 
 export const appRouter = router({
 	healthCheck: publicProcedure.query(() => {
@@ -59,7 +68,24 @@ export const appRouter = router({
 		rename: requirePermission({ project: ["update"] })
 			.input(renameProjectInput)
 			.mutation(({ ctx, input }) => renameProject(ctx.db, ctx.tenant, input)),
+		get: orgProcedure
+			.input(projectIdInput)
+			.query(({ ctx, input }) => getProject(ctx.db, ctx.tenant, input)),
+		update: requirePermission({ project: ["update"] })
+			.input(updateProjectInput)
+			.mutation(({ ctx, input }) => updateProject(ctx.db, ctx.tenant, input)),
+		addClosedDate: requirePermission({ project: ["update"] })
+			.input(closedDateInput)
+			.mutation(({ ctx, input }) => addClosedDate(ctx.db, ctx.tenant, input)),
+		removeClosedDate: requirePermission({ project: ["update"] })
+			.input(removeClosedDateInput)
+			.mutation(({ ctx, input }) =>
+				removeClosedDate(ctx.db, ctx.tenant, input),
+			),
 	}),
+	section: sectionRouter,
+	unitType: unitTypeRouter,
+	unit: unitRouter,
 	projectScope: router({
 		list: requirePermission({ projectScope: ["assign"] })
 			.input(listProjectScopeInput)

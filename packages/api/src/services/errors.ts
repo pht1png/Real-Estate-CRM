@@ -14,3 +14,11 @@ export function isUniqueViolation(error: unknown) {
 	const cause = (error as { cause?: { code?: string } })?.cause ?? error;
 	return (cause as { code?: string })?.code === "23505";
 }
+
+export function badRequest(message: string): never {
+	throw new TRPCError({ code: "BAD_REQUEST", message });
+}
+
+export function forbidden(message = "Not allowed"): never {
+	throw new TRPCError({ code: "FORBIDDEN", message });
+}

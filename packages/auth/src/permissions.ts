@@ -16,6 +16,12 @@ export const statements = {
 	audit: ["read"],
 	// M2: manage = sections, unit types, import; price / block also for managers in scope.
 	unit: ["read", "manage", "price", "block"],
+	// M3: capture = quick capture; assign = choose an owner / send to pool.
+	lead: ["capture", "read", "assign"],
+	customer: ["update"],
+	leadSource: ["manage"],
+	campaign: ["manage"],
+	rules: ["update"],
 } as const;
 
 export const ac = createAccessControl(statements);
@@ -27,17 +33,33 @@ const settings = {
 	team: ["read"],
 	audit: ["read"],
 	unit: ["read", "manage", "price", "block"],
+	lead: ["capture", "read", "assign"],
+	customer: ["update"],
+	leadSource: ["manage"],
+	campaign: ["manage"],
+	rules: ["update"],
 } as const;
 
 export const roles = {
 	owner: ac.newRole({ ...ownerAc.statements, ...settings }),
 	admin: ac.newRole({ ...adminAc.statements, ...settings }),
-	executive: ac.newRole({ team: ["read"], audit: ["read"], unit: ["read"] }),
+	executive: ac.newRole({
+		team: ["read"],
+		audit: ["read"],
+		unit: ["read"],
+		lead: ["read"],
+	}),
 	sales_manager: ac.newRole({
 		team: ["read"],
 		unit: ["read", "price", "block"],
+		lead: ["capture", "read", "assign"],
+		customer: ["update"],
 	}),
-	salesperson: ac.newRole({ unit: ["read"] }),
+	salesperson: ac.newRole({
+		unit: ["read"],
+		lead: ["capture", "read"],
+		customer: ["update"],
+	}),
 };
 
 export type RoleName = keyof typeof roles;

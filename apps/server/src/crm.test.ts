@@ -195,6 +195,8 @@ describe("quick capture", () => {
 			priority: true,
 			prioritySignals: ["budget_in_range", "timeline_soon"],
 			scoringVersion: "rules-v1",
+			// Self-logged: theirs at once, no contact deadline (brief §6).
+			contactDeadlineAt: null,
 		});
 		const [phone] = await db
 			.select()
@@ -645,6 +647,8 @@ describe("rules", () => {
 		expect((await s.salesA.caller.rules.get()).rules).toEqual({
 			reEnquiryWindowDays: 90,
 			preScoreTimelineMonths: 3,
+			claimCap: 5,
+			deadlineRollHours: 2,
 		});
 		expect(
 			await codeOf(s.salesA.caller.rules.update({ reEnquiryWindowDays: 30 })),

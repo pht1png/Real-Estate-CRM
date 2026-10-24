@@ -7,7 +7,8 @@ import { logger } from "hono/logger";
 import { createContext } from "./context";
 import { ENV } from "./env.server";
 import { files } from "./files";
-import { auth, logEmailSender } from "./services";
+import { startScheduler } from "./scheduler";
+import { auth, db, logEmailSender } from "./services";
 
 const app = new Hono();
 
@@ -44,6 +45,11 @@ app.get("/", (c) => {
 // Lets e2e tests follow links from emails sent by the log sender.
 if (ENV.NODE_ENV === "test") {
 	app.get("/__test/outbox", (c) => c.json(logEmailSender.outbox));
+}
+
+// Tests run the jobs directly, at the time they choose.
+if (ENV.NODE_ENV !== "test") {
+	startScheduler(db);
 }
 
 export default app;

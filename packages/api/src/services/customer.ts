@@ -282,6 +282,7 @@ export async function getCustomer(
 				budgetMaxSatang: i.budgetMaxSatang,
 				buyingTimeline: i.buyingTimeline,
 				nextFollowUpAt: i.nextFollowUpAt,
+				contactDeadlineAt: i.contactDeadlineAt,
 				projectMinPriceSatang: d.minPriceSatang,
 				projectMaxPriceSatang: d.maxPriceSatang,
 				createdAt: i.createdAt,

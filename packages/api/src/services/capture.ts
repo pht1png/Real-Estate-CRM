@@ -21,6 +21,7 @@ import { writeAudit } from "./audit";
 import { requireActiveCampaign } from "./campaign";
 import { badRequest, forbidden } from "./errors";
 import { ensureDefaultSources, requireActiveSource } from "./lead-source";
+import { deadlineFor } from "./pool";
 import { availablePriceRange } from "./project";
 import { getRules } from "./rules";
 import { requireProject } from "./scope";
@@ -294,6 +295,11 @@ export async function captureEnquiry(
 				.values({ organizationId: tenant.organizationId, ...values });
 
 		if (!existing) {
+			// Assigned by a manager: contact the same working day, like a claim.
+			const contactDeadlineAt =
+				ownerMemberId && !selfLogged
+					? await deadlineFor(tx, proj, rules.deadlineRollHours, now)
+					: null;
 			const [created] = await tx
 				.insert(interest)
 				.values({
@@ -313,6 +319,7 @@ export async function captureEnquiry(
 					nextFollowUpAt: input.nextFollowUpAt
 						? new Date(input.nextFollowUpAt)
 						: null,
+					contactDeadlineAt,
 				})
 				.returning({ id: interest.id });
 			if (!created) throw new Error("insert returned no row");
@@ -394,6 +401,7 @@ export async function captureEnquiry(
 		if (!keep) {
 			changes.ownerMemberId = null;
 			changes.claimedAt = null;
+			changes.contactDeadlineAt = null;
 			await activity({
 				interestId: existing.id,
 				type: "re_engagement",

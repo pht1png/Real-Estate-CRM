@@ -13,6 +13,8 @@ import type { Tenant } from "./tenancy";
 export const updateRulesInput = z.strictObject({
 	reEnquiryWindowDays: z.number().int().min(1).max(730).optional(),
 	preScoreTimelineMonths: z.number().int().min(1).max(24).optional(),
+	claimCap: z.number().int().min(1).max(50).optional(),
+	deadlineRollHours: z.number().int().min(0).max(8).optional(),
 });
 
 type Executor = Pick<Database, "select">;

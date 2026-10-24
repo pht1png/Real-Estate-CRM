@@ -1,0 +1,1 @@
+CREATE INDEX "interest_contact_deadline_idx" ON "interest" ("contact_deadline_at") WHERE "contact_deadline_at" is not null;

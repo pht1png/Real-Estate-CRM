@@ -241,6 +241,10 @@ export const interest = pgTable(
 			table.stage,
 		),
 		index("interest_owner_idx").on(table.ownerMemberId),
+		// Expiry job: only leads still waiting for first contact have a deadline.
+		index("interest_contact_deadline_idx")
+			.on(table.contactDeadlineAt)
+			.where(sql`${table.contactDeadlineAt} is not null`),
 		foreignKey({
 			name: "interest_customer_fkey",
 			columns: [table.organizationId, table.customerId],

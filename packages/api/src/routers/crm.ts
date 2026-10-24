@@ -1,5 +1,11 @@
 import { orgProcedure, requirePermission, router } from "../index";
 import {
+	logActivity,
+	logActivityInput,
+	setFollowUp,
+	setFollowUpInput,
+} from "../services/activity";
+import {
 	createCampaign,
 	createCampaignInput,
 	listCampaigns,
@@ -40,14 +46,17 @@ import {
 	renameSource,
 	renameSourceInput,
 } from "../services/lead-source";
+import { claimInput, claimLead } from "../services/pool";
 import {
 	getRulesForTenant,
 	updateRules,
 	updateRulesInput,
 } from "../services/rules";
+import { getToday } from "../services/today";
 
 const read = requirePermission({ lead: ["read"] });
 const capture = requirePermission({ lead: ["capture"] });
+const claim = requirePermission({ lead: ["claim"] });
 const editCustomer = requirePermission({ customer: ["update"] });
 const manageSources = requirePermission({ leadSource: ["manage"] });
 const manageCampaigns = requirePermission({ campaign: ["manage"] });
@@ -65,6 +74,19 @@ export const leadRouter = router({
 	addNote: read
 		.input(addNoteInput)
 		.mutation(({ ctx, input }) => addNote(ctx.db, ctx.tenant, input)),
+	claim: claim
+		.input(claimInput)
+		.mutation(({ ctx, input }) => claimLead(ctx.db, ctx.tenant, input)),
+	logActivity: read
+		.input(logActivityInput)
+		.mutation(({ ctx, input }) => logActivity(ctx.db, ctx.tenant, input)),
+	setFollowUp: read
+		.input(setFollowUpInput)
+		.mutation(({ ctx, input }) => setFollowUp(ctx.db, ctx.tenant, input)),
+});
+
+export const todayRouter = router({
+	get: read.query(({ ctx }) => getToday(ctx.db, ctx.tenant)),
 });
 
 export const customerRouter = router({

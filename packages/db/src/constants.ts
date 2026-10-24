@@ -61,6 +61,13 @@ export const closedStages: readonly InterestStage[] = [
 	"invalid",
 ];
 
+/** Open stages: an owned interest here always needs a next follow-up (brief §6). */
+export const openStages: readonly InterestStage[] = [
+	"new",
+	"contacted",
+	"visited",
+];
+
 /** Stages after a deposit: re-enquiry only logs an activity. */
 export const soldStages: readonly InterestStage[] = [
 	"deposited",
@@ -122,9 +129,15 @@ export type Rules = {
 	reEnquiryWindowDays: number;
 	/** Pre-score: buying within this many months counts as soon. */
 	preScoreTimelineMonths: number;
+	/** Max claimed leads a salesperson may hold before contacting them. */
+	claimCap: number;
+	/** Fewer office hours than this left at claim → deadline rolls to the next working day. */
+	deadlineRollHours: number;
 };
 
 export const defaultRules: Rules = {
 	reEnquiryWindowDays: 90,
 	preScoreTimelineMonths: 3,
+	claimCap: 5,
+	deadlineRollHours: 2,
 };

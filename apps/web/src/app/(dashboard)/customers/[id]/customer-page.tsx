@@ -40,7 +40,13 @@ export function CustomerPage({ customerId }: { customerId: string }) {
 				<section className="flex flex-col gap-4">
 					<h2 className="text-lg font-semibold">{t("interests")}</h2>
 					{visible.map((i) =>
-						i.visible ? <InterestCard key={i.id} interest={i} /> : null,
+						i.visible ? (
+							<InterestCard
+								key={i.id}
+								interest={i}
+								phoneE164={c.phones[0]?.phoneE164 ?? null}
+							/>
+						) : null,
 					)}
 					{hidden.length > 0 && (
 						<div className="flex flex-col gap-1">

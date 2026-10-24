@@ -17,6 +17,8 @@ import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { ClaimButton, LeadActions } from "@/components/lead-actions";
+import { useCan, useMe } from "@/hooks/use-me";
 import { useFormatBaht } from "@/lib/money";
 import { useTRPC } from "@/utils/trpc";
 
@@ -27,7 +29,13 @@ type VisibleInterest = Extract<
 	{ visible: true }
 >;
 
-export function InterestCard({ interest: i }: { interest: VisibleInterest }) {
+export function InterestCard({
+	interest: i,
+	phoneE164,
+}: {
+	interest: VisibleInterest;
+	phoneE164: string | null;
+}) {
 	const t = useTranslations("customer");
 	const ts = useTranslations("stages");
 	const ta = useTranslations("activityTypes");
@@ -40,6 +48,13 @@ export function InterestCard({ interest: i }: { interest: VisibleInterest }) {
 	const trpc = useTRPC();
 	const queryClient = useQueryClient();
 	const [note, setNote] = useState("");
+	const { data: me } = useMe();
+	const can = useCan();
+	const isOwner = !!me && i.ownerMemberId === me.memberId;
+	const inPool = i.ownerMemberId === null;
+	const canAct = isOwner || can({ lead: ["assign"] });
+	const deadlinePassed =
+		i.contactDeadlineAt !== null && new Date(i.contactDeadlineAt) <= new Date();
 
 	const addNote = useMutation(
 		trpc.lead.addNote.mutationOptions({
@@ -87,6 +102,19 @@ export function InterestCard({ interest: i }: { interest: VisibleInterest }) {
 							.join(" · ")}
 					</p>
 				)}
+				{inPool && i.stage === "new" && can({ lead: ["claim"] }) && (
+					<div className="flex flex-wrap items-center gap-2">
+						<p className="text-muted-foreground text-sm">{t("inPoolHint")}</p>
+						<ClaimButton interestId={i.id} />
+					</div>
+				)}
+				{canAct && !inPool && (
+					<LeadActions
+						interestId={i.id}
+						phoneE164={phoneE164}
+						nextFollowUpAt={i.nextFollowUpAt}
+					/>
+				)}
 				<dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
 					<dt className="text-muted-foreground">{t("source")}</dt>
 					<dd>{i.sourceName}</dd>
@@ -115,6 +143,14 @@ export function InterestCard({ interest: i }: { interest: VisibleInterest }) {
 					<dd>{i.buyingTimeline ? tt(i.buyingTimeline) : t("notSet")}</dd>
 					<dt className="text-muted-foreground">{t("followUp")}</dt>
 					<dd>{i.nextFollowUpAt ? dateTime(i.nextFollowUpAt) : tc("none")}</dd>
+					{i.contactDeadlineAt && (
+						<>
+							<dt className="text-muted-foreground">{t("contactDeadline")}</dt>
+							<dd className={deadlinePassed ? "text-destructive" : undefined}>
+								{dateTime(i.contactDeadlineAt)}
+							</dd>
+						</>
+					)}
 				</dl>
 				<Separator />
 				<section className="flex flex-col gap-3">

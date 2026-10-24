@@ -42,20 +42,13 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { useCan, useMe } from "@/hooks/use-me";
+import { defaultFollowUp } from "@/lib/follow-up";
 import { bahtToSatang } from "@/lib/money";
 import { useTRPC } from "@/utils/trpc";
 
 const NONE = "none";
 const POOL = "pool";
 const ERROR_CODES = ["FORBIDDEN", "NOT_FOUND", "BAD_REQUEST"] as const;
-
-/** Tomorrow 10:00 local time, as a datetime-local value. */
-function defaultFollowUp() {
-	const d = new Date();
-	d.setDate(d.getDate() + 1);
-	const pad = (n: number) => String(n).padStart(2, "0");
-	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T10:00`;
-}
 
 /** Simple select bound to string values (items give the trigger its label). */
 function SimpleSelect({
@@ -224,6 +217,7 @@ export function QuickCaptureForm({ onDone }: { onDone: () => void }) {
 				onDone();
 				await queryClient.invalidateQueries(trpc.lead.pathFilter());
 				await queryClient.invalidateQueries(trpc.customer.pathFilter());
+				await queryClient.invalidateQueries(trpc.today.pathFilter());
 				router.push(`/customers/${result.customerId}` as Route);
 			},
 			onError: (e) => {

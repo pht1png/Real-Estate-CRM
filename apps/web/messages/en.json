@@ -105,7 +105,28 @@
 		"title": "Today",
 		"welcome": "Welcome, {name}",
 		"summary": "{role} at {organization}",
-		"comingSoon": "Your leads, follow-ups and visits for today will appear here."
+		"comingSoon": "Your leads, follow-ups and visits for today will appear here.",
+		"claims": {
+			"title": "Contact today ({count})",
+			"description": "Leads you claimed or were given. Contact them before the deadline or they go back to the pool.",
+			"empty": "Nothing waiting for first contact."
+		},
+		"followUps": {
+			"title": "Follow-ups due ({count})",
+			"description": "Due today, overdue first.",
+			"empty": "No follow-ups due today."
+		},
+		"pool": {
+			"title": "New in my pools ({count})",
+			"description": "Unclaimed leads in your projects, priority first.",
+			"empty": "The pool is empty."
+		},
+		"contactBy": "Contact by {time} ({relative})",
+		"contactOverdue": "Deadline passed {relative}",
+		"dueAt": "Due {time} ({relative})",
+		"overdue": "Overdue since {time} ({relative})",
+		"noFollowUp": "No follow-up set",
+		"received": "Received {relative}"
 	},
 	"noOrganization": {
 		"title": "No company access",
@@ -462,7 +483,9 @@
 		"by": "{name} · {date}",
 		"system": "System",
 		"removePhoneTitle": "Remove {phone}?",
-		"removePhoneDescription": "The number is removed from this customer. Other numbers stay."
+		"removePhoneDescription": "The number is removed from this customer. Other numbers stay.",
+		"contactDeadline": "Contact by",
+		"inPoolHint": "This lead is in the pool."
 	},
 	"sources": {
 		"title": "Sources",
@@ -497,6 +520,44 @@
 		"reEnquiryWindowDays": "Re-enquiry: stays with the owner if contacted within (days)",
 		"preScoreTimelineMonths": "Priority: buying within (months)",
 		"default": "Default: {value}",
-		"saved": "Rules saved"
+		"saved": "Rules saved",
+		"claimCap": "Claim limit: uncontacted claimed leads per salesperson",
+		"deadlineRollHours": "Contact deadline: roll to the next working day when fewer office hours than this remain"
+	},
+	"leadActions": {
+		"claim": "Claim",
+		"claimed": "Lead claimed. Contact them before the deadline.",
+		"dial": "Dial",
+		"call": "Called",
+		"no_answer": "No answer",
+		"line": "LINE",
+		"followUp": "Follow-up",
+		"titles": {
+			"call": "Log a call",
+			"no_answer": "Log no answer",
+			"line": "Log a LINE message",
+			"followUp": "Reschedule follow-up"
+		},
+		"followUpHint": "Every open lead needs a next follow-up.",
+		"note": "Note",
+		"notePlaceholder": "What happened? (optional)",
+		"nextFollowUp": "Next follow-up",
+		"picks": {
+			"in2h": "In 2 hours",
+			"tomorrow": "Tomorrow 10:00",
+			"in3days": "In 3 days",
+			"nextWeek": "Next week"
+		},
+		"followUpFuture": "Choose a time in the future.",
+		"save": "Save",
+		"saved": "Saved",
+		"errors": {
+			"FORBIDDEN": "Only the lead's owner or a manager can do this. Claim the lead first if it is in the pool.",
+			"NOT_FOUND": "This lead is no longer available to you. Refresh and try again.",
+			"BAD_REQUEST": "Set a next follow-up in the future.",
+			"CONFLICT": "Someone else claimed this lead first.",
+			"PRECONDITION_FAILED": "You've reached your claim limit. Contact your claimed leads first.",
+			"default": "Saving failed. Please try again."
+		}
 	}
 }

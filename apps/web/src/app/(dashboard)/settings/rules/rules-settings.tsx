@@ -20,6 +20,8 @@ import { useTRPC } from "@/utils/trpc";
 const fields = [
 	{ key: "reEnquiryWindowDays", min: 1, max: 730 },
 	{ key: "preScoreTimelineMonths", min: 1, max: 24 },
+	{ key: "claimCap", min: 1, max: 50 },
+	{ key: "deadlineRollHours", min: 0, max: 8 },
 ] as const;
 type Key = (typeof fields)[number]["key"];
 

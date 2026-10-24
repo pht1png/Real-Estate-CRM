@@ -39,3 +39,92 @@ export const unitStatuses = [
 	"transferred",
 ] as const;
 export type UnitStatus = (typeof unitStatuses)[number];
+
+/** Lead lifecycle (brief §2). "In the pool" = stage new with no owner. */
+export const interestStages = [
+	"new",
+	"contacted",
+	"visited",
+	"deposited",
+	"contracted",
+	"transferred",
+	"lost",
+	"nurture",
+	"invalid",
+] as const;
+export type InterestStage = (typeof interestStages)[number];
+
+/** Stages that end the funnel (re-enquiry reopens them as new). */
+export const closedStages: readonly InterestStage[] = [
+	"lost",
+	"nurture",
+	"invalid",
+];
+
+/** Stages after a deposit: re-enquiry only logs an activity. */
+export const soldStages: readonly InterestStage[] = [
+	"deposited",
+	"contracted",
+	"transferred",
+];
+
+export const activityTypes = [
+	"enquiry",
+	"call",
+	"no_answer",
+	"line",
+	"meeting",
+	"visit",
+	"note",
+	"stage_change",
+	"re_engagement",
+	"assignment",
+] as const;
+export type ActivityType = (typeof activityTypes)[number];
+
+/** Activities that count as the owner having contacted the customer. */
+export const contactActivityTypes: readonly ActivityType[] = [
+	"call",
+	"line",
+	"meeting",
+	"visit",
+];
+
+export const buyingTimelines = [
+	"under_1_month",
+	"1_3_months",
+	"3_6_months",
+	"6_12_months",
+	"over_12_months",
+	"unknown",
+] as const;
+export type BuyingTimeline = (typeof buyingTimelines)[number];
+
+/** Upper bound in months for each timeline bucket (null = unknown). */
+export const timelineMaxMonths: Record<BuyingTimeline, number | null> = {
+	under_1_month: 1,
+	"1_3_months": 3,
+	"3_6_months": 6,
+	"6_12_months": 12,
+	over_12_months: Number.POSITIVE_INFINITY,
+	unknown: null,
+};
+
+export const paymentMethods = ["cash", "mortgage"] as const;
+export type PaymentMethod = (typeof paymentMethods)[number];
+
+export const temperatures = ["warm", "hot"] as const;
+export type Temperature = (typeof temperatures)[number];
+
+/** Per-company rules (brief §6), stored as overrides of these defaults. */
+export type Rules = {
+	/** Re-enquiry stays with the owner if they made contact within this many days. */
+	reEnquiryWindowDays: number;
+	/** Pre-score: buying within this many months counts as soon. */
+	preScoreTimelineMonths: number;
+};
+
+export const defaultRules: Rules = {
+	reEnquiryWindowDays: 90,
+	preScoreTimelineMonths: 3,
+};

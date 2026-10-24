@@ -36,6 +36,13 @@ import {
 	updateRoleLabelInput,
 } from "../services/role-label";
 import { listMembersInScope } from "../services/team";
+import {
+	campaignRouter,
+	customerRouter,
+	leadRouter,
+	leadSourceRouter,
+	rulesRouter,
+} from "./crm";
 import { sectionRouter, unitRouter, unitTypeRouter } from "./inventory";
 
 export const appRouter = router({
@@ -86,6 +93,11 @@ export const appRouter = router({
 	section: sectionRouter,
 	unitType: unitTypeRouter,
 	unit: unitRouter,
+	lead: leadRouter,
+	customer: customerRouter,
+	leadSource: leadSourceRouter,
+	campaign: campaignRouter,
+	rules: rulesRouter,
 	projectScope: router({
 		list: requirePermission({ projectScope: ["assign"] })
 			.input(listProjectScopeInput)

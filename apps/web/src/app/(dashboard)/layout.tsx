@@ -12,6 +12,7 @@ import { getTranslations } from "next-intl/server";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AuthCard } from "@/components/auth-card";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { QuickCapture } from "@/components/quick-capture";
 import { authClient } from "@/lib/auth-client";
 
 export default async function DashboardLayout({
@@ -57,6 +58,9 @@ export default async function DashboardLayout({
 							orientation="vertical"
 							className="mr-2 data-vertical:h-4 data-vertical:self-auto"
 						/>
+						<div className="ml-auto">
+							<QuickCapture />
+						</div>
 					</header>
 					<main className="flex flex-1 flex-col gap-6 p-4 pt-0">
 						{children}

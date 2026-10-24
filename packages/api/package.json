@@ -6,14 +6,16 @@
 		"./*": "./src/*.ts"
 	},
 	"scripts": {
-		"check-types": "tsc --noEmit"
+		"check-types": "tsc --noEmit",
+		"test": "bun test"
 	},
 	"dependencies": {
 		"@Real-Estate-CRM/auth": "workspace:*",
 		"@Real-Estate-CRM/db": "workspace:*",
 		"@trpc/client": "catalog:",
-		"drizzle-orm": "catalog:",
 		"@trpc/server": "catalog:",
+		"drizzle-orm": "catalog:",
+		"libphonenumber-js": "^1.13.15",
 		"zod": "catalog:"
 	},
 	"devDependencies": {

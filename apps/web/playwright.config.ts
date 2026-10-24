@@ -8,6 +8,8 @@ export default defineConfig({
 	testDir: "./e2e",
 	// Whole journeys (sign-up, invitations, imports) across several pages.
 	timeout: 60_000,
+	// Assertions wait for server-rendered pages (session checks) under parallel load.
+	expect: { timeout: 15_000 },
 	fullyParallel: true,
 	forbidOnly: !!process.env.CI,
 	retries: process.env.CI ? 1 : 0,

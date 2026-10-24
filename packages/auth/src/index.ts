@@ -1,13 +1,14 @@
 import type { Database } from "@Real-Estate-CRM/db";
 import { type AuditEntry, insertAudit } from "@Real-Estate-CRM/db/audit";
 import * as schema from "@Real-Estate-CRM/db/schema/auth";
+import { interest } from "@Real-Estate-CRM/db/schema/crm";
 import { tryGetCurrentAuthEndpointContext } from "@better-auth/core/context";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
 import { betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { organization } from "better-auth/plugins/organization";
 import { twoFactor } from "better-auth/plugins/two-factor";
-import { and, asc, eq, gt } from "drizzle-orm";
+import { and, asc, eq, gt, notInArray, sql } from "drizzle-orm";
 
 import {
 	accountSetupEmail,
@@ -170,6 +171,30 @@ export function createAuth(
 					},
 					beforeUpdateMemberRole: async ({ newRole }) => {
 						assertSingleKnownRole(newRole);
+					},
+					// Until offboarding (M7) moves leads to a manager, a member who
+					// still owns open leads can't be removed.
+					beforeRemoveMember: async ({ member }) => {
+						const [owned] = await database
+							.select({ n: sql<number>`count(*)::int` })
+							.from(interest)
+							.where(
+								and(
+									eq(interest.ownerMemberId, member.id),
+									notInArray(interest.stage, [
+										"transferred",
+										"lost",
+										"invalid",
+									]),
+								),
+							);
+						if ((owned?.n ?? 0) > 0) {
+							throw new APIError("BAD_REQUEST", {
+								code: "MEMBER_OWNS_LEADS",
+								message:
+									"Reassign this member's open leads before removing them",
+							});
+						}
 					},
 					afterCreateInvitation: ({ invitation }) =>
 						audit({

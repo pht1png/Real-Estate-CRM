@@ -42,6 +42,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { useCan, useMe } from "@/hooks/use-me";
+import { usePipelineLabel } from "@/hooks/use-pipeline-label";
 import { defaultFollowUp } from "@/lib/follow-up";
 import { bahtToSatang } from "@/lib/money";
 import { useTRPC } from "@/utils/trpc";
@@ -108,7 +109,7 @@ function SimpleSelect({
  */
 export function QuickCaptureForm({ onDone }: { onDone: () => void }) {
 	const t = useTranslations("capture");
-	const ts = useTranslations("stages");
+	const pipelineLabel = usePipelineLabel();
 	const tt = useTranslations("timelines");
 	const tsrc = useTranslations("sources");
 	const trpc = useTRPC();
@@ -306,13 +307,14 @@ export function QuickCaptureForm({ onDone }: { onDone: () => void }) {
 								<p className="font-medium">
 									{t("existing", { name: existing.name })}
 								</p>
-								{existing.interests.length === 0 ? (
+								{existing.leads.length === 0 ? (
 									<p>{t("existingNone")}</p>
 								) : (
 									<ul>
-										{existing.interests.map((i) => (
+										{existing.leads.map((i) => (
 											<li key={i.projectId}>
-												{i.projectName} · {ts(i.stage)} · {i.ownerName ?? "—"}
+												{i.projectName} · {pipelineLabel(i.status, i.stage)} ·{" "}
+												{i.ownerName ?? "—"}
 											</li>
 										))}
 									</ul>

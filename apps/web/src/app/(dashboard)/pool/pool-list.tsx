@@ -103,7 +103,7 @@ export function PoolList() {
 			) : (
 				<ul className="flex flex-col gap-3" aria-label={t("title")}>
 					{pool.data.map((l) => (
-						<li key={l.interestId}>
+						<li key={l.leadId}>
 							<Card size="sm">
 								<CardContent className="flex items-center justify-between gap-3">
 									<div className="min-w-0">
@@ -130,7 +130,7 @@ export function PoolList() {
 										</p>
 									</div>
 									{can({ lead: ["claim"] }) && (
-										<ClaimButton interestId={l.interestId} />
+										<ClaimButton leadId={l.leadId} />
 									)}
 								</CardContent>
 							</Card>

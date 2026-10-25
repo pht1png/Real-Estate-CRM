@@ -326,17 +326,6 @@
 		"unblocked": "Unit unblocked",
 		"priceLocked": "Price can't change after deposit"
 	},
-	"stages": {
-		"new": "New",
-		"contacted": "Contacted",
-		"visited": "Visited",
-		"deposited": "Deposited",
-		"contracted": "Contracted",
-		"transferred": "Transferred",
-		"lost": "Lost",
-		"nurture": "Nurture",
-		"invalid": "Invalid"
-	},
 	"activityTypes": {
 		"enquiry": "Enquiry",
 		"call": "Call",
@@ -345,9 +334,11 @@
 		"meeting": "Meeting",
 		"visit": "Visit",
 		"note": "Note",
-		"stage_change": "Stage change",
+		"stage_change": "Status change",
 		"re_engagement": "Back to pool (re-enquiry)",
-		"assignment": "Assigned"
+		"assignment": "Assigned",
+		"qualified": "Qualified",
+		"conversion": "Showroom visit confirmed"
 	},
 	"timelines": {
 		"under_1_month": "Within 1 month",
@@ -387,10 +378,10 @@
 		"save": "Save enquiry",
 		"outcomes": {
 			"new_customer": "New customer saved",
-			"new_interest": "Added to the existing customer",
 			"re_enquiry_kept": "Re-enquiry: stays with the current owner",
 			"re_enquiry_pooled": "Re-enquiry: back in the project pool",
-			"re_enquiry_logged": "Re-enquiry logged on the existing deal"
+			"re_enquiry_logged": "Re-enquiry logged on the existing deal",
+			"new_lead": "Added to the existing customer"
 		},
 		"missing": "Please fill in: {fields}",
 		"required": "Required",
@@ -415,7 +406,13 @@
 		"phone": "Phone",
 		"followUp": "Next follow-up",
 		"empty": "No leads match",
-		"priority": "Priority"
+		"priority": "Priority",
+		"status": "Status",
+		"lastVisit": "Last visit",
+		"pipelines": {
+			"leads": "Leads",
+			"deals": "Deals"
+		}
 	},
 	"customer": {
 		"profile": "Shared profile",
@@ -436,7 +433,7 @@
 		"referrerSet": "Set referrer by phone",
 		"noReferrer": "No referrer",
 		"referrerNotFound": "No customer with this phone",
-		"interests": "Interests",
+		"interests": "Projects",
 		"otherProjects": "Other projects",
 		"summaryLine": "{project} · {stage} · {owner}",
 		"pool": "Pool",
@@ -460,7 +457,16 @@
 		"removePhoneTitle": "Remove {phone}?",
 		"removePhoneDescription": "The number is removed from this customer. Other numbers stay.",
 		"contactDeadline": "Contact by",
-		"inPoolHint": "This lead is in the pool."
+		"inPoolHint": "This lead is in the pool.",
+		"vetting": "Lead (vetting)",
+		"leadStatus": "Status",
+		"qualifiedOn": "qualified {date}",
+		"intent": "Buying for",
+		"deal": "Deal",
+		"dealStage": "Stage",
+		"firstVisit": "First visit",
+		"visits": "{count} visits",
+		"dealTag": "Deal"
 	},
 	"sources": {
 		"title": "Sources",
@@ -512,14 +518,14 @@
 		"changeFollowUp": "Change follow-up",
 		"addNote": "Add note",
 		"exits": {
-			"lost": "Mark lost",
+			"disqualify": "Disqualify",
 			"nurture": "Move to nurture",
-			"invalid": "Mark invalid"
+			"lost": "Mark lost"
 		},
 		"exitHints": {
-			"lost": "{name} leaves your active leads. A new enquiry reopens it.",
+			"disqualify": "{name} leaves the lead queue. A new enquiry reopens it.",
 			"nurture": "{name} leaves your list; a check-in comes back in 30 days.",
-			"invalid": "{name} leaves the funnel and isn't counted as lost."
+			"lost": "The deal with {name} ends. A new enquiry reopens the lead."
 		},
 		"result": {
 			"title": "How did the call with {name} go?",
@@ -554,15 +560,16 @@
 			"unreachable": "No contact after {attempt} tries. Decide: lost or nurture.",
 			"noteSaved": "Note added",
 			"closed": {
-				"lost": "Marked lost",
+				"disqualify": "Lead disqualified",
 				"nurture": "Moved to nurture",
-				"invalid": "Marked invalid"
-			}
+				"lost": "Deal marked lost"
+			},
+			"negotiating": "Deal moved to negotiating"
 		},
 		"unreachable": {
 			"title": "No contact after {attempts} tries",
-			"lost": "Mark lost",
-			"nurture": "Move to nurture"
+			"nurture": "Move to nurture",
+			"disqualify": "Disqualify (unreachable)"
 		},
 		"errors": {
 			"FORBIDDEN": "Only the lead's owner or a manager can do this. Claim the lead first if it is in the pool.",
@@ -571,6 +578,32 @@
 			"CONFLICT": "Someone else claimed this lead first.",
 			"PRECONDITION_FAILED": "You've reached your claim limit. Contact your claimed leads first.",
 			"default": "Saving failed. Please try again."
+		},
+		"markQualified": "Mark qualified",
+		"confirmVisit": "Confirm visit",
+		"markNegotiating": "Negotiating",
+		"saveAndQualify": "Save & qualify",
+		"qualify": {
+			"title": "Mark qualified",
+			"description": "Confirm {name}'s budget, timing, what they want and why they're buying.",
+			"budget": "Budget (baht)",
+			"budgetMin": "From",
+			"budgetMax": "Up to",
+			"projectRange": "This project: {min} – {max}",
+			"budgetError": "Enter a budget range (from ≤ up to).",
+			"timeline": "Plans to buy",
+			"unitTypes": "Unit types wanted",
+			"intent": "Buying for",
+			"required": "Choose one.",
+			"saved": "Lead qualified"
+		},
+		"convert": {
+			"title": "Confirm visit",
+			"description": "Did {name} come to the showroom? This starts the deal.",
+			"visitedAt": "Visited at",
+			"future": "A visit can't be in the future. Booked visits convert when they happen.",
+			"confirm": "Customer visited",
+			"saved": "Visit confirmed. The lead is now a deal."
 		}
 	},
 	"overview": {
@@ -584,7 +617,7 @@
 			"overdue": "Overdue follow-ups",
 			"unreachable": "Unreachable",
 			"qualified": "Qualified",
-			"opportunities": "Opportunities",
+			"opportunities": "Open deals",
 			"deposited": "Deposited"
 		},
 		"hints": {
@@ -592,8 +625,8 @@
 			"oldest": "Oldest {relative}",
 			"none": "None",
 			"decide": "Decide now",
-			"qualified": "Contacted, not visited",
-			"opportunities": "Visited, still open",
+			"qualified": "Marked qualified",
+			"opportunities": "Open deals",
 			"deposited": "Not yet transferred"
 		},
 		"todo": {
@@ -628,18 +661,44 @@
 		"empty": "New leads from the pool appear here.",
 		"waiting": "Received {relative}"
 	},
-	"lostReasons": {
-		"budget": "Budget / price",
-		"mortgage": "Can't get a mortgage",
-		"location_product": "Location / product",
-		"bought_elsewhere": "Bought elsewhere",
+	"leadStatuses": {
+		"new": "New",
+		"attempting": "Attempting contact",
+		"connected": "Connected",
+		"qualified": "Qualified",
+		"nurturing": "Nurturing",
+		"converted": "Converted to deal",
+		"disqualified": "Disqualified"
+	},
+	"opportunityStages": {
+		"visited": "Visited",
+		"negotiating": "Negotiating",
+		"deposited": "Deposited",
+		"contracted": "Contracted",
+		"transferred": "Transferred",
+		"lost": "Lost"
+	},
+	"disqualifyReasons": {
+		"invalid_data": "Invalid / wrong number",
+		"spam": "Spam",
+		"duplicate": "Duplicate",
+		"agent_competitor": "Agent / competitor",
+		"job_seeker": "Job seeker",
+		"bad_budget_fit": "Budget doesn't fit",
+		"bad_location_fit": "Location doesn't fit",
 		"unreachable": "Unreachable",
 		"other": "Other"
 	},
-	"invalidReasons": {
-		"wrong_number": "Wrong number",
-		"spam": "Spam",
-		"duplicate": "Duplicate",
-		"agent_competitor": "Agent / competitor"
+	"lostReasons": {
+		"bought_competitor": "Bought from a competitor",
+		"loan_rejected": "Bank loan rejected",
+		"cold_feet": "Changed mind",
+		"product_mismatch": "Product doesn't fit",
+		"timing_postponed": "Postponed",
+		"other": "Other"
+	},
+	"buyerIntents": {
+		"own_stay": "Own stay",
+		"investment": "Investment"
 	}
 }

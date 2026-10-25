@@ -7,22 +7,23 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 
 import { PageHeader } from "@/components/page-header";
+import { usePipelineLabel } from "@/hooks/use-pipeline-label";
 import { useTRPC } from "@/utils/trpc";
 
-import { InterestCard } from "./interest-card";
+import { LeadCard } from "./lead-card";
 import { ProfileCard } from "./profile-card";
 
 export function CustomerPage({ customerId }: { customerId: string }) {
 	const t = useTranslations("customer");
-	const ts = useTranslations("stages");
+	const pipelineLabel = usePipelineLabel();
 	const tn = useTranslations("nav");
 	const trpc = useTRPC();
 	const customer = useQuery(trpc.customer.get.queryOptions({ customerId }));
 
 	if (!customer.data) return <Spinner />;
 	const c = customer.data;
-	const visible = c.interests.filter((i) => i.visible);
-	const hidden = c.interests.filter((i) => !i.visible);
+	const visible = c.leads.filter((i) => i.visible);
+	const hidden = c.leads.filter((i) => !i.visible);
 
 	return (
 		<>
@@ -41,9 +42,9 @@ export function CustomerPage({ customerId }: { customerId: string }) {
 					<h2 className="text-lg font-semibold">{t("interests")}</h2>
 					{visible.map((i) =>
 						i.visible ? (
-							<InterestCard
+							<LeadCard
 								key={i.id}
-								interest={i}
+								lead={i}
 								customerName={c.name}
 								phoneE164={c.phones[0]?.phoneE164 ?? null}
 							/>
@@ -57,7 +58,7 @@ export function CustomerPage({ customerId }: { customerId: string }) {
 									<li key={i.id}>
 										{t("summaryLine", {
 											project: i.projectName,
-											stage: ts(i.stage),
+											stage: pipelineLabel(i.status, i.stage),
 											owner: i.ownerName ?? t("pool"),
 										})}
 									</li>

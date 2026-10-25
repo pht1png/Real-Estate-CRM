@@ -12,7 +12,7 @@ import {
 	uniqueEmail,
 } from "./support";
 
-test("salesperson on a phone: pool badge, claim, call results, unreachable → lost, Start mode", async ({
+test("salesperson on a phone: pool badge, claim, call results, qualify, confirmed visit → deal → lost, unreachable → disqualified, Start mode", async ({
 	page: owner,
 	browser,
 }) => {
@@ -61,18 +61,29 @@ test("salesperson on a phone: pool badge, claim, call results, unreachable → l
 	const mali = todo.getByRole("listitem").filter({ hasText: "Khun Mali" });
 	await expect(nida.getByText(/ลีดใหม่ · ติดต่อภายใน/)).toBeVisible();
 
-	// Nida: no answer first (try 1 of 3), then answered with a follow-up she picks.
+	// Nida: no answer first (Attempting, try 1 of 3)…
 	await logNoAnswer(m, nida);
 	await expect(nida.getByText(/โทรครั้งที่ 1 จาก 3/)).toBeVisible();
+	await expect(nida.getByText("กำลังติดต่อ", { exact: true })).toBeVisible();
+
+	// …then answered: reaching her isn't qualifying her; she saves & qualifies herself.
 	await tapCall(nida);
 	await m.getByRole("button", { name: "รับสาย", exact: true }).click();
 	const answered = m.getByRole("dialog", { name: "ลูกค้ารับสาย" });
 	await answered.getByLabel("บันทึก", { exact: true }).fill("Wants a 2-bed");
 	await answered.getByRole("button", { name: /วันทำการถัดไป/ }).click();
-	await answered.getByRole("button", { name: "บันทึก", exact: true }).click();
-	await expect(answered).toBeHidden();
+	await answered.getByRole("button", { name: "บันทึกและคัดกรอง" }).click();
+	const qualify = m.getByRole("dialog", { name: "ผ่านการคัดกรอง" });
+	await qualify.getByLabel("ตั้งแต่").fill("3000000");
+	await qualify.getByLabel("ถึง", { exact: true }).fill("5000000");
+	await qualify.getByRole("button", { name: "1–3 เดือน" }).click();
+	await qualify.getByRole("button", { name: "อยู่เอง" }).click();
+	await qualify
+		.getByRole("button", { name: "ผ่านการคัดกรอง", exact: true })
+		.click();
+	await expect(qualify).toBeHidden();
 	await expect(nida).toHaveCount(0);
-	await expect(m.getByRole("link", { name: /ติดต่อได้แล้ว\s*1/ })).toBeVisible();
+	await expect(m.getByRole("link", { name: /ผ่านการคัดกรอง\s*1/ })).toBeVisible();
 
 	// Start mode walks the list one lead at a time.
 	await todo.getByRole("button", { name: "เริ่มโทร" }).click();
@@ -82,15 +93,43 @@ test("salesperson on a phone: pool badge, claim, call results, unreachable → l
 	await expect(callMode.getByText("เรียบร้อยแล้ว")).toBeVisible();
 	await callMode.getByRole("button", { name: "กลับไปหน้าภาพรวม" }).click();
 
-	// Two more no-answers within 7 days: unreachable → she marks it lost.
+	// Two more no-answers within 7 days: unreachable → she disqualifies it.
 	await logNoAnswer(m, mali);
 	await logNoAnswer(m, mali);
 	await expect(m.getByRole("button", { name: /ติดต่อไม่ได้\s*1/ })).toBeVisible();
 	const prompt = mali.getByRole("region", { name: "ติดต่อไม่ได้ 3 ครั้ง" });
-	await prompt.getByRole("button", { name: "ปิดเป็นไม่ซื้อ" }).click();
+	await prompt.getByRole("button", { name: "ไม่ผ่าน (ติดต่อไม่ได้)" }).click();
 	await expect(mali).toHaveCount(0);
 	await expect(m.getByText("เคลียร์หมดแล้ว")).toBeVisible();
-	await expect(m.getByRole("link", { name: /ลีดที่ดูแลอยู่\s*1/ })).toBeVisible();
+
+	// Nida comes to the showroom: confirming the visit turns the lead into a deal.
+	await m.goto("/customers");
+	await m.getByRole("link", { name: "Khun Nida" }).click();
+	const card = m
+		.getByRole("heading", { name: "Riverside" })
+		.locator("../../..");
+	await card.getByRole("button", { name: "การทำงานอื่น" }).click();
+	await m.getByRole("menuitem", { name: "ยืนยันลูกค้าเข้าชมแล้ว" }).click();
+	const visit = m.getByRole("dialog", { name: "ยืนยันลูกค้าเข้าชมแล้ว" });
+	await visit.getByRole("button", { name: "ลูกค้าเข้าชมแล้ว" }).click();
+	await expect(visit).toBeHidden();
+	await expect(card.getByText("เยี่ยมชมแล้ว").first()).toBeVisible();
+
+	// The deal moves to negotiating, then is lost to a competitor.
+	await card.getByRole("button", { name: "การทำงานอื่น" }).click();
+	await m.getByRole("menuitem", { name: "กำลังต่อรอง" }).click();
+	await expect(card.getByText("กำลังต่อรอง").first()).toBeVisible();
+	await card.getByRole("button", { name: "การทำงานอื่น" }).click();
+	await m.getByRole("menuitem", { name: "ปิดเป็นไม่ซื้อ" }).click();
+	const lost = m.getByRole("dialog", { name: "ปิดเป็นไม่ซื้อ" });
+	await lost.getByRole("button", { name: "ซื้อโครงการอื่น" }).click();
+	await lost.getByRole("button", { name: "ปิดเป็นไม่ซื้อ", exact: true }).click();
+	await expect(lost).toBeHidden();
+	await expect(card.getByText("ไม่ซื้อ · ซื้อโครงการอื่น").first()).toBeVisible();
+
+	// The deals list has it under Lost.
+	await m.goto("/customers?pipeline=deals&stage=lost");
+	await expect(m.getByRole("link", { name: "Khun Nida" })).toBeVisible();
 
 	await malee.context.close();
 });

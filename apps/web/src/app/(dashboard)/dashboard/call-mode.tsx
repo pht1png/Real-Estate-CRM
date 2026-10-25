@@ -47,7 +47,10 @@ export function CallMode({
 					</DialogDescription>
 				</DialogHeader>
 				{lead ? (
-					<div key={lead.interestId} className="flex flex-1 flex-col gap-4">
+					<div
+						key={`${lead.kind}:${lead.id}`}
+						className="flex flex-1 flex-col gap-4"
+					>
 						<TodoRow
 							lead={lead}
 							now={now}

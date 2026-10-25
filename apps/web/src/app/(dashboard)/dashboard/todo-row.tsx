@@ -9,6 +9,7 @@ import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 
 import { LeadActions, UnreachablePrompt } from "@/components/lead-actions";
+import { usePipelineLabel } from "@/hooks/use-pipeline-label";
 
 export type TodoLead =
 	inferRouterOutputs<AppRouter>["today"]["get"]["todo"][number];
@@ -72,6 +73,8 @@ export function TodoRow({
 	size?: "default" | "lg";
 }) {
 	const tc = useTranslations("customers");
+	const pipelineLabel = usePipelineLabel();
+	const target = l;
 	return (
 		<>
 			<div className="flex items-start justify-between gap-2">
@@ -90,7 +93,12 @@ export function TodoRow({
 						{l.primaryPhone && ` · ${l.primaryPhone}`}
 					</p>
 				</div>
-				{l.priority && <Badge>{tc("priority")}</Badge>}
+				<div className="flex shrink-0 gap-1">
+					{l.priority && <Badge>{tc("priority")}</Badge>}
+					<Badge variant={l.kind === "opportunity" ? "default" : "secondary"}>
+						{pipelineLabel(l.status, l.stage)}
+					</Badge>
+				</div>
 			</div>
 			<ReasonLine
 				lead={l}
@@ -98,9 +106,13 @@ export function TodoRow({
 				unreachableAttempts={unreachableAttempts}
 			/>
 			{l.unreachable && (
-				<UnreachablePrompt lead={l} attempts={l.attempts} onDone={onDone} />
+				<UnreachablePrompt
+					target={target}
+					attempts={l.attempts}
+					onDone={onDone}
+				/>
 			)}
-			<LeadActions lead={l} onDone={onDone} size={size} />
+			<LeadActions target={target} onDone={onDone} size={size} />
 		</>
 	);
 }

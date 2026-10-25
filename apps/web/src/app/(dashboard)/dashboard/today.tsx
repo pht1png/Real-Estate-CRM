@@ -1,6 +1,5 @@
 "use client";
 
-import { activeStages } from "@Real-Estate-CRM/db/constants";
 import { Button } from "@Real-Estate-CRM/ui/components/button";
 import { Card, CardContent } from "@Real-Estate-CRM/ui/components/card";
 import {
@@ -30,8 +29,11 @@ type Filter = "all" | "overdue" | "unreachable";
 /** Roles that own leads see their work; others keep the welcome card until M7. */
 const WORKING_ROLES = ["salesperson", "sales_manager"];
 
-const customersLink = (stages: readonly string[]) =>
-	`/customers?ownership=mine&stage=${stages.join(",")}` as Route;
+/** My leads (vetting) or deals in the customer list, filtered by status/stage. */
+const leadsLink = (statuses?: string[]) =>
+	`/customers?ownership=mine${statuses ? `&status=${statuses.join(",")}` : ""}` as Route;
+const dealsLink = (stages: string[]) =>
+	`/customers?pipeline=deals&ownership=mine&stage=${stages.join(",")}` as Route;
 
 export function Today({ name }: { name: string }) {
 	const t = useTranslations("overview");
@@ -101,7 +103,7 @@ function OverviewBody() {
 						label={t("cards.active")}
 						value={stats.active}
 						hint={t("hints.active")}
-						href={customersLink(activeStages)}
+						href={leadsLink()}
 					/>
 					<StatCard
 						label={t("cards.overdue")}
@@ -132,19 +134,19 @@ function OverviewBody() {
 						label={t("cards.qualified")}
 						value={stats.qualified}
 						hint={t("hints.qualified")}
-						href={customersLink(["new", "contacted"])}
+						href={leadsLink(["qualified"])}
 					/>
 					<StatCard
 						label={t("cards.opportunities")}
 						value={stats.opportunities}
 						hint={t("hints.opportunities")}
-						href={customersLink(["visited"])}
+						href={dealsLink(["visited", "negotiating"])}
 					/>
 					<StatCard
 						label={t("cards.deposited")}
 						value={stats.deposited}
 						hint={t("hints.deposited")}
-						href={customersLink(["deposited", "contracted"])}
+						href={dealsLink(["deposited", "contracted"])}
 					/>
 				</div>
 			</section>
@@ -185,7 +187,7 @@ function OverviewBody() {
 				) : (
 					<ul className="flex flex-col gap-3">
 						{shown.map((l) => (
-							<li key={l.interestId}>
+							<li key={`${l.kind}:${l.id}`}>
 								<Card size="sm">
 									<CardContent className="flex flex-col gap-3">
 										<TodoRow

@@ -1,11 +1,12 @@
 import { returnExpiredClaims } from "@Real-Estate-CRM/api/services/pool";
 import { contactDeadline } from "@Real-Estate-CRM/api/services/working-time";
 import {
+	activity,
 	auditLog,
 	defaultOfficeHours,
-	interest,
-	interestActivity,
+	lead,
 	type OfficeHours,
+	opportunity,
 } from "@Real-Estate-CRM/db/schema/index";
 import { describe, expect, test } from "bun:test";
 import { TRPCError } from "@trpc/server";
@@ -61,7 +62,7 @@ let phoneCounter = 0;
 /** A manager-logged enquiry sent to the pool (or to `ownerMemberId`). */
 async function poolLead(s: Setup, ownerMemberId: string | null = null) {
 	const n = String(phoneCounter++ % 10_000).padStart(4, "0");
-	const { interestId } = await s.manager.caller.lead.capture({
+	const { leadId } = await s.manager.caller.lead.capture({
 		projectId: s.projectId,
 		name: `Customer ${n}`,
 		phone: `08123${n}0`,
@@ -69,15 +70,12 @@ async function poolLead(s: Setup, ownerMemberId: string | null = null) {
 		marketingConsent: false,
 		ownerMemberId,
 	});
-	return interestId;
+	return leadId;
 }
 
-async function row(interestId: string) {
-	const [r] = await db
-		.select()
-		.from(interest)
-		.where(eq(interest.id, interestId));
-	if (!r) throw new Error("no interest");
+async function row(leadId: string) {
+	const [r] = await db.select().from(lead).where(eq(lead.id, leadId));
+	if (!r) throw new Error("no lead");
 	return r;
 }
 
@@ -94,7 +92,7 @@ describe("claiming", () => {
 		const id = await poolLead(s);
 		const before = new Date();
 		const { contactDeadlineAt } = await s.salesA.caller.lead.claim({
-			interestId: id,
+			leadId: id,
 		});
 		expect([
 			expectedDeadline(before)?.getTime(),
@@ -106,16 +104,11 @@ describe("claiming", () => {
 		});
 		expect((await row(id)).claimedAt).not.toBeNull();
 
-		const [activity] = await db
+		const [assignment] = await db
 			.select()
-			.from(interestActivity)
-			.where(
-				and(
-					eq(interestActivity.interestId, id),
-					eq(interestActivity.type, "assignment"),
-				),
-			);
-		expect(activity?.data).toEqual({
+			.from(activity)
+			.where(and(eq(activity.leadId, id), eq(activity.type, "assignment")));
+		expect(assignment?.data).toEqual({
 			from: null,
 			to: s.salesA.member.id,
 			via: "claim",
@@ -123,12 +116,10 @@ describe("claiming", () => {
 		const [audit] = await db
 			.select()
 			.from(auditLog)
-			.where(
-				and(eq(auditLog.entityId, id), eq(auditLog.action, "interest.claim")),
-			);
+			.where(and(eq(auditLog.entityId, id), eq(auditLog.action, "lead.claim")));
 		expect(audit?.actorUserId).toBe(s.salesA.user.id);
 
-		const second = s.salesB.caller.lead.claim({ interestId: id });
+		const second = s.salesB.caller.lead.claim({ leadId: id });
 		expect(await codeOf(second)).toBe("CONFLICT");
 	});
 
@@ -140,7 +131,7 @@ describe("claiming", () => {
 		);
 		const results = await Promise.all(
 			[s.salesA, s.salesB, ...others].map((p) =>
-				codeOf(p.caller.lead.claim({ interestId: id })),
+				codeOf(p.caller.lead.claim({ leadId: id })),
 			),
 		);
 		expect(results.filter((r) => r === "OK")).toHaveLength(1);
@@ -151,16 +142,16 @@ describe("claiming", () => {
 		const s = await setup();
 		const ids = await Promise.all([0, 1, 2, 3, 4, 5].map(() => poolLead(s)));
 		for (const id of ids.slice(0, 5)) {
-			await s.salesA.caller.lead.claim({ interestId: id });
+			await s.salesA.caller.lead.claim({ leadId: id });
 		}
-		const sixth = { interestId: ids[5] ?? "" };
+		const sixth = { leadId: ids[5] ?? "" };
 		expect(await codeOf(s.salesA.caller.lead.claim(sixth))).toBe(
 			"PRECONDITION_FAILED",
 		);
 
 		const nextFollowUpAt = inDays(1).toISOString();
 		await s.salesA.caller.lead.logOutcome({
-			interestId: ids[0] ?? "",
+			leadId: ids[0] ?? "",
 			outcome: "no_answer",
 			nextFollowUpAt,
 		});
@@ -168,7 +159,7 @@ describe("claiming", () => {
 			"PRECONDITION_FAILED",
 		);
 		await s.salesA.caller.lead.logOutcome({
-			interestId: ids[0] ?? "",
+			leadId: ids[0] ?? "",
 			outcome: "answered",
 			note: "Wants a 2-bed",
 			nextFollowUpAt,
@@ -180,14 +171,14 @@ describe("claiming", () => {
 	test("salespeople only, in their projects, and only from the pool", async () => {
 		const s = await setup();
 		const id = await poolLead(s);
-		expect(await codeOf(s.manager.caller.lead.claim({ interestId: id }))).toBe(
+		expect(await codeOf(s.manager.caller.lead.claim({ leadId: id }))).toBe(
 			"FORBIDDEN",
 		);
 		const { id: hillside } = await s.admin.caller.project.create({
 			name: "Hillside",
 		});
 		const outsider = await callerAs(s.org.id, "salesperson", [hillside]);
-		expect(await codeOf(outsider.caller.lead.claim({ interestId: id }))).toBe(
+		expect(await codeOf(outsider.caller.lead.claim({ leadId: id }))).toBe(
 			"NOT_FOUND",
 		);
 	});
@@ -202,7 +193,7 @@ describe("claiming", () => {
 
 		const ids = await Promise.all([0, 1, 2, 3, 4].map(() => poolLead(s)));
 		for (const id of ids) {
-			expect(await codeOf(s.salesA.caller.lead.claim({ interestId: id }))).toBe(
+			expect(await codeOf(s.salesA.caller.lead.claim({ leadId: id }))).toBe(
 				"OK",
 			);
 		}
@@ -212,7 +203,7 @@ describe("claiming", () => {
 		const a = await setup();
 		const b = await setup();
 		const id = await poolLead(a);
-		expect(await codeOf(b.salesA.caller.lead.claim({ interestId: id }))).toBe(
+		expect(await codeOf(b.salesA.caller.lead.claim({ leadId: id }))).toBe(
 			"NOT_FOUND",
 		);
 		expect((await row(id)).ownerMemberId).toBeNull();
@@ -223,11 +214,11 @@ describe("expired claims", () => {
 	test("the scheduled job returns them to the pool, logged by the system", async () => {
 		const s = await setup();
 		const id = await poolLead(s);
-		await s.salesA.caller.lead.claim({ interestId: id });
+		await s.salesA.caller.lead.claim({ leadId: id });
 		await db
-			.update(interest)
+			.update(lead)
 			.set({ contactDeadlineAt: new Date(Date.now() - 60_000) })
-			.where(eq(interest.id, id));
+			.where(eq(lead.id, id));
 
 		const result = await runScheduledJobs(db);
 		expect(result?.expiredClaims).toBeGreaterThanOrEqual(1);
@@ -238,8 +229,8 @@ describe("expired claims", () => {
 		});
 		const activities = await db
 			.select()
-			.from(interestActivity)
-			.where(eq(interestActivity.interestId, id));
+			.from(activity)
+			.where(eq(activity.leadId, id));
 		expect(activities.at(-1)).toMatchObject({
 			type: "assignment",
 			byUserId: null,
@@ -253,7 +244,7 @@ describe("expired claims", () => {
 			.select()
 			.from(auditLog)
 			.where(
-				and(eq(auditLog.entityId, id), eq(auditLog.action, "interest.assign")),
+				and(eq(auditLog.entityId, id), eq(auditLog.action, "lead.assign")),
 			);
 		expect(audit?.actorUserId).toBeNull();
 	});
@@ -262,15 +253,15 @@ describe("expired claims", () => {
 		const s = await setup();
 		const kept = await poolLead(s);
 		const expired = await poolLead(s);
-		await s.salesA.caller.lead.claim({ interestId: kept });
-		await s.salesA.caller.lead.claim({ interestId: expired });
+		await s.salesA.caller.lead.claim({ leadId: kept });
+		await s.salesA.caller.lead.claim({ leadId: expired });
 		await db
-			.update(interest)
+			.update(lead)
 			.set({ contactDeadlineAt: new Date(Date.now() - 1000) })
-			.where(eq(interest.id, expired));
+			.where(eq(lead.id, expired));
 
 		const pool = await s.salesB.caller.pool.list({});
-		expect(pool.map((l) => l.interestId)).toContain(expired);
+		expect(pool.map((l) => l.leadId)).toContain(expired);
 		expect((await row(kept)).ownerMemberId).toBe(s.salesA.member.id);
 	});
 
@@ -287,11 +278,11 @@ describe("expired claims", () => {
 		const a = await setup();
 		const b = await setup();
 		const id = await poolLead(a);
-		await a.salesA.caller.lead.claim({ interestId: id });
+		await a.salesA.caller.lead.claim({ leadId: id });
 		await db
-			.update(interest)
+			.update(lead)
 			.set({ contactDeadlineAt: new Date(Date.now() - 1000) })
-			.where(eq(interest.id, id));
+			.where(eq(lead.id, id));
 		await returnExpiredClaims(db, { organizationId: b.org.id });
 		expect((await row(id)).ownerMemberId).toBe(a.salesA.member.id);
 	});
@@ -302,7 +293,7 @@ const later = (days = 1) => inDays(days).toISOString();
 /** A pool lead claimed by salesperson A. */
 async function claimed(s: Setup) {
 	const id = await poolLead(s);
-	await s.salesA.caller.lead.claim({ interestId: id });
+	await s.salesA.caller.lead.claim({ leadId: id });
 	return id;
 }
 
@@ -313,7 +304,7 @@ describe("call results and follow-ups", () => {
 		expect(
 			await codeOf(
 				s.salesA.caller.lead.logOutcome({
-					interestId: id,
+					leadId: id,
 					outcome: "answered",
 					nextFollowUpAt: inDays(-1).toISOString(),
 				}),
@@ -323,7 +314,7 @@ describe("call results and follow-ups", () => {
 		// A time later today is fine: the salesperson chooses freely.
 		const inTwoHours = new Date(Date.now() + 2 * 3_600_000);
 		await s.salesA.caller.lead.logOutcome({
-			interestId: id,
+			leadId: id,
 			outcome: "no_answer",
 			nextFollowUpAt: inTwoHours.toISOString(),
 		});
@@ -333,7 +324,7 @@ describe("call results and follow-ups", () => {
 
 		const nextWeek = inDays(7);
 		await s.salesA.caller.lead.logOutcome({
-			interestId: id,
+			leadId: id,
 			outcome: "line",
 			note: "Sent brochure",
 			nextFollowUpAt: nextWeek.toISOString(),
@@ -345,7 +336,7 @@ describe("call results and follow-ups", () => {
 
 		const in5 = inDays(5);
 		await s.salesA.caller.lead.setFollowUp({
-			interestId: id,
+			leadId: id,
 			nextFollowUpAt: in5.toISOString(),
 		});
 		expect((await row(id)).nextFollowUpAt).toEqual(in5);
@@ -356,34 +347,34 @@ describe("call results and follow-ups", () => {
 		const id = await claimed(s);
 		const noAnswer = () =>
 			s.salesA.caller.lead.logOutcome({
-				interestId: id,
+				leadId: id,
 				outcome: "no_answer",
 				nextFollowUpAt: later(),
 			});
-		expect(await noAnswer()).toEqual({ attempt: 1, unreachable: false });
-		expect(await noAnswer()).toEqual({ attempt: 2, unreachable: false });
-		expect(await noAnswer()).toEqual({ attempt: 3, unreachable: true });
+		expect(await noAnswer()).toMatchObject({ attempt: 1, unreachable: false });
+		expect(await noAnswer()).toMatchObject({ attempt: 2, unreachable: false });
+		expect(await noAnswer()).toMatchObject({ attempt: 3, unreachable: true });
 
 		await s.salesA.caller.lead.logOutcome({
-			interestId: id,
+			leadId: id,
 			outcome: "answered",
 			nextFollowUpAt: later(),
 		});
-		expect(await noAnswer()).toEqual({ attempt: 1, unreachable: false });
+		expect(await noAnswer()).toMatchObject({ attempt: 1, unreachable: false });
 	});
 
 	test("no-answers older than the window don't count", async () => {
 		const s = await setup();
 		const id = await claimed(s);
 		// History is append-only, so seed an old try directly.
-		await db.insert(interestActivity).values({
+		await db.insert(activity).values({
 			organizationId: s.org.id,
-			interestId: id,
+			leadId: id,
 			type: "no_answer",
 			at: inDays(-8),
 		});
 		const result = await s.salesA.caller.lead.logOutcome({
-			interestId: id,
+			leadId: id,
 			outcome: "no_answer",
 			nextFollowUpAt: later(),
 		});
@@ -393,8 +384,8 @@ describe("call results and follow-ups", () => {
 	test("other salespeople can't log on my lead; pool leads must be claimed first", async () => {
 		const s = await setup();
 		const mine = await claimed(s);
-		const answered = (interestId: string) => ({
-			interestId,
+		const answered = (leadId: string) => ({
+			leadId,
 			outcome: "answered" as const,
 			nextFollowUpAt: later(),
 		});
@@ -414,69 +405,247 @@ describe("call results and follow-ups", () => {
 	test("follow-up picks land in the future and are private like the lead", async () => {
 		const s = await setup();
 		const id = await claimed(s);
-		const picks = await s.salesA.caller.lead.followUpPicks({ interestId: id });
+		const picks = await s.salesA.caller.lead.followUpPicks({ leadId: id });
 		for (const at of Object.values(picks)) {
 			expect(at?.getTime()).toBeGreaterThan(Date.now());
 		}
 		expect(
-			await codeOf(s.salesB.caller.lead.followUpPicks({ interestId: id })),
+			await codeOf(s.salesB.caller.lead.followUpPicks({ leadId: id })),
 		).toBe("NOT_FOUND");
 		const b = await setup();
 		expect(
-			await codeOf(b.manager.caller.lead.followUpPicks({ interestId: id })),
+			await codeOf(b.manager.caller.lead.followUpPicks({ leadId: id })),
 		).toBe("NOT_FOUND");
 	});
 });
 
-describe("Lost / Nurture / Invalid", () => {
-	test("Lost needs a reason, Other needs a note; closing frees the claim slot", async () => {
+describe("lead status moves with call results", () => {
+	test("no answer: new → attempting; answered: → connected; each move is logged", async () => {
+		const s = await setup();
+		const id = await claimed(s);
+		const first = await s.salesA.caller.lead.logOutcome({
+			leadId: id,
+			outcome: "no_answer",
+			nextFollowUpAt: later(),
+		});
+		expect(first).toMatchObject({ status: "attempting", attempt: 1 });
+		const second = await s.salesA.caller.lead.logOutcome({
+			leadId: id,
+			outcome: "answered",
+			nextFollowUpAt: later(),
+		});
+		expect(second.status).toBe("connected");
+		const moves = await db
+			.select({ data: activity.data })
+			.from(activity)
+			.where(and(eq(activity.leadId, id), eq(activity.type, "stage_change")));
+		expect(moves.map((m) => m.data)).toEqual([
+			{ from: "new", to: "attempting", reason: "call_result" },
+			{ from: "attempting", to: "connected", reason: "call_result" },
+		]);
+	});
+});
+
+describe("Mark qualified", () => {
+	/** A project with two unit types, and a claimed lead in it. */
+	async function withTypes(s: Setup) {
+		const twoBed = await s.admin.caller.unitType.create({
+			projectId: s.projectId,
+			name: "2 Bed",
+		});
+		const other = await s.admin.caller.project.create({ name: "Elsewhere" });
+		const foreign = await s.admin.caller.unitType.create({
+			projectId: other.id,
+			name: "Villa",
+		});
+		return { id: await claimed(s), twoBedId: twoBed.id, foreignId: foreign.id };
+	}
+	const form = (leadId: string, unitTypeIds: string[]) => ({
+		leadId,
+		budgetMinSatang: 300_000_000,
+		budgetMaxSatang: 450_000_000,
+		buyingTimeline: "1_3_months" as const,
+		unitTypeIds,
+		buyerIntent: "own_stay" as const,
+		nextFollowUpAt: later(2),
+	});
+
+	test("needs budget, timeline, intent and this project's unit types", async () => {
+		const s = await setup();
+		const { id, twoBedId, foreignId } = await withTypes(s);
+		expect(await codeOf(s.salesA.caller.lead.qualify(form(id, [])))).toBe(
+			"BAD_REQUEST",
+		);
+		expect(
+			await codeOf(s.salesA.caller.lead.qualify(form(id, [foreignId]))),
+		).toBe("BAD_REQUEST");
+		expect(
+			await codeOf(
+				s.salesA.caller.lead.qualify({
+					...form(id, [twoBedId]),
+					budgetMinSatang: 500_000_000,
+				}),
+			),
+		).toBe("BAD_REQUEST");
+
+		await s.salesA.caller.lead.qualify(form(id, [twoBedId]));
+		const r = await row(id);
+		expect(r).toMatchObject({
+			status: "qualified",
+			unitTypeIds: [twoBedId],
+			buyerIntent: "own_stay",
+			buyingTimeline: "1_3_months",
+			contactDeadlineAt: null,
+		});
+		expect(r.qualifiedAt).not.toBeNull();
+		const today = await s.salesA.caller.today.get();
+		expect(today.stats.qualified).toBe(1);
+	});
+
+	test("being reached is not qualified; only the salesperson marks it", async () => {
+		const s = await setup();
+		const id = await claimed(s);
+		await s.salesA.caller.lead.logOutcome({
+			leadId: id,
+			outcome: "answered",
+			nextFollowUpAt: later(),
+		});
+		expect((await s.salesA.caller.today.get()).stats.qualified).toBe(0);
+		expect(await codeOf(s.salesB.caller.lead.qualify(form(id, [])))).toBe(
+			"NOT_FOUND",
+		);
+		const b = await setup();
+		expect(await codeOf(b.manager.caller.lead.qualify(form(id, [])))).toBe(
+			"NOT_FOUND",
+		);
+	});
+});
+
+describe("conversion: confirmed visit → opportunity", () => {
+	test("creates one deal at Visited; the lead becomes converted", async () => {
+		const s = await setup();
+		const id = await claimed(s);
+		const visitedAt = new Date(Date.now() - 600_000);
+		const { opportunityId } = await s.salesA.caller.lead.convert({
+			leadId: id,
+			visitedAt: visitedAt.toISOString(),
+			nextFollowUpAt: later(),
+		});
+		expect(await row(id)).toMatchObject({
+			status: "converted",
+			contactDeadlineAt: null,
+			nextFollowUpAt: null,
+		});
+		const [deal] = await db
+			.select()
+			.from(opportunity)
+			.where(eq(opportunity.id, opportunityId));
+		expect(deal).toMatchObject({
+			stage: "visited",
+			leadId: id,
+			ownerMemberId: s.salesA.member.id,
+			firstVisitAt: visitedAt,
+			visitCount: 1,
+		});
+		const [conversion] = await db
+			.select()
+			.from(activity)
+			.where(and(eq(activity.leadId, id), eq(activity.type, "conversion")));
+		expect(conversion?.opportunityId).toBe(opportunityId);
+		const today = await s.salesA.caller.today.get();
+		expect(today.stats).toMatchObject({ opportunities: 1, active: 1 });
+	});
+
+	test("a booked (future) visit can't convert; pool leads must be claimed first", async () => {
 		const s = await setup();
 		const id = await claimed(s);
 		expect(
 			await codeOf(
-				s.salesA.caller.lead.close({
-					interestId: id,
-					exit: "lost",
-					reason: "other",
+				s.salesA.caller.lead.convert({
+					leadId: id,
+					visitedAt: inDays(1).toISOString(),
+					nextFollowUpAt: later(2),
 				}),
 			),
 		).toBe("BAD_REQUEST");
-		await s.salesA.caller.lead.close({
-			interestId: id,
-			exit: "lost",
+		const pooled = await poolLead(s);
+		expect(
+			await codeOf(
+				s.manager.caller.lead.convert({
+					leadId: pooled,
+					nextFollowUpAt: later(),
+				}),
+			),
+		).toBe("BAD_REQUEST");
+	});
+
+	test("parallel confirmations create exactly one deal", async () => {
+		const s = await setup();
+		const id = await claimed(s);
+		const results = await Promise.all(
+			[1, 2, 3].map(() =>
+				codeOf(
+					s.salesA.caller.lead.convert({ leadId: id, nextFollowUpAt: later() }),
+				),
+			),
+		);
+		expect(results.filter((r) => r === "OK")).toHaveLength(1);
+		const deals = await db
+			.select()
+			.from(opportunity)
+			.where(eq(opportunity.leadId, id));
+		expect(deals).toHaveLength(1);
+	});
+
+	test("company B can't convert company A's lead", async () => {
+		const a = await setup();
+		const b = await setup();
+		const id = await claimed(a);
+		expect(
+			await codeOf(
+				b.manager.caller.lead.convert({ leadId: id, nextFollowUpAt: later() }),
+			),
+		).toBe("NOT_FOUND");
+	});
+});
+
+describe("exits per pipeline", () => {
+	test("Disqualify: reason (Other needs a note); frees the claim slot", async () => {
+		const s = await setup();
+		const id = await claimed(s);
+		expect(
+			await codeOf(
+				s.salesA.caller.lead.disqualify({ leadId: id, reason: "other" }),
+			),
+		).toBe("BAD_REQUEST");
+		await s.salesA.caller.lead.disqualify({
+			leadId: id,
 			reason: "other",
 			note: "Moved abroad",
 		});
 		expect(await row(id)).toMatchObject({
-			stage: "lost",
-			lostReason: "other",
+			status: "disqualified",
+			disqualifyReason: "other",
 			ownerMemberId: s.salesA.member.id,
 			contactDeadlineAt: null,
 			nextFollowUpAt: null,
 		});
 		const [change] = await db
 			.select()
-			.from(interestActivity)
-			.where(
-				and(
-					eq(interestActivity.interestId, id),
-					eq(interestActivity.type, "stage_change"),
-				),
-			);
+			.from(activity)
+			.where(and(eq(activity.leadId, id), eq(activity.type, "stage_change")));
 		expect(change).toMatchObject({
 			note: "Moved abroad",
-			data: { from: "new", to: "lost", reason: "other" },
+			data: { from: "new", to: "disqualified", reason: "other" },
 		});
-		// Closed leads can't be closed again or take call results.
-		expect(
-			await codeOf(
-				s.salesA.caller.lead.close({ interestId: id, exit: "nurture" }),
-			),
-		).toBe("BAD_REQUEST");
+		// Closed leads take no more actions.
+		expect(await codeOf(s.salesA.caller.lead.nurture({ leadId: id }))).toBe(
+			"BAD_REQUEST",
+		);
 		expect(
 			await codeOf(
 				s.salesA.caller.lead.logOutcome({
-					interestId: id,
+					leadId: id,
 					outcome: "answered",
 					nextFollowUpAt: later(),
 				}),
@@ -484,50 +653,108 @@ describe("Lost / Nurture / Invalid", () => {
 		).toBe("BAD_REQUEST");
 	});
 
-	test("Invalid and Nurture: reasons, check-in date, off To do", async () => {
+	test("Nurture sets the check-in; disqualified and nurtured leads leave the Overview", async () => {
 		const s = await setup();
 		const wrong = await claimed(s);
-		const nurture = await claimed(s);
-		await s.salesA.caller.lead.close({
-			interestId: wrong,
-			exit: "invalid",
-			reason: "wrong_number",
+		const later30 = await claimed(s);
+		await s.salesA.caller.lead.disqualify({
+			leadId: wrong,
+			reason: "invalid_data",
 		});
-		await s.salesA.caller.lead.close({ interestId: nurture, exit: "nurture" });
-		expect((await row(wrong)).invalidReason).toBe("wrong_number");
-		const nurtured = await row(nurture);
-		expect(nurtured.stage).toBe("nurture");
+		await s.salesA.caller.lead.nurture({ leadId: later30 });
+		const nurtured = await row(later30);
+		expect(nurtured.status).toBe("nurturing");
 		const days =
 			((nurtured.nurtureNextCheckAt?.getTime() ?? 0) - Date.now()) / 86_400_000;
 		expect(days).toBeGreaterThan(29.9);
 		expect(days).toBeLessThan(30.1);
-
 		const today = await s.salesA.caller.today.get();
 		expect(today.todo).toEqual([]);
 		expect(today.stats.active).toBe(0);
 	});
 
+	test("Lost is for deals only, with a reason; Negotiating moves the deal on", async () => {
+		const s = await setup();
+		const id = await claimed(s);
+		const { opportunityId } = await s.salesA.caller.lead.convert({
+			leadId: id,
+			nextFollowUpAt: later(),
+		});
+		// The lead is converted: lead-phase exits no longer apply.
+		expect(
+			await codeOf(
+				s.salesA.caller.lead.disqualify({ leadId: id, reason: "spam" }),
+			),
+		).toBe("BAD_REQUEST");
+
+		await s.salesA.caller.opportunity.setStage({
+			opportunityId,
+			stage: "negotiating",
+		});
+		expect(
+			await codeOf(
+				s.salesA.caller.opportunity.markLost({
+					opportunityId,
+					reason: "other",
+				}),
+			),
+		).toBe("BAD_REQUEST");
+		await s.salesA.caller.opportunity.markLost({
+			opportunityId,
+			reason: "loan_rejected",
+		});
+		const [deal] = await db
+			.select()
+			.from(opportunity)
+			.where(eq(opportunity.id, opportunityId));
+		expect(deal).toMatchObject({ stage: "lost", lostReason: "loan_rejected" });
+		expect(deal?.lostAt).not.toBeNull();
+	});
+
 	test("only the owner or a covering manager can close; company B can't", async () => {
 		const s = await setup();
 		const id = await claimed(s);
-		const lost = {
-			interestId: id,
-			exit: "lost" as const,
-			reason: "budget" as const,
-		};
-		expect(await codeOf(s.salesB.caller.lead.close(lost))).toBe("NOT_FOUND");
+		const disqualify = { leadId: id, reason: "spam" as const };
+		expect(await codeOf(s.salesB.caller.lead.disqualify(disqualify))).toBe(
+			"NOT_FOUND",
+		);
 		const b = await setup();
-		expect(await codeOf(b.manager.caller.lead.close(lost))).toBe("NOT_FOUND");
+		expect(await codeOf(b.manager.caller.lead.disqualify(disqualify))).toBe(
+			"NOT_FOUND",
+		);
 		expect(
 			await codeOf(
 				b.manager.caller.lead.logOutcome({
-					interestId: id,
+					leadId: id,
 					outcome: "answered",
 					nextFollowUpAt: later(),
 				}),
 			),
 		).toBe("NOT_FOUND");
-		expect(await codeOf(s.manager.caller.lead.close(lost))).toBe("OK");
+		const { opportunityId } = await s.salesA.caller.lead.convert({
+			leadId: id,
+			nextFollowUpAt: later(),
+		});
+		const lost = { opportunityId, reason: "cold_feet" as const };
+		expect(await codeOf(s.salesB.caller.opportunity.markLost(lost))).toBe(
+			"NOT_FOUND",
+		);
+		expect(await codeOf(b.manager.caller.opportunity.markLost(lost))).toBe(
+			"NOT_FOUND",
+		);
+		expect(
+			await codeOf(
+				b.manager.caller.opportunity.setFollowUp({
+					opportunityId,
+					nextFollowUpAt: later(),
+				}),
+			),
+		).toBe("NOT_FOUND");
+		expect(await codeOf(b.manager.caller.opportunity.list({}))).toBe("OK");
+		expect(await b.manager.caller.opportunity.list({})).toEqual([]);
+		expect(await codeOf(s.manager.caller.opportunity.markLost(lost))).toBe(
+			"OK",
+		);
 	});
 });
 
@@ -536,17 +763,14 @@ describe("pool page", () => {
 		const s = await setup();
 		const plain = await poolLead(s);
 		const urgent = await poolLead(s);
-		await db
-			.update(interest)
-			.set({ priority: true })
-			.where(eq(interest.id, urgent));
+		await db.update(lead).set({ priority: true }).where(eq(lead.id, urgent));
 		const { id: hillside } = await s.admin.caller.project.create({
 			name: "Hillside",
 		});
 		const outsider = await callerAs(s.org.id, "salesperson", [hillside]);
 
 		let pool = await s.salesA.caller.pool.list({});
-		expect(pool.map((l) => l.interestId)).toEqual([urgent, plain]);
+		expect(pool.map((l) => l.leadId)).toEqual([urgent, plain]);
 		expect(pool[0]).toMatchObject({ projectName: "Riverside", priority: true });
 		expect((await s.salesA.caller.pool.count()).count).toBe(2);
 		expect(await outsider.caller.pool.list({})).toEqual([]);
@@ -554,9 +778,9 @@ describe("pool page", () => {
 			[],
 		);
 
-		await s.salesB.caller.lead.claim({ interestId: urgent });
+		await s.salesB.caller.lead.claim({ leadId: urgent });
 		pool = await s.salesA.caller.pool.list({});
-		expect(pool.map((l) => l.interestId)).toEqual([plain]);
+		expect(pool.map((l) => l.leadId)).toEqual([plain]);
 		expect((await s.salesA.caller.pool.count()).count).toBe(1);
 	});
 
@@ -570,34 +794,45 @@ describe("pool page", () => {
 });
 
 describe("Overview", () => {
-	test("To do: first contact by deadline, then due follow-ups; cards count my leads", async () => {
+	test("To do: first contact by deadline, then due follow-ups; cards count my leads and deals", async () => {
 		const s = await setup();
 		const fresh = await claimed(s);
 		const due = await claimed(s);
 		const notYet = await claimed(s);
-		const answered = (interestId: string, at: Date) =>
+		const dealLead = await claimed(s);
+		const answered = (leadId: string, at: Date) =>
 			s.salesA.caller.lead.logOutcome({
-				interestId,
+				leadId,
 				outcome: "answered",
 				nextFollowUpAt: at.toISOString(),
 			});
 		await answered(due, inDays(1));
 		await answered(notYet, inDays(2));
 		await db
-			.update(interest)
+			.update(lead)
 			.set({ nextFollowUpAt: new Date(Date.now() - 3_600_000) })
-			.where(eq(interest.id, due));
+			.where(eq(lead.id, due));
+		const { opportunityId } = await s.salesA.caller.lead.convert({
+			leadId: dealLead,
+			nextFollowUpAt: later(),
+		});
+		await db
+			.update(opportunity)
+			.set({ nextFollowUpAt: new Date(Date.now() - 7_200_000) })
+			.where(eq(opportunity.id, opportunityId));
 
 		const today = await s.salesA.caller.today.get();
-		expect(today.todo.map((l) => [l.interestId, l.reason])).toEqual([
-			[fresh, "first_contact"],
-			[due, "follow_up_due"],
+		expect(today.todo.map((l) => [l.kind, l.id, l.reason])).toEqual([
+			["lead", fresh, "first_contact"],
+			["opportunity", opportunityId, "follow_up_due"],
+			["lead", due, "follow_up_due"],
 		]);
 		expect(today.todo[0]?.phoneE164).toMatch(/^\+66/);
 		expect(today.stats).toMatchObject({
-			active: 3,
-			overdue: { count: 1 },
-			qualified: 2,
+			active: 4,
+			overdue: { count: 2 },
+			qualified: 0,
+			opportunities: 1,
 			unreachable: 0,
 		});
 		expect(today.stats.overdue.oldest).not.toBeNull();
@@ -605,26 +840,28 @@ describe("Overview", () => {
 		expect((await s.salesB.caller.today.get()).todo).toEqual([]);
 	});
 
-	test("cards follow the pipeline; unreachable leads show up to decide on", async () => {
+	test("deal cards follow the deal stage; unreachable leads show up to decide on", async () => {
 		const s = await setup();
-		const visited = await claimed(s);
-		const deposited = await claimed(s);
-		const won = await claimed(s);
+		const toDeal = async (
+			stage: "negotiating" | "deposited" | "transferred",
+		) => {
+			const id = await claimed(s);
+			const { opportunityId } = await s.salesA.caller.lead.convert({
+				leadId: id,
+				nextFollowUpAt: later(3),
+			});
+			await db
+				.update(opportunity)
+				.set({ stage })
+				.where(eq(opportunity.id, opportunityId));
+		};
+		await toDeal("negotiating");
+		await toDeal("deposited");
+		await toDeal("transferred");
 		const quiet = await claimed(s);
-		const setStage = (
-			id: string,
-			stage: "visited" | "deposited" | "transferred",
-		) =>
-			db
-				.update(interest)
-				.set({ stage, contactDeadlineAt: null, nextFollowUpAt: inDays(3) })
-				.where(eq(interest.id, id));
-		await setStage(visited, "visited");
-		await setStage(deposited, "deposited");
-		await setStage(won, "transferred");
 		for (let i = 0; i < 3; i++) {
 			await s.salesA.caller.lead.logOutcome({
-				interestId: quiet,
+				leadId: quiet,
 				outcome: "no_answer",
 				nextFollowUpAt: later(3),
 			});
@@ -638,9 +875,10 @@ describe("Overview", () => {
 			unreachable: 1,
 			qualified: 0,
 		});
-		expect(today.todo.find((l) => l.interestId === quiet)).toMatchObject({
+		expect(today.todo.find((l) => l.id === quiet)).toMatchObject({
 			attempts: 3,
 			unreachable: true,
+			reason: "first_contact",
 		});
 	});
 

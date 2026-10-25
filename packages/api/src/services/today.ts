@@ -1,17 +1,20 @@
 import type { Database } from "@Real-Estate-CRM/db";
 import {
-	activeStages,
-	contactActivityTypes,
 	customer,
-	interest,
-	openStages,
+	lead,
+	openLeadStatuses,
+	openOpportunityStages,
+	opportunity,
 	project,
 } from "@Real-Estate-CRM/db/schema/index";
 import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
 
 import { formatPhone } from "../phone";
-import { noAnswerStreak, outerInterestId, streakSince } from "./activity";
-import { visibleInterestCondition } from "./lead-access";
+import { noAnswerStreak, streakSince } from "./activity";
+import {
+	visibleLeadCondition,
+	visibleOpportunityCondition,
+} from "./lead-access";
 import { returnExpiredClaims } from "./pool";
 import { getRules } from "./rules";
 import type { Tenant } from "./tenancy";
@@ -23,113 +26,208 @@ const list = (values: readonly string[]) =>
 		values.map((v) => sql`${v}`),
 		sql`, `,
 	);
-const inStages = (stages: readonly string[]) =>
-	sql`${interest.stage} in (${list(stages)})`;
 const count = (where: SQL) =>
 	sql<number>`count(*) filter (where ${where})::int`;
+const primaryPhone = sql<
+	string | null
+>`(select p.phone_e164 from customer_phone p where p.customer_id = ${customer.id} order by p.is_primary desc limit 1)`;
+
+export type TodoReason =
+	| "first_contact"
+	| "unreachable"
+	| "no_follow_up"
+	| "follow_up_due";
 
 /**
- * Salesperson Overview (brief §7): six number cards for my leads and one To do
- * list: leads waiting for first contact (by deadline), then follow-ups due or
- * missing, plus leads that look unreachable. Expired claims are returned to
- * the pool first (lazy check).
+ * Salesperson Overview (brief §7): six number cards across both pipelines and
+ * one To do list of leads (vetting) and deals that need a step now. Expired
+ * claims are returned to the pool first (lazy check).
  */
 export async function getToday(db: Database, tenant: Tenant) {
 	await returnExpiredClaims(db, { organizationId: tenant.organizationId });
 	const now = new Date();
 	const rules = await getRules(db, tenant.organizationId);
 	const streak = noAnswerStreak(streakSince(rules.unreachableWindowDays, now));
-	const open = inStages(openStages);
-	const unreachable = sql`${open} and ${streak} >= ${rules.unreachableAttempts}`;
-	const overdue = sql`${open} and ${interest.nextFollowUpAt} < ${now}`;
-	const contacted = sql`exists (select 1 from interest_activity c where c.interest_id = ${outerInterestId} and c.type in (${list(contactActivityTypes)}))`;
-	const mine = and(
-		visibleInterestCondition(tenant),
-		eq(interest.ownerMemberId, tenant.memberId),
+	const openLead = sql`${lead.status} in (${list(openLeadStatuses)})`;
+	const vetting = sql`${lead.status} in (${list(["new", "attempting", "connected"])})`;
+	const unreachable = sql`${vetting} and ${streak} >= ${rules.unreachableAttempts}`;
+	const openDeal = sql`${opportunity.stage} in (${list(openOpportunityStages)})`;
+	const myLeads = and(
+		visibleLeadCondition(tenant),
+		eq(lead.ownerMemberId, tenant.memberId),
+	);
+	const myDeals = and(
+		visibleOpportunityCondition(tenant),
+		eq(opportunity.ownerMemberId, tenant.memberId),
 	);
 
-	const [statsRow, todo] = await Promise.all([
+	const [leadStats, dealStats, leadRows, dealRows] = await Promise.all([
 		db
 			.select({
-				active: count(inStages(activeStages)),
-				overdue: count(overdue),
-				oldestOverdue: sql<
+				open: count(openLead),
+				overdue: count(sql`${openLead} and ${lead.nextFollowUpAt} < ${now}`),
+				oldest: sql<
 					string | null
-				>`min(${interest.nextFollowUpAt}) filter (where ${overdue})`,
+				>`min(${lead.nextFollowUpAt}) filter (where ${openLead} and ${lead.nextFollowUpAt} < ${now})`,
 				unreachable: count(unreachable),
-				qualified: count(
-					sql`${inStages(["new", "contacted"])} and ${contacted}`,
-				),
-				opportunities: count(inStages(["visited"])),
-				deposited: count(inStages(["deposited", "contracted"])),
+				qualified: count(sql`${lead.status} = 'qualified'`),
 			})
-			.from(interest)
-			.where(mine),
+			.from(lead)
+			.where(myLeads),
 		db
 			.select({
-				interestId: interest.id,
+				open: count(
+					sql`${opportunity.stage} in (${list(["visited", "negotiating", "deposited", "contracted"])})`,
+				),
+				overdue: count(
+					sql`${openDeal} and ${opportunity.nextFollowUpAt} < ${now}`,
+				),
+				oldest: sql<
+					string | null
+				>`min(${opportunity.nextFollowUpAt}) filter (where ${openDeal} and ${opportunity.nextFollowUpAt} < ${now})`,
+				opportunities: count(openDeal),
+				deposited: count(
+					sql`${opportunity.stage} in (${list(["deposited", "contracted"])})`,
+				),
+			})
+			.from(opportunity)
+			.where(myDeals),
+		db
+			.select({
+				id: lead.id,
 				customerId: customer.id,
 				customerName: customer.name,
+				projectId: project.id,
 				projectName: project.name,
-				stage: interest.stage,
-				priority: interest.priority,
-				contactDeadlineAt: interest.contactDeadlineAt,
-				nextFollowUpAt: interest.nextFollowUpAt,
+				status: lead.status,
+				priority: lead.priority,
+				contactDeadlineAt: lead.contactDeadlineAt,
+				nextFollowUpAt: lead.nextFollowUpAt,
 				attempts: streak,
-				primaryPhone: sql<
-					string | null
-				>`(select p.phone_e164 from customer_phone p where p.customer_id = ${customer.id} order by p.is_primary desc limit 1)`,
+				primaryPhone,
 			})
-			.from(interest)
-			.innerJoin(customer, eq(customer.id, interest.customerId))
-			.innerJoin(project, eq(project.id, interest.projectId))
+			.from(lead)
+			.innerJoin(customer, eq(customer.id, lead.customerId))
+			.innerJoin(project, eq(project.id, lead.projectId))
 			.where(
 				and(
-					mine,
-					inArray(interest.stage, [...openStages]),
-					sql`(${interest.contactDeadlineAt} is not null
-						or ${interest.nextFollowUpAt} is null
-						or ${interest.nextFollowUpAt} <= ${now}
-						or ${streak} >= ${rules.unreachableAttempts})`,
+					myLeads,
+					inArray(lead.status, [...openLeadStatuses]),
+					sql`(${lead.contactDeadlineAt} is not null
+						or ${lead.nextFollowUpAt} is null
+						or ${lead.nextFollowUpAt} <= ${now}
+						or ${unreachable})`,
 				),
 			)
-			.orderBy(
-				sql`${interest.contactDeadlineAt} is null`,
-				sql`${interest.contactDeadlineAt} asc`,
-				sql`${interest.nextFollowUpAt} is null`,
-				sql`${interest.nextFollowUpAt} asc`,
-				sql`${interest.priority} desc`,
+			.limit(LIMIT),
+		db
+			.select({
+				id: opportunity.id,
+				customerId: customer.id,
+				customerName: customer.name,
+				projectId: project.id,
+				projectName: project.name,
+				stage: opportunity.stage,
+				nextFollowUpAt: opportunity.nextFollowUpAt,
+				primaryPhone,
+			})
+			.from(opportunity)
+			.innerJoin(customer, eq(customer.id, opportunity.customerId))
+			.innerJoin(project, eq(project.id, opportunity.projectId))
+			.where(
+				and(
+					myDeals,
+					openDeal,
+					sql`(${opportunity.nextFollowUpAt} is null or ${opportunity.nextFollowUpAt} <= ${now})`,
+				),
 			)
 			.limit(LIMIT),
 	]);
 
-	const stats = statsRow[0];
+	const phone = (p: string | null) => ({
+		phoneE164: p,
+		primaryPhone: p ? formatPhone(p) : null,
+	});
+	const leads = leadRows.map((r) => {
+		const isUnreachable =
+			r.status !== "qualified" && r.attempts >= rules.unreachableAttempts;
+		const reason: TodoReason =
+			r.contactDeadlineAt !== null
+				? "first_contact"
+				: isUnreachable
+					? "unreachable"
+					: r.nextFollowUpAt === null
+						? "no_follow_up"
+						: "follow_up_due";
+		return {
+			kind: "lead" as const,
+			id: r.id,
+			customerId: r.customerId,
+			customerName: r.customerName,
+			projectId: r.projectId,
+			projectName: r.projectName,
+			status: r.status,
+			stage: null,
+			priority: r.priority,
+			contactDeadlineAt: r.contactDeadlineAt,
+			nextFollowUpAt: r.nextFollowUpAt,
+			attempts: r.attempts,
+			unreachable: isUnreachable,
+			reason,
+			...phone(r.primaryPhone),
+		};
+	});
+	const deals = dealRows.map((r) => ({
+		kind: "opportunity" as const,
+		id: r.id,
+		customerId: r.customerId,
+		customerName: r.customerName,
+		projectId: r.projectId,
+		projectName: r.projectName,
+		status: null,
+		stage: r.stage,
+		priority: false,
+		contactDeadlineAt: null,
+		nextFollowUpAt: r.nextFollowUpAt,
+		attempts: 0,
+		unreachable: false,
+		reason: (r.nextFollowUpAt === null
+			? "no_follow_up"
+			: "follow_up_due") as TodoReason,
+		...phone(r.primaryPhone),
+	}));
+	// First contact by deadline, then missing follow-ups, then the oldest due.
+	const time = (d: Date | null) => d?.getTime() ?? Number.NEGATIVE_INFINITY;
+	const todo = [...leads, ...deals].sort((a, b) => {
+		if (!!a.contactDeadlineAt !== !!b.contactDeadlineAt) {
+			return a.contactDeadlineAt ? -1 : 1;
+		}
+		if (a.contactDeadlineAt && b.contactDeadlineAt) {
+			return a.contactDeadlineAt.getTime() - b.contactDeadlineAt.getTime();
+		}
+		const byDue = time(a.nextFollowUpAt) - time(b.nextFollowUpAt);
+		return byDue !== 0 ? byDue : Number(b.priority) - Number(a.priority);
+	});
+
+	const l = leadStats[0];
+	const o = dealStats[0];
+	const oldest = [l?.oldest, o?.oldest]
+		.filter((v): v is string => !!v)
+		.map((v) => new Date(v))
+		.sort((a, b) => a.getTime() - b.getTime())[0];
 	return {
 		stats: {
-			active: stats?.active ?? 0,
+			active: (l?.open ?? 0) + (o?.open ?? 0),
 			overdue: {
-				count: stats?.overdue ?? 0,
-				oldest: stats?.oldestOverdue ? new Date(stats.oldestOverdue) : null,
+				count: (l?.overdue ?? 0) + (o?.overdue ?? 0),
+				oldest: oldest ?? null,
 			},
-			unreachable: stats?.unreachable ?? 0,
-			qualified: stats?.qualified ?? 0,
-			opportunities: stats?.opportunities ?? 0,
-			deposited: stats?.deposited ?? 0,
+			unreachable: l?.unreachable ?? 0,
+			qualified: l?.qualified ?? 0,
+			opportunities: o?.opportunities ?? 0,
+			deposited: o?.deposited ?? 0,
 		},
 		unreachableAttempts: rules.unreachableAttempts,
-		todo: todo.map((r) => ({
-			...r,
-			phoneE164: r.primaryPhone,
-			primaryPhone: r.primaryPhone ? formatPhone(r.primaryPhone) : null,
-			unreachable: r.attempts >= rules.unreachableAttempts,
-			reason:
-				r.contactDeadlineAt !== null
-					? ("first_contact" as const)
-					: r.attempts >= rules.unreachableAttempts
-						? ("unreachable" as const)
-						: r.nextFollowUpAt === null
-							? ("no_follow_up" as const)
-							: ("follow_up_due" as const),
-		})),
+		todo: todo.slice(0, LIMIT),
 	};
 }

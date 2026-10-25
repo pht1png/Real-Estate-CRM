@@ -1,12 +1,13 @@
 import type { Database } from "@Real-Estate-CRM/db";
 import { type AuditEntry, insertAudit } from "@Real-Estate-CRM/db/audit";
 import {
+	activity,
 	campaign,
 	customer,
-	interest,
-	interestActivity,
+	lead,
 	leadSource,
 	member,
+	poolLeadStatuses,
 	project,
 	projectClosedDate,
 	user,
@@ -28,7 +29,7 @@ import { z } from "zod";
 
 import { writeAudit } from "./audit";
 import { badRequest, conflict, notFound } from "./errors";
-import { visibleInterestCondition } from "./lead-access";
+import { visibleLeadCondition } from "./lead-access";
 import { getRules } from "./rules";
 import { coversProject, type Tenant } from "./tenancy";
 import {
@@ -37,7 +38,7 @@ import {
 	type WorkingCalendar,
 } from "./working-time";
 
-export const claimInput = z.strictObject({ interestId: z.uuid() });
+export const claimInput = z.strictObject({ leadId: z.uuid() });
 export const listPoolInput = z.strictObject({ projectId: z.uuid().optional() });
 
 type Executor = Pick<Database, "select">;
@@ -93,16 +94,16 @@ export async function claimLead(
 	return db.transaction(async (tx) => {
 		const [row] = await tx
 			.select()
-			.from(interest)
+			.from(lead)
 			.where(
 				and(
-					eq(interest.id, input.interestId),
-					eq(interest.organizationId, tenant.organizationId),
+					eq(lead.id, input.leadId),
+					eq(lead.organizationId, tenant.organizationId),
 				),
 			)
 			.for("update");
 		// In my projects is enough here: a lost race may name the owner (brief §4 summary line).
-		if (!row || !coversProject(tenant, row.projectId)) notFound("Interest");
+		if (!row || !coversProject(tenant, row.projectId)) notFound("Lead");
 		if (row.ownerMemberId) {
 			const [owner] = await tx
 				.select({ name: user.name })
@@ -111,7 +112,9 @@ export async function claimLead(
 				.where(eq(member.id, row.ownerMemberId));
 			conflict(`Already claimed by ${owner?.name ?? "someone else"}`);
 		}
-		if (row.stage !== "new") badRequest("Only new leads can be claimed");
+		if (!poolLeadStatuses.includes(row.status)) {
+			badRequest("Only leads in the pool can be claimed");
+		}
 
 		// One claim at a time per person, so the cap can't be raced.
 		await tx.execute(
@@ -120,12 +123,12 @@ export async function claimLead(
 		const rules = await getRules(tx, tenant.organizationId);
 		const [held] = await tx
 			.select({ n: sql<number>`count(*)::int` })
-			.from(interest)
+			.from(lead)
 			.where(
 				and(
-					eq(interest.ownerMemberId, tenant.memberId),
-					isNotNull(interest.claimedAt),
-					isNotNull(interest.contactDeadlineAt),
+					eq(lead.ownerMemberId, tenant.memberId),
+					isNotNull(lead.claimedAt),
+					isNotNull(lead.contactDeadlineAt),
 				),
 			);
 		if ((held?.n ?? 0) >= rules.claimCap) {
@@ -148,23 +151,23 @@ export async function claimLead(
 			now,
 		);
 		await tx
-			.update(interest)
+			.update(lead)
 			.set({
 				ownerMemberId: tenant.memberId,
 				claimedAt: now,
 				contactDeadlineAt,
 			})
-			.where(eq(interest.id, row.id));
-		await tx.insert(interestActivity).values({
+			.where(eq(lead.id, row.id));
+		await tx.insert(activity).values({
 			organizationId: tenant.organizationId,
-			interestId: row.id,
+			leadId: row.id,
 			type: "assignment",
 			byUserId: tenant.userId,
 			data: { from: null, to: tenant.memberId, via: "claim" },
 		});
 		await writeAudit(tx, tenant, {
-			action: "interest.claim",
-			entityType: "interest",
+			action: "lead.claim",
+			entityType: "lead",
 			entityId: row.id,
 			before: { ownerMemberId: null },
 			after: { ownerMemberId: tenant.memberId },
@@ -185,16 +188,16 @@ export async function returnExpiredClaims(
 	return db.transaction(async (tx) => {
 		const expired = await tx
 			.select({
-				id: interest.id,
-				organizationId: interest.organizationId,
-				ownerMemberId: interest.ownerMemberId,
+				id: lead.id,
+				organizationId: lead.organizationId,
+				ownerMemberId: lead.ownerMemberId,
 			})
-			.from(interest)
+			.from(lead)
 			.where(
 				and(
-					lte(interest.contactDeadlineAt, now),
+					lte(lead.contactDeadlineAt, now),
 					options.organizationId
-						? eq(interest.organizationId, options.organizationId)
+						? eq(lead.organizationId, options.organizationId)
 						: undefined,
 				),
 			)
@@ -202,18 +205,18 @@ export async function returnExpiredClaims(
 		if (expired.length === 0) return 0;
 
 		await tx
-			.update(interest)
+			.update(lead)
 			.set({ ownerMemberId: null, claimedAt: null, contactDeadlineAt: null })
 			.where(
 				inArray(
-					interest.id,
+					lead.id,
 					expired.map((e) => e.id),
 				),
 			);
-		await tx.insert(interestActivity).values(
+		await tx.insert(activity).values(
 			expired.map((e) => ({
 				organizationId: e.organizationId,
-				interestId: e.id,
+				leadId: e.id,
 				type: "assignment" as const,
 				data: {
 					from: e.ownerMemberId,
@@ -226,8 +229,8 @@ export async function returnExpiredClaims(
 			const entry: AuditEntry = {
 				organizationId: e.organizationId,
 				actorUserId: null,
-				action: "interest.assign",
-				entityType: "interest",
+				action: "lead.assign",
+				entityType: "lead",
 				entityId: e.id,
 				before: { ownerMemberId: e.ownerMemberId },
 				after: { ownerMemberId: null, reason: "contact_deadline_missed" },
@@ -241,9 +244,9 @@ export async function returnExpiredClaims(
 /** Unclaimed leads in the tenant's projects (brief §6 pool). */
 function inPool(tenant: Tenant) {
 	return and(
-		visibleInterestCondition(tenant),
-		isNull(interest.ownerMemberId),
-		eq(interest.stage, "new"),
+		visibleLeadCondition(tenant),
+		isNull(lead.ownerMemberId),
+		inArray(lead.status, [...poolLeadStatuses]),
 	);
 }
 
@@ -256,28 +259,28 @@ export async function listPool(
 	await returnExpiredClaims(db, { organizationId: tenant.organizationId });
 	return db
 		.select({
-			interestId: interest.id,
+			leadId: lead.id,
 			customerId: customer.id,
 			customerName: customer.name,
 			projectId: project.id,
 			projectName: project.name,
-			priority: interest.priority,
+			priority: lead.priority,
 			sourceName: leadSource.name,
 			campaignCode: campaign.code,
-			createdAt: interest.createdAt,
+			createdAt: lead.createdAt,
 		})
-		.from(interest)
-		.innerJoin(customer, eq(customer.id, interest.customerId))
-		.innerJoin(project, eq(project.id, interest.projectId))
-		.innerJoin(leadSource, eq(leadSource.id, interest.sourceId))
-		.leftJoin(campaign, eq(campaign.id, interest.campaignId))
+		.from(lead)
+		.innerJoin(customer, eq(customer.id, lead.customerId))
+		.innerJoin(project, eq(project.id, lead.projectId))
+		.innerJoin(leadSource, eq(leadSource.id, lead.sourceId))
+		.leftJoin(campaign, eq(campaign.id, lead.campaignId))
 		.where(
 			and(
 				inPool(tenant),
-				input.projectId ? eq(interest.projectId, input.projectId) : undefined,
+				input.projectId ? eq(lead.projectId, input.projectId) : undefined,
 			),
 		)
-		.orderBy(desc(interest.priority), asc(interest.createdAt))
+		.orderBy(desc(lead.priority), asc(lead.createdAt))
 		.limit(200);
 }
 
@@ -286,7 +289,7 @@ export async function poolCount(db: Database, tenant: Tenant) {
 	await returnExpiredClaims(db, { organizationId: tenant.organizationId });
 	const [row] = await db
 		.select({ count: sql<number>`count(*)::int` })
-		.from(interest)
+		.from(lead)
 		.where(inPool(tenant));
 	return { count: row?.count ?? 0 };
 }

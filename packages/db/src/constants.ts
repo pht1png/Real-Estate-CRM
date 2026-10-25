@@ -40,36 +40,70 @@ export const unitStatuses = [
 ] as const;
 export type UnitStatus = (typeof unitStatuses)[number];
 
-/** Lead lifecycle (brief §2). "In the pool" = stage new with no owner. */
-export const interestStages = [
+/**
+ * Lead pipeline (the vetting queue, brief §2): a customer's enquiry about one
+ * project. A confirmed showroom visit converts it into an opportunity.
+ */
+export const leadStatuses = [
 	"new",
-	"contacted",
+	"attempting",
+	"connected",
+	"qualified",
+	"nurturing",
+	"converted",
+	"disqualified",
+] as const;
+export type LeadStatus = (typeof leadStatuses)[number];
+
+/** Leads still being worked: they need a next follow-up (brief §6). */
+export const openLeadStatuses: readonly LeadStatus[] = [
+	"new",
+	"attempting",
+	"connected",
+	"qualified",
+];
+
+/** Unowned leads in these statuses form the project pool. */
+export const poolLeadStatuses: readonly LeadStatus[] = [
+	"new",
+	"attempting",
+	"connected",
+];
+
+/** Lead exits; a re-enquiry reopens them as new. */
+export const closedLeadStatuses: readonly LeadStatus[] = [
+	"disqualified",
+	"nurturing",
+];
+
+/** Opportunity (deal) pipeline, from the first confirmed visit. */
+export const opportunityStages = [
 	"visited",
+	"negotiating",
 	"deposited",
 	"contracted",
 	"transferred",
 	"lost",
-	"nurture",
-	"invalid",
 ] as const;
-export type InterestStage = (typeof interestStages)[number];
+export type OpportunityStage = (typeof opportunityStages)[number];
 
-/** Stages that end the funnel (re-enquiry reopens them as new). */
-export const closedStages: readonly InterestStage[] = [
-	"lost",
-	"nurture",
-	"invalid",
-];
-
-/** Open stages: an owned interest here always needs a next follow-up (brief §6). */
-export const openStages: readonly InterestStage[] = [
-	"new",
-	"contacted",
+/** Deals still being worked before a deposit: they need a next follow-up. */
+export const openOpportunityStages: readonly OpportunityStage[] = [
 	"visited",
+	"negotiating",
 ];
 
-/** Stages after a deposit: re-enquiry only logs an activity. */
-export const soldStages: readonly InterestStage[] = [
+/** After a deposit: re-enquiry only logs an activity. */
+export const soldStages: readonly OpportunityStage[] = [
+	"deposited",
+	"contracted",
+	"transferred",
+];
+
+/** Opportunities that block a new one for the same lead (all but lost). */
+export const liveOpportunityStages: readonly OpportunityStage[] = [
+	"visited",
+	"negotiating",
 	"deposited",
 	"contracted",
 	"transferred",
@@ -86,6 +120,8 @@ export const activityTypes = [
 	"stage_change",
 	"re_engagement",
 	"assignment",
+	"qualified",
+	"conversion",
 ] as const;
 export type ActivityType = (typeof activityTypes)[number];
 
@@ -123,34 +159,33 @@ export type PaymentMethod = (typeof paymentMethods)[number];
 export const temperatures = ["warm", "hot"] as const;
 export type Temperature = (typeof temperatures)[number];
 
-/** Lost reasons (brief §6); "other" needs a note. */
-export const lostReasons = [
-	"budget",
-	"mortgage",
-	"location_product",
-	"bought_elsewhere",
-	"unreachable",
-	"other",
-] as const;
-export type LostReason = (typeof lostReasons)[number];
+export const buyerIntents = ["own_stay", "investment"] as const;
+export type BuyerIntent = (typeof buyerIntents)[number];
 
-/** Invalid leaves the funnel and isn't counted as Lost (brief §6). */
-export const invalidReasons = [
-	"wrong_number",
+/** Why a lead leaves the vetting queue (brief §6); "other" needs a note. */
+export const disqualifyReasons = [
+	"invalid_data",
 	"spam",
 	"duplicate",
 	"agent_competitor",
+	"job_seeker",
+	"bad_budget_fit",
+	"bad_location_fit",
+	"unreachable",
+	"other",
 ] as const;
-export type InvalidReason = (typeof invalidReasons)[number];
+export type DisqualifyReason = (typeof disqualifyReasons)[number];
 
-/** Stages still in play for an owner: everything except closed exits and transferred. */
-export const activeStages: readonly InterestStage[] = [
-	"new",
-	"contacted",
-	"visited",
-	"deposited",
-	"contracted",
-];
+/** Why a deal is lost after a visit (brief §6); "other" needs a note. */
+export const lostReasons = [
+	"bought_competitor",
+	"loan_rejected",
+	"cold_feet",
+	"product_mismatch",
+	"timing_postponed",
+	"other",
+] as const;
+export type LostReason = (typeof lostReasons)[number];
 
 /** Per-company rules (brief §6), stored as overrides of these defaults. */
 export type Rules = {

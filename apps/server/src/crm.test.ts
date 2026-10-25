@@ -1,9 +1,10 @@
 import {
+	activity,
 	auditLog,
 	customer,
 	customerPhone,
-	interest,
-	interestActivity,
+	lead,
+	opportunity,
 } from "@Real-Estate-CRM/db/schema/index";
 import { describe, expect, test } from "bun:test";
 import { TRPCError } from "@trpc/server";
@@ -187,11 +188,11 @@ describe("quick capture", () => {
 		expect(result.outcome).toBe("new_customer");
 		const [row] = await db
 			.select()
-			.from(interest)
-			.where(eq(interest.id, result.interestId));
+			.from(lead)
+			.where(eq(lead.id, result.leadId));
 		expect(row).toMatchObject({
 			ownerMemberId: s.salesA.member.id,
-			stage: "new",
+			status: "new",
 			priority: true,
 			prioritySignals: ["budget_in_range", "timeline_soon"],
 			scoringVersion: "rules-v1",
@@ -213,8 +214,8 @@ describe("quick capture", () => {
 		});
 		const [enquiry] = await db
 			.select()
-			.from(interestActivity)
-			.where(eq(interestActivity.interestId, result.interestId));
+			.from(activity)
+			.where(eq(activity.leadId, result.leadId));
 		expect(enquiry).toMatchObject({
 			type: "enquiry",
 			byUserId: s.salesA.user.id,
@@ -250,16 +251,16 @@ describe("quick capture", () => {
 		);
 		const [row] = await db
 			.select()
-			.from(interest)
-			.where(eq(interest.id, assigned.interestId));
+			.from(lead)
+			.where(eq(lead.id, assigned.leadId));
 		expect(row?.ownerMemberId).toBe(s.salesB.member.id);
 		const [audit] = await db
 			.select()
 			.from(auditLog)
 			.where(
 				and(
-					eq(auditLog.action, "interest.assign"),
-					eq(auditLog.entityId, assigned.interestId),
+					eq(auditLog.action, "lead.assign"),
+					eq(auditLog.entityId, assigned.leadId),
 				),
 			);
 		expect(audit?.actorUserId).toBe(s.manager.user.id);
@@ -273,8 +274,8 @@ describe("quick capture", () => {
 		);
 		const [pool] = await db
 			.select()
-			.from(interest)
-			.where(eq(interest.id, pooled.interestId));
+			.from(lead)
+			.where(eq(lead.id, pooled.leadId));
 		expect(pool?.ownerMemberId).toBeNull();
 	});
 
@@ -297,7 +298,7 @@ describe("quick capture", () => {
 });
 
 describe("duplicates and re-enquiry", () => {
-	test("the same phone in another format and project adds an interest to the same customer", async () => {
+	test("the same phone in another format and project adds a lead to the same customer", async () => {
 		const s = await setup();
 		const first = await s.salesA.caller.lead.capture(walkIn(s));
 		const second = await s.salesB.caller.lead.capture(
@@ -309,32 +310,34 @@ describe("duplicates and re-enquiry", () => {
 		);
 		expect(second).toMatchObject({
 			customerId: first.customerId,
-			outcome: "new_interest",
+			outcome: "new_lead",
 		});
 
 		const lookup = await s.salesB.caller.lead.lookupPhone({
 			phone: "0812345678",
 		});
 		expect(lookup.customer?.name).toBe("Khun Somchai");
-		expect(lookup.customer?.interests.map((i) => i.projectName).sort()).toEqual(
-			["Hillside", "Riverside"],
-		);
-		expect(Object.keys(lookup.customer?.interests[0] ?? {}).sort()).toEqual([
+		expect(lookup.customer?.leads.map((i) => i.projectName).sort()).toEqual([
+			"Hillside",
+			"Riverside",
+		]);
+		expect(Object.keys(lookup.customer?.leads[0] ?? {}).sort()).toEqual([
 			"ownerName",
 			"projectId",
 			"projectName",
 			"stage",
+			"status",
 		]);
 	});
 
 	async function captureOwnedByA(s: Setup) {
 		const first = await s.salesA.caller.lead.capture(walkIn(s));
-		return first.interestId;
+		return first.leadId;
 	}
-	const contactAt = (s: Setup, interestId: string, at: Date) =>
-		db.insert(interestActivity).values({
+	const contactAt = (s: Setup, leadId: string, at: Date) =>
+		db.insert(activity).values({
 			organizationId: s.org.id,
-			interestId,
+			leadId,
 			type: "call",
 			byUserId: s.salesA.user.id,
 			at,
@@ -342,37 +345,31 @@ describe("duplicates and re-enquiry", () => {
 
 	test("re-enquiry stays with an owner who made contact within 90 days", async () => {
 		const s = await setup();
-		const interestId = await captureOwnedByA(s);
-		await contactAt(s, interestId, daysAgo(10));
+		const leadId = await captureOwnedByA(s);
+		await contactAt(s, leadId, daysAgo(10));
 		const again = await s.salesB.caller.lead.capture(
 			walkIn(s, { nextFollowUpAt: followUp() }),
 		);
-		expect(again).toMatchObject({ interestId, outcome: "re_enquiry_kept" });
-		const [row] = await db
-			.select()
-			.from(interest)
-			.where(eq(interest.id, interestId));
+		expect(again).toMatchObject({ leadId, outcome: "re_enquiry_kept" });
+		const [row] = await db.select().from(lead).where(eq(lead.id, leadId));
 		expect(row?.ownerMemberId).toBe(s.salesA.member.id);
 	});
 
 	test("re-enquiry goes to the pool after 90 days without contact, logged as re_engagement", async () => {
 		const s = await setup();
-		const interestId = await captureOwnedByA(s);
-		await contactAt(s, interestId, daysAgo(95));
+		const leadId = await captureOwnedByA(s);
+		await contactAt(s, leadId, daysAgo(95));
 		const again = await s.manager.caller.lead.capture(
 			walkIn(s, { ownerMemberId: null }),
 		);
 		expect(again.outcome).toBe("re_enquiry_pooled");
-		const [row] = await db
-			.select()
-			.from(interest)
-			.where(eq(interest.id, interestId));
+		const [row] = await db.select().from(lead).where(eq(lead.id, leadId));
 		expect(row?.ownerMemberId).toBeNull();
 		const types = (
 			await db
-				.select({ type: interestActivity.type })
-				.from(interestActivity)
-				.where(eq(interestActivity.interestId, interestId))
+				.select({ type: activity.type })
+				.from(activity)
+				.where(eq(activity.leadId, leadId))
 		).map((a) => a.type);
 		expect(types).toContain("re_engagement");
 		expect(types.filter((t) => t === "enquiry").length).toBe(2);
@@ -381,47 +378,78 @@ describe("duplicates and re-enquiry", () => {
 	test("the window follows the company rule", async () => {
 		const s = await setup();
 		await s.admin.caller.rules.update({ reEnquiryWindowDays: 120 });
-		const interestId = await captureOwnedByA(s);
-		await contactAt(s, interestId, daysAgo(95));
+		const leadId = await captureOwnedByA(s);
+		await contactAt(s, leadId, daysAgo(95));
 		expect((await s.salesB.caller.lead.capture(walkIn(s))).outcome).toBe(
 			"re_enquiry_kept",
 		);
 	});
 
-	test("a lost interest reopens as new; a deposited one only gets the activity", async () => {
+	test("disqualified leads and lost deals reopen as new; a live deal only gets the activity", async () => {
 		const s = await setup();
-		const interestId = await captureOwnedByA(s);
+		const leadId = await captureOwnedByA(s);
 		await db
-			.update(interest)
-			.set({ stage: "lost" })
-			.where(eq(interest.id, interestId));
+			.update(lead)
+			.set({ status: "disqualified", disqualifyReason: "spam" })
+			.where(eq(lead.id, leadId));
 		expect((await s.salesB.caller.lead.capture(walkIn(s))).outcome).toBe(
 			"re_enquiry_pooled",
 		);
-		const [reopened] = await db
-			.select()
-			.from(interest)
-			.where(eq(interest.id, interestId));
-		expect(reopened?.stage).toBe("new");
+		const [reopened] = await db.select().from(lead).where(eq(lead.id, leadId));
+		expect(reopened).toMatchObject({ status: "new", disqualifyReason: null });
 
+		// A confirmed visit made it a deal: a re-enquiry is only logged on it.
 		await db
-			.update(interest)
-			.set({ stage: "deposited", ownerMemberId: s.salesA.member.id })
-			.where(eq(interest.id, interestId));
+			.update(lead)
+			.set({ ownerMemberId: s.salesA.member.id })
+			.where(eq(lead.id, leadId));
+		const { opportunityId } = await s.salesA.caller.lead.convert({
+			leadId,
+			nextFollowUpAt: followUp(),
+		});
 		expect((await s.salesB.caller.lead.capture(walkIn(s))).outcome).toBe(
 			"re_enquiry_logged",
 		);
-		const [sold] = await db
-			.select()
-			.from(interest)
-			.where(eq(interest.id, interestId));
-		expect(sold).toMatchObject({
-			stage: "deposited",
+		const [still] = await db.select().from(lead).where(eq(lead.id, leadId));
+		expect(still).toMatchObject({
+			status: "converted",
 			ownerMemberId: s.salesA.member.id,
 		});
+		const [enquiry] = await db
+			.select()
+			.from(activity)
+			.where(
+				and(
+					eq(activity.opportunityId, opportunityId),
+					eq(activity.type, "enquiry"),
+				),
+			);
+		expect(enquiry).toBeDefined();
+
+		// Once the deal is lost, the lead starts over and can convert again.
+		await s.salesA.caller.opportunity.markLost({
+			opportunityId,
+			reason: "bought_competitor",
+		});
+		await contactAt(s, leadId, daysAgo(1));
+		expect((await s.salesB.caller.lead.capture(walkIn(s))).outcome).toBe(
+			"re_enquiry_kept",
+		);
+		const [again] = await db.select().from(lead).where(eq(lead.id, leadId));
+		expect(again?.status).toBe("new");
+		const second = await s.salesA.caller.lead.convert({
+			leadId,
+			nextFollowUpAt: followUp(),
+		});
+		expect(second.opportunityId).not.toBe(opportunityId);
+		const deals = await db
+			.select()
+			.from(opportunity)
+			.where(eq(opportunity.leadId, leadId));
+		expect(deals.map((d) => d.stage).sort()).toEqual(["lost", "visited"]);
 	});
 
-	test("five simultaneous captures of a new phone create one customer and one interest", async () => {
+	test("five simultaneous captures of a new phone create one customer and one lead", async () => {
 		const s = await setup();
 		const results = await Promise.all(
 			[s.salesA, s.salesB, s.salesA, s.salesB, s.salesA].map((who) =>
@@ -429,29 +457,26 @@ describe("duplicates and re-enquiry", () => {
 			),
 		);
 		expect(new Set(results.map((r) => r.customerId)).size).toBe(1);
-		expect(new Set(results.map((r) => r.interestId)).size).toBe(1);
+		expect(new Set(results.map((r) => r.leadId)).size).toBe(1);
 		expect(results.filter((r) => r.outcome === "new_customer").length).toBe(1);
 	});
 
-	test("re-enquiry with a new budget re-scores the interest", async () => {
+	test("re-enquiry with a new budget re-scores the lead", async () => {
 		const s = await setup();
-		const interestId = await captureOwnedByA(s);
+		const leadId = await captureOwnedByA(s);
 		await s.salesA.caller.lead.capture(
 			walkIn(s, {
 				budgetMinSatang: 350_000_000,
 				buyingTimeline: "under_1_month",
 			}),
 		);
-		const [row] = await db
-			.select()
-			.from(interest)
-			.where(eq(interest.id, interestId));
+		const [row] = await db.select().from(lead).where(eq(lead.id, leadId));
 		expect(row?.priority).toBe(true);
 	});
 });
 
 describe("visibility (brief §4)", () => {
-	test("another salesperson sees only summary lines of a colleague's interest", async () => {
+	test("another salesperson sees only summary lines of a colleague's lead", async () => {
 		const s = await setup();
 		const a = await s.salesA.caller.lead.capture(
 			walkIn(s, { budgetMaxSatang: 400_000_000 }),
@@ -461,7 +486,7 @@ describe("visibility (brief §4)", () => {
 		).toBe("NOT_FOUND");
 		expect(
 			await codeOf(
-				s.salesB.caller.lead.addNote({ interestId: a.interestId, note: "hi" }),
+				s.salesB.caller.lead.addNote({ leadId: a.leadId, note: "hi" }),
 			),
 		).toBe("NOT_FOUND");
 
@@ -471,17 +496,18 @@ describe("visibility (brief §4)", () => {
 		const page = await s.salesB.caller.customer.get({
 			customerId: a.customerId,
 		});
-		const theirs = page.interests.find((i) => i.projectName === "Riverside");
+		const theirs = page.leads.find((i) => i.projectName === "Riverside");
 		expect(theirs).toEqual({
 			visible: false,
-			id: a.interestId,
+			id: a.leadId,
 			projectName: "Riverside",
-			stage: "new",
+			status: "new",
+			stage: null,
 			ownerName: s.salesA.user.name,
 		});
-		expect(
-			page.interests.find((i) => i.projectName === "Hillside")?.visible,
-		).toBe(true);
+		expect(page.leads.find((i) => i.projectName === "Hillside")?.visible).toBe(
+			true,
+		);
 	});
 
 	test("lists: salespeople see their own and the pool; managers see their projects; others are hidden", async () => {
@@ -574,7 +600,7 @@ describe("customer profile", () => {
 		await s.salesA.caller.lead.capture(walkIn(s));
 		let message = "no error";
 		try {
-			await db.execute(sql`update interest_activity set note = 'edited'`);
+			await db.execute(sql`update activity set note = 'edited'`);
 		} catch (error) {
 			message = String((error as { cause?: Error }).cause?.message ?? error);
 		}
@@ -598,27 +624,27 @@ describe("customer profile", () => {
 describe("cross-tenant isolation (org B cannot read or change org A)", () => {
 	test("every M3 procedure is NOT_FOUND or empty for another company", async () => {
 		const a = await setup();
-		const lead = await a.salesA.caller.lead.capture(walkIn(a));
+		const captured = await a.salesA.caller.lead.capture(walkIn(a));
 		const b = await setup();
 		const adminB = b.admin.caller;
 
 		const attempts: Record<string, () => Promise<unknown>> = {
 			"customer.get": () =>
-				adminB.customer.get({ customerId: lead.customerId }),
+				adminB.customer.get({ customerId: captured.customerId }),
 			"customer.update": () =>
-				adminB.customer.update({ customerId: lead.customerId, name: "X" }),
+				adminB.customer.update({ customerId: captured.customerId, name: "X" }),
 			"customer.addPhone": () =>
 				adminB.customer.addPhone({
-					customerId: lead.customerId,
+					customerId: captured.customerId,
 					phone: "0877777777",
 				}),
 			"customer.setConsent": () =>
 				adminB.customer.setConsent({
-					customerId: lead.customerId,
+					customerId: captured.customerId,
 					marketingConsent: false,
 				}),
 			"lead.addNote": () =>
-				adminB.lead.addNote({ interestId: lead.interestId, note: "x" }),
+				adminB.lead.addNote({ leadId: captured.leadId, note: "x" }),
 			"lead.capture (A's project)": () =>
 				adminB.lead.capture({ ...walkIn(a), ownerMemberId: null }),
 			"leadSource.renameSource": () =>
@@ -637,7 +663,7 @@ describe("cross-tenant isolation (org B cannot read or change org A)", () => {
 		).toBeNull();
 		expect(await adminB.lead.list({})).toEqual([]);
 		const bLead = await b.salesA.caller.lead.capture(walkIn(b));
-		expect(bLead.customerId).not.toBe(lead.customerId);
+		expect(bLead.customerId).not.toBe(captured.customerId);
 	});
 });
 

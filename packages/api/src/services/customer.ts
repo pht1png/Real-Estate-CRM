@@ -1,13 +1,15 @@
 import type { Database } from "@Real-Estate-CRM/db";
 import {
+	activity,
 	campaign,
 	customer,
 	customerPhone,
-	interest,
-	interestActivity,
-	interestStages,
+	lead,
 	leadSource,
+	leadStatuses,
 	member,
+	opportunity,
+	opportunityStages,
 	project,
 	user,
 } from "@Real-Estate-CRM/db/schema/index";
@@ -20,6 +22,7 @@ import {
 	ilike,
 	inArray,
 	or,
+	type SQL,
 	sql,
 } from "drizzle-orm";
 import { z } from "zod";
@@ -28,9 +31,9 @@ import { formatPhone, normalizePhone } from "../phone";
 import { writeAudit } from "./audit";
 import { badRequest, conflict, notFound } from "./errors";
 import {
-	canSeeInterest,
-	requireVisibleInterest,
-	visibleInterestCondition,
+	canSeeLead,
+	visibleLeadCondition,
+	visibleOpportunityCondition,
 } from "./lead-access";
 import type { Tenant } from "./tenancy";
 
@@ -40,11 +43,21 @@ export const phoneLookupInput = z.strictObject({
 	phone: z.string().trim().max(40),
 });
 export const customerIdInput = z.strictObject({ customerId: z.uuid() });
+const search = z.string().trim().max(120).optional();
 export const listLeadsInput = z.strictObject({
-	query: z.string().trim().max(120).optional(),
+	query: search,
 	projectId: z.uuid().optional(),
-	stages: z.array(z.enum(interestStages)).max(interestStages.length).optional(),
+	statuses: z.array(z.enum(leadStatuses)).max(leadStatuses.length).optional(),
 	ownership: z.enum(["mine", "pool", "all"]).optional(),
+});
+export const listOpportunitiesInput = z.strictObject({
+	query: search,
+	projectId: z.uuid().optional(),
+	stages: z
+		.array(z.enum(opportunityStages))
+		.max(opportunityStages.length)
+		.optional(),
+	ownership: z.enum(["mine", "all"]).optional(),
 });
 export const updateCustomerInput = z.strictObject({
 	customerId: z.uuid(),
@@ -64,37 +77,39 @@ export const referrerInput = z.strictObject({
 	customerId: z.uuid(),
 	referrerCustomerId: z.uuid().nullable(),
 });
-export const addNoteInput = z.strictObject({
-	interestId: z.uuid(),
-	note: z.string().trim().min(1).max(2000),
-});
 
 const ownerUser = aliasedTable(user, "owner_user");
 
-/** Every interest of a customer, with project and owner names (no private fields). */
-function interestSummaries(
+/** The latest deal stage of the outer `lead` row (null until converted). */
+const latestStage = sql<
+	(typeof opportunityStages)[number] | null
+>`(select o.stage from opportunity o where o.lead_id = ${sql.raw(`"lead"."id"`)} order by o.created_at desc limit 1)`;
+
+/** Every lead of a customer, with project, owner and deal stage (no private fields). */
+function leadSummaries(
 	db: Executor,
 	organizationId: string,
 	customerIds: string[],
 ) {
 	return db
 		.select({
-			id: interest.id,
-			customerId: interest.customerId,
-			projectId: interest.projectId,
+			id: lead.id,
+			customerId: lead.customerId,
+			projectId: lead.projectId,
 			projectName: project.name,
-			stage: interest.stage,
-			ownerMemberId: interest.ownerMemberId,
+			status: lead.status,
+			stage: latestStage,
+			ownerMemberId: lead.ownerMemberId,
 			ownerName: ownerUser.name,
 		})
-		.from(interest)
-		.innerJoin(project, eq(project.id, interest.projectId))
-		.leftJoin(member, eq(member.id, interest.ownerMemberId))
+		.from(lead)
+		.innerJoin(project, eq(project.id, lead.projectId))
+		.leftJoin(member, eq(member.id, lead.ownerMemberId))
 		.leftJoin(ownerUser, eq(ownerUser.id, member.userId))
 		.where(
 			and(
-				eq(interest.organizationId, organizationId),
-				inArray(interest.customerId, customerIds),
+				eq(lead.organizationId, organizationId),
+				inArray(lead.customerId, customerIds),
 			),
 		)
 		.orderBy(asc(project.name));
@@ -102,7 +117,8 @@ function interestSummaries(
 
 /**
  * Duplicate check while typing (brief §6): the customer behind a phone, with a
- * summary line per interest (project · stage · owner) — never private details.
+ * summary line per project (project · status or deal stage · owner) — never
+ * private details.
  */
 export async function lookupByPhone(
 	db: Database,
@@ -122,17 +138,16 @@ export async function lookupByPhone(
 			),
 		);
 	if (!match) return { phone, customer: null };
-	const interests = await interestSummaries(db, tenant.organizationId, [
-		match.id,
-	]);
+	const leads = await leadSummaries(db, tenant.organizationId, [match.id]);
 	return {
 		phone,
 		customer: {
 			...match,
-			interests: interests.map(
-				({ projectId, projectName, stage, ownerName }) => ({
+			leads: leads.map(
+				({ projectId, projectName, status, stage, ownerName }) => ({
 					projectId,
 					projectName,
+					status,
 					stage,
 					ownerName,
 				}),
@@ -141,7 +156,7 @@ export async function lookupByPhone(
 	};
 }
 
-/** The customer if the tenant may open their page: unscoped roles, or any visible interest. */
+/** The customer if the tenant may open their page: unscoped roles, or any visible lead. */
 async function requireCustomerAccess(
 	db: Executor,
 	tenant: Tenant,
@@ -159,21 +174,19 @@ async function requireCustomerAccess(
 	if (!row) notFound("Customer");
 	if (tenant.projectIds !== null) {
 		const [visible] = await db
-			.select({ id: interest.id })
-			.from(interest)
-			.where(
-				and(
-					eq(interest.customerId, customerId),
-					visibleInterestCondition(tenant),
-				),
-			)
+			.select({ id: lead.id })
+			.from(lead)
+			.where(and(eq(lead.customerId, customerId), visibleLeadCondition(tenant)))
 			.limit(1);
 		if (!visible) notFound("Customer");
 	}
 	return row;
 }
 
-/** Customer page: shared profile, full visible interests with timelines, summary lines for the rest. */
+/**
+ * Customer page: shared profile; per visible project the lead (vetting) and
+ * its latest deal, with one timeline; summary lines for the rest.
+ */
 export async function getCustomer(
 	db: Database,
 	tenant: Tenant,
@@ -194,7 +207,7 @@ export async function getCustomer(
 			.from(customerPhone)
 			.where(eq(customerPhone.customerId, row.id))
 			.orderBy(desc(customerPhone.isPrimary), asc(customerPhone.createdAt)),
-		interestSummaries(db, tenant.organizationId, [row.id]),
+		leadSummaries(db, tenant.organizationId, [row.id]),
 		row.referredByCustomerId
 			? db
 					.select({ id: customer.id, name: customer.name })
@@ -204,43 +217,49 @@ export async function getCustomer(
 	]);
 
 	const visibleIds = summaries
-		.filter((s) => canSeeInterest(tenant, s))
+		.filter((s) => canSeeLead(tenant, s))
 		.map((s) => s.id);
-	const [details, activities] = visibleIds.length
+	const [details, deals, activities] = visibleIds.length
 		? await Promise.all([
 				db
 					.select({
-						interest,
+						lead,
 						sourceName: leadSource.name,
 						campaignName: campaign.name,
 						campaignCode: campaign.code,
 						minPriceSatang: sql<
 							number | null
-						>`(select min(u.list_price_satang)::float8 from unit u where u.project_id = ${interest.projectId} and u.status = 'available')`,
+						>`(select min(u.list_price_satang)::float8 from unit u where u.project_id = ${lead.projectId} and u.status = 'available')`,
 						maxPriceSatang: sql<
 							number | null
-						>`(select max(u.list_price_satang)::float8 from unit u where u.project_id = ${interest.projectId} and u.status = 'available')`,
+						>`(select max(u.list_price_satang)::float8 from unit u where u.project_id = ${lead.projectId} and u.status = 'available')`,
 					})
-					.from(interest)
-					.innerJoin(leadSource, eq(leadSource.id, interest.sourceId))
-					.leftJoin(campaign, eq(campaign.id, interest.campaignId))
-					.where(inArray(interest.id, visibleIds)),
+					.from(lead)
+					.innerJoin(leadSource, eq(leadSource.id, lead.sourceId))
+					.leftJoin(campaign, eq(campaign.id, lead.campaignId))
+					.where(inArray(lead.id, visibleIds)),
+				db
+					.select()
+					.from(opportunity)
+					.where(inArray(opportunity.leadId, visibleIds))
+					.orderBy(desc(opportunity.createdAt)),
 				db
 					.select({
-						id: interestActivity.id,
-						interestId: interestActivity.interestId,
-						type: interestActivity.type,
-						at: interestActivity.at,
-						note: interestActivity.note,
+						id: activity.id,
+						leadId: activity.leadId,
+						opportunityId: activity.opportunityId,
+						type: activity.type,
+						at: activity.at,
+						note: activity.note,
 						byName: user.name,
-						data: interestActivity.data,
+						data: activity.data,
 					})
-					.from(interestActivity)
-					.leftJoin(user, eq(user.id, interestActivity.byUserId))
-					.where(inArray(interestActivity.interestId, visibleIds))
-					.orderBy(desc(interestActivity.at)),
+					.from(activity)
+					.leftJoin(user, eq(user.id, activity.byUserId))
+					.where(inArray(activity.leadId, visibleIds))
+					.orderBy(desc(activity.at)),
 			])
-		: [[], []];
+		: [[], [], []];
 
 	return {
 		id: row.id,
@@ -252,104 +271,174 @@ export async function getCustomer(
 		consentRecordedAt: row.consentRecordedAt,
 		consentRecordedBy: consent?.name ?? null,
 		referredBy: referrer ?? null,
-		interests: summaries.map((s) => {
-			const d = details.find((x) => x.interest.id === s.id);
+		leads: summaries.map((s) => {
+			const d = details.find((x) => x.lead.id === s.id);
 			if (!d) {
-				// Brief §4: other salespeople see only project · stage · owner.
+				// Brief §4: other salespeople see only project · status · owner.
 				return {
 					visible: false as const,
 					id: s.id,
 					projectName: s.projectName,
+					status: s.status,
 					stage: s.stage,
 					ownerName: s.ownerName,
 				};
 			}
-			const i = d.interest;
+			const l = d.lead;
+			const deal = deals.find((o) => o.leadId === l.id) ?? null;
 			return {
 				visible: true as const,
-				id: i.id,
-				projectId: i.projectId,
+				id: l.id,
+				projectId: l.projectId,
 				projectName: s.projectName,
-				stage: i.stage,
-				ownerMemberId: i.ownerMemberId,
+				status: l.status,
+				disqualifyReason: l.disqualifyReason,
+				ownerMemberId: l.ownerMemberId,
 				ownerName: s.ownerName,
 				sourceName: d.sourceName,
 				campaignName: d.campaignName,
 				campaignCode: d.campaignCode,
-				priority: i.priority,
-				prioritySignals: i.prioritySignals,
-				budgetMinSatang: i.budgetMinSatang,
-				budgetMaxSatang: i.budgetMaxSatang,
-				buyingTimeline: i.buyingTimeline,
-				nextFollowUpAt: i.nextFollowUpAt,
-				contactDeadlineAt: i.contactDeadlineAt,
+				priority: l.priority,
+				prioritySignals: l.prioritySignals,
+				budgetMinSatang: l.budgetMinSatang,
+				budgetMaxSatang: l.budgetMaxSatang,
+				buyingTimeline: l.buyingTimeline,
+				unitTypeIds: l.unitTypeIds,
+				buyerIntent: l.buyerIntent,
+				qualifiedAt: l.qualifiedAt,
+				convertedAt: l.convertedAt,
+				nextFollowUpAt: l.nextFollowUpAt,
+				contactDeadlineAt: l.contactDeadlineAt,
 				projectMinPriceSatang: d.minPriceSatang,
 				projectMaxPriceSatang: d.maxPriceSatang,
-				createdAt: i.createdAt,
-				activities: activities.filter((a) => a.interestId === i.id),
+				createdAt: l.createdAt,
+				opportunity: deal && {
+					id: deal.id,
+					stage: deal.stage,
+					lostReason: deal.lostReason,
+					ownerMemberId: deal.ownerMemberId,
+					firstVisitAt: deal.firstVisitAt,
+					lastVisitAt: deal.lastVisitAt,
+					visitCount: deal.visitCount,
+					nextFollowUpAt: deal.nextFollowUpAt,
+				},
+				activities: activities.filter((a) => a.leadId === l.id),
 			};
 		}),
 	};
 }
 
-/** Leads the tenant can see, newest first; search by name or phone. */
+const primaryPhone = sql<
+	string | null
+>`(select p.phone_e164 from customer_phone p where p.customer_id = ${customer.id} order by p.is_primary desc limit 1)`;
+
+/** Name contains the query, or the query is one of the customer's phones. */
+function customerSearch(query: string | undefined): SQL | undefined {
+	const q = query?.trim();
+	if (!q) return undefined;
+	const phone = normalizePhone(q);
+	return or(
+		ilike(customer.name, `%${q.replace(/[%_\\]/g, "\\$&")}%`),
+		phone
+			? sql`exists (select 1 from customer_phone p where p.customer_id = ${customer.id} and p.phone_e164 = ${phone})`
+			: undefined,
+	);
+}
+
+const withPhone = <T extends { primaryPhone: string | null }>(rows: T[]) =>
+	rows.map((r) => ({
+		...r,
+		primaryPhone: r.primaryPhone ? formatPhone(r.primaryPhone) : null,
+	}));
+
+/** Lead pipeline list (vetting queue), newest first; search by name or phone. */
 export async function listLeads(
 	db: Database,
 	tenant: Tenant,
 	input: z.infer<typeof listLeadsInput>,
 ) {
-	const q = input.query?.trim();
-	const phone = q ? normalizePhone(q) : null;
 	const rows = await db
 		.select({
-			interestId: interest.id,
+			leadId: lead.id,
 			customerId: customer.id,
 			customerName: customer.name,
 			projectName: project.name,
-			stage: interest.stage,
-			priority: interest.priority,
-			ownerMemberId: interest.ownerMemberId,
+			status: lead.status,
+			priority: lead.priority,
+			ownerMemberId: lead.ownerMemberId,
 			ownerName: ownerUser.name,
-			nextFollowUpAt: interest.nextFollowUpAt,
-			createdAt: interest.createdAt,
-			primaryPhone: sql<
-				string | null
-			>`(select p.phone_e164 from customer_phone p where p.customer_id = ${customer.id} order by p.is_primary desc limit 1)`,
+			nextFollowUpAt: lead.nextFollowUpAt,
+			createdAt: lead.createdAt,
+			primaryPhone,
 		})
-		.from(interest)
-		.innerJoin(customer, eq(customer.id, interest.customerId))
-		.innerJoin(project, eq(project.id, interest.projectId))
-		.leftJoin(member, eq(member.id, interest.ownerMemberId))
+		.from(lead)
+		.innerJoin(customer, eq(customer.id, lead.customerId))
+		.innerJoin(project, eq(project.id, lead.projectId))
+		.leftJoin(member, eq(member.id, lead.ownerMemberId))
 		.leftJoin(ownerUser, eq(ownerUser.id, member.userId))
 		.where(
 			and(
-				visibleInterestCondition(tenant),
-				input.projectId ? eq(interest.projectId, input.projectId) : undefined,
-				input.stages?.length
-					? inArray(interest.stage, input.stages)
+				visibleLeadCondition(tenant),
+				input.projectId ? eq(lead.projectId, input.projectId) : undefined,
+				input.statuses?.length
+					? inArray(lead.status, input.statuses)
 					: undefined,
 				input.ownership === "mine"
-					? eq(interest.ownerMemberId, tenant.memberId)
+					? eq(lead.ownerMemberId, tenant.memberId)
 					: undefined,
 				input.ownership === "pool"
-					? sql`${interest.ownerMemberId} is null`
+					? sql`${lead.ownerMemberId} is null`
 					: undefined,
-				q
-					? or(
-							ilike(customer.name, `%${q.replace(/[%_\\]/g, "\\$&")}%`),
-							phone
-								? sql`exists (select 1 from customer_phone p where p.customer_id = ${customer.id} and p.phone_e164 = ${phone})`
-								: undefined,
-						)
-					: undefined,
+				customerSearch(input.query),
 			),
 		)
-		.orderBy(desc(interest.priority), desc(interest.createdAt))
+		.orderBy(desc(lead.priority), desc(lead.createdAt))
 		.limit(200);
-	return rows.map((r) => ({
-		...r,
-		primaryPhone: r.primaryPhone ? formatPhone(r.primaryPhone) : null,
-	}));
+	return withPhone(rows);
+}
+
+/** Deal pipeline list, most recent visit first. */
+export async function listOpportunities(
+	db: Database,
+	tenant: Tenant,
+	input: z.infer<typeof listOpportunitiesInput>,
+) {
+	const rows = await db
+		.select({
+			opportunityId: opportunity.id,
+			customerId: customer.id,
+			customerName: customer.name,
+			projectName: project.name,
+			stage: opportunity.stage,
+			ownerMemberId: opportunity.ownerMemberId,
+			ownerName: ownerUser.name,
+			lastVisitAt: opportunity.lastVisitAt,
+			nextFollowUpAt: opportunity.nextFollowUpAt,
+			primaryPhone,
+		})
+		.from(opportunity)
+		.innerJoin(customer, eq(customer.id, opportunity.customerId))
+		.innerJoin(project, eq(project.id, opportunity.projectId))
+		.leftJoin(member, eq(member.id, opportunity.ownerMemberId))
+		.leftJoin(ownerUser, eq(ownerUser.id, member.userId))
+		.where(
+			and(
+				visibleOpportunityCondition(tenant),
+				input.projectId
+					? eq(opportunity.projectId, input.projectId)
+					: undefined,
+				input.stages?.length
+					? inArray(opportunity.stage, input.stages)
+					: undefined,
+				input.ownership === "mine"
+					? eq(opportunity.ownerMemberId, tenant.memberId)
+					: undefined,
+				customerSearch(input.query),
+			),
+		)
+		.orderBy(desc(opportunity.lastVisitAt))
+		.limit(200);
+	return withPhone(rows);
 }
 
 export async function updateCustomer(
@@ -515,23 +604,6 @@ export async function setReferrer(
 			entityType: "customer",
 			entityId: input.customerId,
 			after: { referredByCustomerId: input.referrerCustomerId },
-		});
-	});
-}
-
-export async function addNote(
-	db: Database,
-	tenant: Tenant,
-	input: z.infer<typeof addNoteInput>,
-) {
-	await db.transaction(async (tx) => {
-		const row = await requireVisibleInterest(tx, tenant, input.interestId);
-		await tx.insert(interestActivity).values({
-			organizationId: tenant.organizationId,
-			interestId: row.id,
-			type: "note",
-			byUserId: tenant.userId,
-			note: input.note,
 		});
 	});
 }

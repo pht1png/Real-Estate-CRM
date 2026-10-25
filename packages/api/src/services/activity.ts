@@ -1,17 +1,20 @@
 import { roleCan } from "@Real-Estate-CRM/auth/permissions";
 import type { Database } from "@Real-Estate-CRM/db";
 import {
+	activity,
 	contactActivityTypes,
-	interest,
-	interestActivity,
-	openStages,
+	type LeadStatus,
+	lead,
+	openLeadStatuses,
+	openOpportunityStages,
+	opportunity,
 	project,
 } from "@Real-Estate-CRM/db/schema/index";
 import { eq, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { badRequest, forbidden, notFound } from "./errors";
-import { requireVisibleInterest } from "./lead-access";
+import { requireVisibleLead, requireVisibleOpportunity } from "./lead-access";
 import { loadCalendar } from "./pool";
 import { getRules } from "./rules";
 import type { Tenant } from "./tenancy";
@@ -25,23 +28,35 @@ const outcomeActivity = {
 	line: "line",
 } as const;
 
-const futureDateTime = z.iso.datetime({ offset: true });
+export const futureDateTime = z.iso.datetime({ offset: true });
 
-export const logOutcomeInput = z.strictObject({
-	interestId: z.uuid(),
+const outcomeFields = {
 	outcome: z.enum(callOutcomes),
 	note: z.string().trim().max(1000).optional(),
 	nextFollowUpAt: futureDateTime,
+};
+export const leadOutcomeInput = z.strictObject({
+	leadId: z.uuid(),
+	...outcomeFields,
+});
+export const opportunityOutcomeInput = z.strictObject({
+	opportunityId: z.uuid(),
+	...outcomeFields,
 });
 
-export const interestIdInput = z.strictObject({ interestId: z.uuid() });
+export const leadIdInput = z.strictObject({ leadId: z.uuid() });
+export const opportunityIdInput = z.strictObject({ opportunityId: z.uuid() });
 
-export const setFollowUpInput = z.strictObject({
-	interestId: z.uuid(),
+export const leadFollowUpInput = z.strictObject({
+	leadId: z.uuid(),
+	nextFollowUpAt: futureDateTime,
+});
+export const opportunityFollowUpInput = z.strictObject({
+	opportunityId: z.uuid(),
 	nextFollowUpAt: futureDateTime,
 });
 
-/** The owner works their lead; managers covering the project may act on any of them. */
+/** The owner works their lead or deal; managers covering the project may act on any. */
 export function requireActor(
 	tenant: Tenant,
 	row: { ownerMemberId: string | null },
@@ -55,34 +70,32 @@ export function requireActor(
 	);
 }
 
-/** The follow-up an owned open lead ends up with must be in the future. */
-function resolveFollowUp(
-	row: {
-		ownerMemberId: string | null;
-		stage: string;
-		nextFollowUpAt: Date | null;
-	},
-	requested: string | undefined,
-	now: Date,
-) {
-	const next = requested ? new Date(requested) : row.nextFollowUpAt;
-	if (requested && next && next <= now) {
-		badRequest("The next follow-up must be in the future");
-	}
-	const needsFollowUp =
-		row.ownerMemberId !== null &&
-		(openStages as readonly string[]).includes(row.stage);
-	if (needsFollowUp && (!next || next <= now)) {
-		badRequest("Set the next follow-up");
-	}
+/** The next follow-up must be in the future (brief §6: nothing sits without a next step). */
+export function requireFutureFollowUp(value: string, now = new Date()) {
+	const next = new Date(value);
+	if (next <= now) badRequest("The next follow-up must be in the future");
 	return next;
 }
 
+/** Leads still being vetted (open statuses). */
+export function requireOpenLead(row: { status: LeadStatus }) {
+	if (!openLeadStatuses.includes(row.status)) {
+		badRequest("This lead is no longer open");
+	}
+}
+
+/** Deals before a deposit (visited, negotiating). */
+export function requireOpenOpportunity(row: { stage: string }) {
+	if (!(openOpportunityStages as readonly string[]).includes(row.stage)) {
+		badRequest("This deal is no longer open");
+	}
+}
+
 /**
- * `interest.id` with its table name: Drizzle drops the qualifier in
- * single-table selects, and a bare "id" inside a subquery means the inner row.
+ * `lead.id` with its table name: Drizzle drops the qualifier in single-table
+ * selects, and a bare "id" inside a subquery means the inner row.
  */
-export const outerInterestId = sql.raw(`"interest"."id"`);
+export const outerLeadId = sql.raw(`"lead"."id"`);
 
 const contactTypes = sql.join(
 	contactActivityTypes.map((t) => sql`${t}`),
@@ -90,90 +103,219 @@ const contactTypes = sql.join(
 );
 
 /**
- * No-answers in a row on the interest: since `since` and after its last real
- * contact (call, LINE, meeting, visit). Correlated to the outer `interest` row.
+ * No-answers in a row on the lead: since `since` and after its last real
+ * contact (call, LINE, meeting, visit). Correlated to the outer `lead` row.
  */
 export function noAnswerStreak(since: Date): SQL<number> {
-	return sql<number>`(select count(*)::int from interest_activity na
-		where na.interest_id = ${outerInterestId} and na.type = 'no_answer' and na.at >= ${since}
-		and na.at > coalesce((select max(c.at) from interest_activity c
-			where c.interest_id = ${outerInterestId} and c.type in (${contactTypes})), '-infinity'::timestamptz))`;
+	return sql<number>`(select count(*)::int from activity na
+		where na.lead_id = ${outerLeadId} and na.type = 'no_answer' and na.at >= ${since}
+		and na.at > coalesce((select max(c.at) from activity c
+			where c.lead_id = ${outerLeadId} and c.type in (${contactTypes})), '-infinity'::timestamptz))`;
 }
 
 /** Start of the Unreachable window (brief §6: 3 no-answers over 7 days). */
 export const streakSince = (windowDays: number, now = new Date()) =>
 	new Date(now.getTime() - windowDays * 86_400_000);
 
+/** Records a lead status move as an activity (history is append-only). */
+export function logStatusChange(
+	tx: Pick<Database, "insert">,
+	tenant: Tenant,
+	leadId: string,
+	from: string,
+	to: string,
+	reason: string,
+	at = new Date(),
+) {
+	return tx.insert(activity).values({
+		organizationId: tenant.organizationId,
+		leadId,
+		type: "stage_change",
+		at,
+		byUserId: tenant.userId,
+		data: { from, to, reason },
+	});
+}
+
+/** Lead status after a call result: the vetting queue moves on by itself. */
+function statusAfter(
+	status: LeadStatus,
+	outcome: (typeof callOutcomes)[number],
+): LeadStatus {
+	if (outcome === "no_answer") return status === "new" ? "attempting" : status;
+	return status === "new" || status === "attempting" ? "connected" : status;
+}
+
 /**
- * Log a call result or a LINE contact with the next follow-up (brief §6–7).
- * Answered and LINE count as contact and clear the contact deadline. A No
- * answer returns the try count and whether the lead is now unreachable.
+ * Call result or LINE contact on a lead, with the next follow-up (brief §6–7).
+ * No answer: New → Attempting, and returns the try count and whether the lead
+ * now looks unreachable. Answered / LINE: → Connected and the contact deadline
+ * is cleared.
  */
-export async function logOutcome(
+export async function logLeadOutcome(
 	db: Database,
 	tenant: Tenant,
-	input: z.infer<typeof logOutcomeInput>,
+	input: z.infer<typeof leadOutcomeInput>,
 ) {
 	const now = new Date();
 	return db.transaction(async (tx) => {
-		const row = await requireVisibleInterest(tx, tenant, input.interestId);
+		const row = await requireVisibleLead(tx, tenant, input.leadId);
 		requireActor(tenant, row);
-		if (!(openStages as readonly string[]).includes(row.stage)) {
-			badRequest("Only open leads take call results");
-		}
-		const nextFollowUpAt = resolveFollowUp(row, input.nextFollowUpAt, now);
+		requireOpenLead(row);
+		const nextFollowUpAt = requireFutureFollowUp(input.nextFollowUpAt, now);
 		const type = outcomeActivity[input.outcome];
-		await tx.insert(interestActivity).values({
+		await tx.insert(activity).values({
 			organizationId: tenant.organizationId,
-			interestId: row.id,
+			leadId: row.id,
 			type,
 			at: now,
 			byUserId: tenant.userId,
 			note: input.note || null,
 			data: { nextFollowUpAt: input.nextFollowUpAt },
 		});
+		const status = statusAfter(row.status, input.outcome);
+		if (status !== row.status) {
+			await logStatusChange(
+				tx,
+				tenant,
+				row.id,
+				row.status,
+				status,
+				"call_result",
+				now,
+			);
+		}
 		await tx
-			.update(interest)
+			.update(lead)
 			.set({
+				status,
 				nextFollowUpAt,
 				...(contactActivityTypes.includes(type) && {
 					contactDeadlineAt: null,
 				}),
 			})
-			.where(eq(interest.id, row.id));
+			.where(eq(lead.id, row.id));
 
-		if (input.outcome !== "no_answer")
-			return { attempt: 0, unreachable: false };
+		if (input.outcome !== "no_answer") {
+			return { status, attempt: 0, unreachable: false };
+		}
 		const rules = await getRules(tx, tenant.organizationId);
 		const [streak] = await tx
 			.select({
 				n: noAnswerStreak(streakSince(rules.unreachableWindowDays, now)),
 			})
-			.from(interest)
-			.where(eq(interest.id, row.id));
+			.from(lead)
+			.where(eq(lead.id, row.id));
 		const attempt = streak?.n ?? 1;
-		return { attempt, unreachable: attempt >= rules.unreachableAttempts };
+		return {
+			status,
+			attempt,
+			unreachable: attempt >= rules.unreachableAttempts,
+		};
 	});
 }
 
-/** Reschedule the next follow-up. */
-export async function setFollowUp(
+/** Call result or LINE contact on a deal; no automatic stage moves. */
+export async function logOpportunityOutcome(
 	db: Database,
 	tenant: Tenant,
-	input: z.infer<typeof setFollowUpInput>,
+	input: z.infer<typeof opportunityOutcomeInput>,
+) {
+	const now = new Date();
+	await db.transaction(async (tx) => {
+		const row = await requireVisibleOpportunity(
+			tx,
+			tenant,
+			input.opportunityId,
+		);
+		requireActor(tenant, row);
+		requireOpenOpportunity(row);
+		const nextFollowUpAt = requireFutureFollowUp(input.nextFollowUpAt, now);
+		await tx.insert(activity).values({
+			organizationId: tenant.organizationId,
+			leadId: row.leadId,
+			opportunityId: row.id,
+			type: outcomeActivity[input.outcome],
+			at: now,
+			byUserId: tenant.userId,
+			note: input.note || null,
+			data: { nextFollowUpAt: input.nextFollowUpAt },
+		});
+		await tx
+			.update(opportunity)
+			.set({ nextFollowUpAt })
+			.where(eq(opportunity.id, row.id));
+	});
+}
+
+export async function setLeadFollowUp(
+	db: Database,
+	tenant: Tenant,
+	input: z.infer<typeof leadFollowUpInput>,
 ) {
 	await db.transaction(async (tx) => {
-		const row = await requireVisibleInterest(tx, tenant, input.interestId);
+		const row = await requireVisibleLead(tx, tenant, input.leadId);
 		requireActor(tenant, row);
-		const nextFollowUpAt = resolveFollowUp(
-			row,
-			input.nextFollowUpAt,
-			new Date(),
-		);
+		requireOpenLead(row);
 		await tx
-			.update(interest)
-			.set({ nextFollowUpAt })
-			.where(eq(interest.id, row.id));
+			.update(lead)
+			.set({ nextFollowUpAt: requireFutureFollowUp(input.nextFollowUpAt) })
+			.where(eq(lead.id, row.id));
+	});
+}
+
+export async function setOpportunityFollowUp(
+	db: Database,
+	tenant: Tenant,
+	input: z.infer<typeof opportunityFollowUpInput>,
+) {
+	await db.transaction(async (tx) => {
+		const row = await requireVisibleOpportunity(
+			tx,
+			tenant,
+			input.opportunityId,
+		);
+		requireActor(tenant, row);
+		requireOpenOpportunity(row);
+		await tx
+			.update(opportunity)
+			.set({ nextFollowUpAt: requireFutureFollowUp(input.nextFollowUpAt) })
+			.where(eq(opportunity.id, row.id));
+	});
+}
+
+/** Note on a lead or deal timeline. */
+export const addNoteInput = z
+	.strictObject({
+		leadId: z.uuid().optional(),
+		opportunityId: z.uuid().optional(),
+		note: z.string().trim().min(1).max(2000),
+	})
+	.refine((v) => !!v.leadId !== !!v.opportunityId, {
+		message: "Give a lead or an opportunity",
+	});
+
+export async function addNote(
+	db: Database,
+	tenant: Tenant,
+	input: z.infer<typeof addNoteInput>,
+) {
+	await db.transaction(async (tx) => {
+		const target = input.opportunityId
+			? await requireVisibleOpportunity(tx, tenant, input.opportunityId).then(
+					(o) => ({ leadId: o.leadId, opportunityId: o.id }),
+				)
+			: await requireVisibleLead(tx, tenant, input.leadId ?? "").then((l) => ({
+					leadId: l.id,
+					opportunityId: null,
+				}));
+		await tx.insert(activity).values({
+			organizationId: tenant.organizationId,
+			...target,
+			type: "note",
+			byUserId: tenant.userId,
+			note: input.note,
+		});
 	});
 }
 
@@ -181,9 +323,11 @@ export async function setFollowUp(
 export async function getFollowUpPicks(
 	db: Database,
 	tenant: Tenant,
-	input: z.infer<typeof interestIdInput>,
+	input: { leadId?: string; opportunityId?: string },
 ) {
-	const row = await requireVisibleInterest(db, tenant, input.interestId);
+	const row = input.opportunityId
+		? await requireVisibleOpportunity(db, tenant, input.opportunityId)
+		: await requireVisibleLead(db, tenant, input.leadId ?? "");
 	const [proj] = await db
 		.select()
 		.from(project)

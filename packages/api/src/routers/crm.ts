@@ -1,11 +1,18 @@
 import { orgProcedure, requirePermission, router } from "../index";
 import {
+	addNote,
+	addNoteInput,
 	getFollowUpPicks,
-	interestIdInput,
-	logOutcome,
-	logOutcomeInput,
-	setFollowUp,
-	setFollowUpInput,
+	leadFollowUpInput,
+	leadIdInput,
+	leadOutcomeInput,
+	logLeadOutcome,
+	logOpportunityOutcome,
+	opportunityFollowUpInput,
+	opportunityIdInput,
+	opportunityOutcomeInput,
+	setLeadFollowUp,
+	setOpportunityFollowUp,
 } from "../services/activity";
 import {
 	createCampaign,
@@ -16,16 +23,17 @@ import {
 	updateCampaignInput,
 } from "../services/campaign";
 import { captureEnquiry, captureEnquiryInput } from "../services/capture";
+import { convertLead, convertLeadInput } from "../services/conversion";
 import {
 	addCustomerPhone,
-	addNote,
-	addNoteInput,
 	consentInput,
 	customerIdInput,
 	customerPhoneInput,
 	getCustomer,
 	listLeads,
 	listLeadsInput,
+	listOpportunities,
+	listOpportunitiesInput,
 	lookupByPhone,
 	phoneLookupInput,
 	referrerInput,
@@ -35,7 +43,16 @@ import {
 	updateCustomer,
 	updateCustomerInput,
 } from "../services/customer";
-import { closeLead, closeLeadInput } from "../services/exit";
+import {
+	disqualifyLead,
+	disqualifyLeadInput,
+	markLost,
+	markLostInput,
+	nurtureLead,
+	nurtureLeadInput,
+	setOpportunityStage,
+	setOpportunityStageInput,
+} from "../services/exit";
 import {
 	archiveSource,
 	archiveSourceInput,
@@ -56,6 +73,7 @@ import {
 	listPoolInput,
 	poolCount,
 } from "../services/pool";
+import { qualifyLead, qualifyLeadInput } from "../services/qualify";
 import {
 	getRulesForTenant,
 	updateRules,
@@ -70,6 +88,7 @@ const editCustomer = requirePermission({ customer: ["update"] });
 const manageSources = requirePermission({ leadSource: ["manage"] });
 const manageCampaigns = requirePermission({ campaign: ["manage"] });
 
+/** Lead pipeline (vetting queue). Services check owner / manager per lead. */
 export const leadRouter = router({
 	capture: capture
 		.input(captureEnquiryInput)
@@ -80,24 +99,61 @@ export const leadRouter = router({
 	list: read
 		.input(listLeadsInput)
 		.query(({ ctx, input }) => listLeads(ctx.db, ctx.tenant, input)),
-	addNote: read
-		.input(addNoteInput)
-		.mutation(({ ctx, input }) => addNote(ctx.db, ctx.tenant, input)),
 	claim: claim
 		.input(claimInput)
 		.mutation(({ ctx, input }) => claimLead(ctx.db, ctx.tenant, input)),
 	logOutcome: read
-		.input(logOutcomeInput)
-		.mutation(({ ctx, input }) => logOutcome(ctx.db, ctx.tenant, input)),
-	close: read
-		.input(closeLeadInput)
-		.mutation(({ ctx, input }) => closeLead(ctx.db, ctx.tenant, input)),
-	followUpPicks: read
-		.input(interestIdInput)
-		.query(({ ctx, input }) => getFollowUpPicks(ctx.db, ctx.tenant, input)),
+		.input(leadOutcomeInput)
+		.mutation(({ ctx, input }) => logLeadOutcome(ctx.db, ctx.tenant, input)),
+	qualify: read
+		.input(qualifyLeadInput)
+		.mutation(({ ctx, input }) => qualifyLead(ctx.db, ctx.tenant, input)),
+	convert: read
+		.input(convertLeadInput)
+		.mutation(({ ctx, input }) => convertLead(ctx.db, ctx.tenant, input)),
+	disqualify: read
+		.input(disqualifyLeadInput)
+		.mutation(({ ctx, input }) => disqualifyLead(ctx.db, ctx.tenant, input)),
+	nurture: read
+		.input(nurtureLeadInput)
+		.mutation(({ ctx, input }) => nurtureLead(ctx.db, ctx.tenant, input)),
 	setFollowUp: read
-		.input(setFollowUpInput)
-		.mutation(({ ctx, input }) => setFollowUp(ctx.db, ctx.tenant, input)),
+		.input(leadFollowUpInput)
+		.mutation(({ ctx, input }) => setLeadFollowUp(ctx.db, ctx.tenant, input)),
+	followUpPicks: read
+		.input(leadIdInput)
+		.query(({ ctx, input }) => getFollowUpPicks(ctx.db, ctx.tenant, input)),
+	addNote: read
+		.input(addNoteInput)
+		.mutation(({ ctx, input }) => addNote(ctx.db, ctx.tenant, input)),
+});
+
+/** Opportunity (deal) pipeline, created by a confirmed visit. */
+export const opportunityRouter = router({
+	list: read
+		.input(listOpportunitiesInput)
+		.query(({ ctx, input }) => listOpportunities(ctx.db, ctx.tenant, input)),
+	logOutcome: read
+		.input(opportunityOutcomeInput)
+		.mutation(({ ctx, input }) =>
+			logOpportunityOutcome(ctx.db, ctx.tenant, input),
+		),
+	setStage: read
+		.input(setOpportunityStageInput)
+		.mutation(({ ctx, input }) =>
+			setOpportunityStage(ctx.db, ctx.tenant, input),
+		),
+	markLost: read
+		.input(markLostInput)
+		.mutation(({ ctx, input }) => markLost(ctx.db, ctx.tenant, input)),
+	setFollowUp: read
+		.input(opportunityFollowUpInput)
+		.mutation(({ ctx, input }) =>
+			setOpportunityFollowUp(ctx.db, ctx.tenant, input),
+		),
+	followUpPicks: read
+		.input(opportunityIdInput)
+		.query(({ ctx, input }) => getFollowUpPicks(ctx.db, ctx.tenant, input)),
 });
 
 export const poolRouter = router({

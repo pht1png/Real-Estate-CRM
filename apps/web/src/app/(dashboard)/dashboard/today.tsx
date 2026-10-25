@@ -1,14 +1,8 @@
 "use client";
 
-import type { AppRouter } from "@Real-Estate-CRM/api/routers/index";
-import { Badge } from "@Real-Estate-CRM/ui/components/badge";
-import {
-	Card,
-	CardContent,
-	CardDescription,
-	CardHeader,
-	CardTitle,
-} from "@Real-Estate-CRM/ui/components/card";
+import { activeStages } from "@Real-Estate-CRM/db/constants";
+import { Button } from "@Real-Estate-CRM/ui/components/button";
+import { Card, CardContent } from "@Real-Estate-CRM/ui/components/card";
 import {
 	Empty,
 	EmptyDescription,
@@ -17,49 +11,53 @@ import {
 	EmptyTitle,
 } from "@Real-Estate-CRM/ui/components/empty";
 import { Spinner } from "@Real-Estate-CRM/ui/components/spinner";
+import { cn } from "@Real-Estate-CRM/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
-import type { inferRouterOutputs } from "@trpc/server";
-import { SunIcon } from "lucide-react";
+import { CheckCircle2Icon, LayoutDashboardIcon, PlayIcon } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import { useFormatter, useNow, useTranslations } from "next-intl";
-import type { ReactNode } from "react";
+import { useState } from "react";
 
-import { ClaimButton, LeadActions } from "@/components/lead-actions";
 import { useMe, useRoleLabel } from "@/hooks/use-me";
 import { useTRPC } from "@/utils/trpc";
 
-type TodayData = inferRouterOutputs<AppRouter>["today"]["get"];
-type Lead = TodayData["pool"][number];
+import { CallMode } from "./call-mode";
+import { type TodoLead, TodoRow } from "./todo-row";
+
+type Filter = "all" | "overdue" | "unreachable";
 
 /** Roles that own leads see their work; others keep the welcome card until M7. */
 const WORKING_ROLES = ["salesperson", "sales_manager"];
 
+const customersLink = (stages: readonly string[]) =>
+	`/customers?ownership=mine&stage=${stages.join(",")}` as Route;
+
 export function Today({ name }: { name: string }) {
-	const t = useTranslations("today");
+	const t = useTranslations("overview");
 	const { data: me } = useMe();
 	const roleLabel = useRoleLabel();
 
 	return (
 		<>
 			<div>
-				<h1 className="text-2xl font-semibold">{t("welcome", { name })}</h1>
-				{me && (
-					<p className="text-muted-foreground">
-						{t("summary", {
+				<h1 className="text-2xl font-semibold">{t("title")}</h1>
+				<p className="text-muted-foreground">
+					{t("welcome", { name })}
+					{me &&
+						` · ${t("summary", {
 							role: roleLabel(me.role),
 							organization: me.organization?.name ?? "",
-						})}
-					</p>
-				)}
+						})}`}
+				</p>
 			</div>
 			{me && WORKING_ROLES.includes(me.role) ? (
-				<TodayLists canClaim={me.role === "salesperson"} />
+				<OverviewBody />
 			) : (
 				<Empty className="border">
 					<EmptyHeader>
 						<EmptyMedia variant="icon">
-							<SunIcon />
+							<LayoutDashboardIcon />
 						</EmptyMedia>
 						<EmptyTitle>{t("title")}</EmptyTitle>
 						<EmptyDescription>{t("comingSoon")}</EmptyDescription>
@@ -70,182 +68,207 @@ export function Today({ name }: { name: string }) {
 	);
 }
 
-function TodayLists({ canClaim }: { canClaim: boolean }) {
-	const t = useTranslations("today");
+function OverviewBody() {
+	const t = useTranslations("overview");
+	const format = useFormatter();
 	const trpc = useTRPC();
 	// Refetch each minute so expired claims and newly due follow-ups show up.
-	const today = useQuery(
+	const overview = useQuery(
 		trpc.today.get.queryOptions(undefined, { refetchInterval: 60_000 }),
 	);
 	const now = useNow({ updateInterval: 60_000 });
+	const [filter, setFilter] = useState<Filter>("all");
+	const [calling, setCalling] = useState(false);
 
-	if (!today.data) return <Spinner />;
-	const { pool, claims, followUps } = today.data;
+	if (!overview.data) return <Spinner />;
+	const { stats, todo, unreachableAttempts } = overview.data;
+	const isOverdue = (l: TodoLead) =>
+		!!l.nextFollowUpAt && new Date(l.nextFollowUpAt) < now;
+	const shown = todo.filter((l) =>
+		filter === "overdue"
+			? isOverdue(l)
+			: filter === "unreachable"
+				? l.unreachable
+				: true,
+	);
+	const toggle = (f: Filter) => setFilter((v) => (v === f ? "all" : f));
 
 	return (
-		<div className="grid gap-4 lg:grid-cols-3">
-			<Section
-				id="today-claims"
-				title={t("claims.title", { count: claims.length })}
-				description={t("claims.description")}
-				empty={t("claims.empty")}
-				leads={claims}
-				renderMeta={(l) => (
-					<DueLabel
-						at={l.contactDeadlineAt}
-						now={now}
-						label="contactBy"
-						overdueLabel="contactOverdue"
+		<>
+			<section aria-label={t("cardsLabel")} className="flex flex-col gap-3">
+				<div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+					<StatCard
+						label={t("cards.active")}
+						value={stats.active}
+						hint={t("hints.active")}
+						href={customersLink(activeStages)}
 					/>
-				)}
-				renderActions={(l) => (
-					<LeadActions
-						interestId={l.interestId}
-						phoneE164={l.phoneE164}
-						nextFollowUpAt={l.nextFollowUpAt}
+					<StatCard
+						label={t("cards.overdue")}
+						value={stats.overdue.count}
+						hint={
+							stats.overdue.oldest
+								? t("hints.oldest", {
+										relative: format.relativeTime(
+											new Date(stats.overdue.oldest),
+											now,
+										),
+									})
+								: t("hints.none")
+						}
+						alert={stats.overdue.count > 0}
+						pressed={filter === "overdue"}
+						onClick={() => toggle("overdue")}
 					/>
-				)}
-			/>
-			<Section
-				id="today-follow-ups"
-				title={t("followUps.title", { count: followUps.length })}
-				description={t("followUps.description")}
-				empty={t("followUps.empty")}
-				leads={followUps}
-				renderMeta={(l) =>
-					l.nextFollowUpAt ? (
-						<DueLabel
-							at={l.nextFollowUpAt}
-							now={now}
-							label="dueAt"
-							overdueLabel="overdue"
-						/>
-					) : (
-						<Badge variant="destructive">{t("noFollowUp")}</Badge>
-					)
-				}
-				renderActions={(l) => (
-					<LeadActions
-						interestId={l.interestId}
-						phoneE164={l.phoneE164}
-						nextFollowUpAt={l.nextFollowUpAt}
+					<StatCard
+						label={t("cards.unreachable")}
+						value={stats.unreachable}
+						hint={stats.unreachable > 0 ? t("hints.decide") : t("hints.none")}
+						alert={stats.unreachable > 0}
+						pressed={filter === "unreachable"}
+						onClick={() => toggle("unreachable")}
 					/>
+					<StatCard
+						label={t("cards.qualified")}
+						value={stats.qualified}
+						hint={t("hints.qualified")}
+						href={customersLink(["new", "contacted"])}
+					/>
+					<StatCard
+						label={t("cards.opportunities")}
+						value={stats.opportunities}
+						hint={t("hints.opportunities")}
+						href={customersLink(["visited"])}
+					/>
+					<StatCard
+						label={t("cards.deposited")}
+						value={stats.deposited}
+						hint={t("hints.deposited")}
+						href={customersLink(["deposited", "contracted"])}
+					/>
+				</div>
+			</section>
+
+			<section aria-labelledby="overview-todo" className="flex flex-col gap-3">
+				<div className="flex items-center justify-between gap-2">
+					<h2 id="overview-todo" className="text-lg font-semibold">
+						{t("todo.title", { count: shown.length })}
+					</h2>
+					<div className="flex gap-2">
+						{filter !== "all" && (
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={() => setFilter("all")}
+							>
+								{t("todo.showAll")}
+							</Button>
+						)}
+						{shown.length > 0 && (
+							<Button size="sm" onClick={() => setCalling(true)}>
+								<PlayIcon data-icon="inline-start" />
+								{t("todo.start")}
+							</Button>
+						)}
+					</div>
+				</div>
+				{shown.length === 0 ? (
+					<Empty className="border">
+						<EmptyHeader>
+							<EmptyMedia variant="icon">
+								<CheckCircle2Icon />
+							</EmptyMedia>
+							<EmptyTitle>{t("todo.emptyTitle")}</EmptyTitle>
+							<EmptyDescription>{t("todo.empty")}</EmptyDescription>
+						</EmptyHeader>
+					</Empty>
+				) : (
+					<ul className="flex flex-col gap-3">
+						{shown.map((l) => (
+							<li key={l.interestId}>
+								<Card size="sm">
+									<CardContent className="flex flex-col gap-3">
+										<TodoRow
+											lead={l}
+											now={now}
+											unreachableAttempts={unreachableAttempts}
+										/>
+									</CardContent>
+								</Card>
+							</li>
+						))}
+					</ul>
 				)}
-			/>
-			<Section
-				id="today-pool"
-				title={t("pool.title", { count: pool.length })}
-				description={t("pool.description")}
-				empty={t("pool.empty")}
-				leads={pool}
-				renderMeta={(l) => <ReceivedLabel at={l.createdAt} now={now} />}
-				renderActions={(l) =>
-					canClaim ? <ClaimButton interestId={l.interestId} /> : null
-				}
-			/>
-		</div>
+			</section>
+			{calling && (
+				<CallMode
+					leads={shown}
+					now={now}
+					unreachableAttempts={unreachableAttempts}
+					onClose={() => setCalling(false)}
+				/>
+			)}
+		</>
 	);
 }
 
-function Section({
-	id,
-	title,
-	description,
-	empty,
-	leads,
-	renderMeta,
-	renderActions,
-}: {
-	id: string;
-	title: string;
-	description: string;
-	empty: string;
-	leads: Lead[];
-	renderMeta: (lead: Lead) => ReactNode;
-	renderActions: (lead: Lead) => ReactNode;
-}) {
-	const tc = useTranslations("customers");
-	return (
-		<section aria-labelledby={id}>
-			<Card className="h-full">
-				<CardHeader>
-					<CardTitle>
-						<h2 id={id}>{title}</h2>
-					</CardTitle>
-					<CardDescription>{description}</CardDescription>
-				</CardHeader>
-				<CardContent>
-					{leads.length === 0 ? (
-						<p className="text-muted-foreground text-sm">{empty}</p>
-					) : (
-						<ul className="flex flex-col divide-y">
-							{leads.map((l) => (
-								<li
-									key={l.interestId}
-									className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0"
-								>
-									<div className="flex items-start justify-between gap-2">
-										<div className="min-w-0">
-											<Link
-												href={`/customers/${l.customerId}` as Route}
-												className="font-medium underline-offset-4 hover:underline"
-											>
-												{l.customerName}
-											</Link>
-											<p className="text-muted-foreground truncate text-sm">
-												{l.projectName}
-												{l.primaryPhone && ` · ${l.primaryPhone}`}
-											</p>
-										</div>
-										{l.priority && <Badge>{tc("priority")}</Badge>}
-									</div>
-									<div className="text-sm">{renderMeta(l)}</div>
-									{renderActions(l)}
-								</li>
-							))}
-						</ul>
-					)}
-				</CardContent>
-			</Card>
-		</section>
-	);
-}
-
-function DueLabel({
-	at,
-	now,
+function StatCard({
 	label,
-	overdueLabel,
+	value,
+	hint,
+	alert,
+	href,
+	pressed,
+	onClick,
 }: {
-	at: Date | string | null;
-	now: Date;
-	label: "contactBy" | "dueAt";
-	overdueLabel: "contactOverdue" | "overdue";
+	label: string;
+	value: number;
+	hint: string;
+	alert?: boolean;
+	href?: Route;
+	pressed?: boolean;
+	onClick?: () => void;
 }) {
-	const t = useTranslations("today");
-	const format = useFormatter();
-	if (!at) return null;
-	const date = new Date(at);
-	const time = format.dateTime(date, {
-		dateStyle: "medium",
-		timeStyle: "short",
-	});
-	const relative = format.relativeTime(date, now);
-	return date <= now ? (
-		<span className="text-destructive font-medium">
-			{t(overdueLabel, { time, relative })}
-		</span>
-	) : (
-		<span className="tabular-nums">{t(label, { time, relative })}</span>
+	const body = (
+		<Card
+			size="sm"
+			className={cn(
+				"hover:bg-muted/50 h-full transition-colors",
+				alert && "bg-destructive/5 ring-destructive/40",
+				pressed && "ring-primary ring-2",
+			)}
+		>
+			<CardContent className="flex flex-col gap-1">
+				<span className="text-muted-foreground text-xs font-medium">
+					{label}
+				</span>
+				<span
+					className={cn(
+						"text-3xl font-semibold tabular-nums",
+						alert && "text-destructive",
+					)}
+				>
+					{value}
+				</span>
+				<span className="text-muted-foreground truncate text-xs">{hint}</span>
+			</CardContent>
+		</Card>
 	);
-}
-
-function ReceivedLabel({ at, now }: { at: Date | string; now: Date }) {
-	const t = useTranslations("today");
-	const format = useFormatter();
+	if (href) {
+		return (
+			<Link href={href} className="block focus-visible:outline-2">
+				{body}
+			</Link>
+		);
+	}
 	return (
-		<span className="text-muted-foreground">
-			{t("received", { relative: format.relativeTime(new Date(at), now) })}
-		</span>
+		<button
+			type="button"
+			aria-pressed={pressed}
+			className="block text-left focus-visible:outline-2"
+			onClick={onClick}
+		>
+			{body}
+		</button>
 	);
 }

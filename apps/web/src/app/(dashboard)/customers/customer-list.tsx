@@ -31,6 +31,7 @@ import {
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { Route } from "next";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 import { useDeferredValue, useState } from "react";
 
@@ -82,11 +83,50 @@ export function CustomerList() {
 	const tc = useTranslations("common");
 	const format = useFormatter();
 	const trpc = useTRPC();
-	const [query, setQuery] = useState("");
-	const [projectId, setProjectId] = useState(ALL);
-	const [stage, setStage] = useState(ALL);
-	const [ownership, setOwnership] = useState<"all" | "mine" | "pool">("all");
+	// Filters live in the URL so links (e.g. Overview cards) can open them.
+	const params = useSearchParams();
+	const router = useRouter();
+	const pathname = usePathname();
+	const [query, setQuery] = useState(params.get("q") ?? "");
+	const [projectId, setProjectId] = useState(params.get("project") ?? ALL);
+	const [stage, setStage] = useState(() => {
+		const valid = (params.get("stage") ?? "")
+			.split(",")
+			.filter((v): v is InterestStage =>
+				(interestStages as readonly string[]).includes(v),
+			);
+		return valid.length ? valid.join(",") : ALL;
+	});
+	const [ownership, setOwnership] = useState<"all" | "mine" | "pool">(() => {
+		const v = params.get("ownership");
+		return v === "mine" || v === "pool" ? v : "all";
+	});
 	const deferredQuery = useDeferredValue(query);
+	const sync = (changes: Record<string, string>) => {
+		const next = new URLSearchParams(params);
+		for (const [key, value] of Object.entries(changes)) {
+			if (!value || value === ALL) next.delete(key);
+			else next.set(key, value);
+		}
+		const qs = next.toString();
+		router.replace((qs ? `${pathname}?${qs}` : pathname) as Route, {
+			scroll: false,
+		});
+	};
+	const stageItems = [
+		{ value: ALL, label: tc("all") },
+		...interestStages.map((s) => ({ value: s, label: ts(s) })),
+	];
+	// A combined filter from a link (e.g. deposited + contracted).
+	if (stage.includes(",")) {
+		stageItems.push({
+			value: stage,
+			label: stage
+				.split(",")
+				.map((s) => ts(s as InterestStage))
+				.join(" + "),
+		});
+	}
 
 	const projects = useQuery(trpc.project.list.queryOptions());
 	const leads = useQuery(
@@ -94,7 +134,8 @@ export function CustomerList() {
 			{
 				query: deferredQuery.trim() || undefined,
 				projectId: projectId === ALL ? undefined : projectId,
-				stage: stage === ALL ? undefined : (stage as InterestStage),
+				stages:
+					stage === ALL ? undefined : (stage.split(",") as InterestStage[]),
 				ownership,
 			},
 			{ placeholderData: keepPreviousData },
@@ -110,14 +151,20 @@ export function CustomerList() {
 						id="lead-search"
 						type="search"
 						value={query}
-						onChange={(e) => setQuery(e.target.value)}
+						onChange={(e) => {
+							setQuery(e.target.value);
+							sync({ q: e.target.value.trim() });
+						}}
 					/>
 				</Field>
 				<FilterSelect
 					id="lead-project"
 					label={t("project")}
 					value={projectId}
-					onChange={setProjectId}
+					onChange={(v) => {
+						setProjectId(v);
+						sync({ project: v });
+					}}
 					items={[
 						{ value: ALL, label: tc("all") },
 						...(projects.data ?? []).map((p) => ({
@@ -130,17 +177,20 @@ export function CustomerList() {
 					id="lead-stage"
 					label={t("stage")}
 					value={stage}
-					onChange={setStage}
-					items={[
-						{ value: ALL, label: tc("all") },
-						...interestStages.map((s) => ({ value: s, label: ts(s) })),
-					]}
+					onChange={(v) => {
+						setStage(v);
+						sync({ stage: v });
+					}}
+					items={stageItems}
 				/>
 				<FilterSelect
 					id="lead-ownership"
 					label={t("ownership")}
 					value={ownership}
-					onChange={(v) => setOwnership(v as typeof ownership)}
+					onChange={(v) => {
+						setOwnership(v as typeof ownership);
+						sync({ ownership: v });
+					}}
 					items={[
 						{ value: "all", label: t("ownershipAll") },
 						{ value: "mine", label: t("ownershipMine") },

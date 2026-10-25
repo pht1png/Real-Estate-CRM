@@ -22,6 +22,9 @@ const fields = [
 	{ key: "preScoreTimelineMonths", min: 1, max: 24 },
 	{ key: "claimCap", min: 1, max: 50 },
 	{ key: "deadlineRollHours", min: 0, max: 8 },
+	{ key: "unreachableAttempts", min: 1, max: 20 },
+	{ key: "unreachableWindowDays", min: 1, max: 60 },
+	{ key: "nurtureCheckDays", min: 1, max: 365 },
 ] as const;
 type Key = (typeof fields)[number]["key"];
 

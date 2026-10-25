@@ -204,3 +204,40 @@ export async function fillAndSubmit(
 		await expect(page).toHaveURL(until, { timeout: 10_000 });
 	}).toPass({ timeout: 45_000 });
 }
+
+/** The owner (acting as manager) sends a Facebook lead to the Riverside pool. */
+export async function poolLead(owner: Page, name: string, phone: string) {
+	await openCapture(owner);
+	await choose(owner, "โครงการ", "Riverside");
+	// exact: the customer page behind the sheet has "เพิ่มเบอร์โทร".
+	await owner.getByLabel("เบอร์โทร", { exact: true }).fill(phone);
+	await owner.getByLabel("ชื่อลูกค้า").fill(name);
+	await choose(owner, "แหล่งที่มา", "Facebook");
+	await owner.getByRole("button", { name: "บันทึกลูกค้า", exact: true }).click();
+	await expect(owner.getByText("บันทึกลูกค้าใหม่แล้ว").first()).toBeVisible();
+}
+
+/** Tap Call without leaving the page: the test browser has no dialler. */
+export async function tapCall(scope: Locator) {
+	const call = scope.getByRole("link", { name: "โทร", exact: true });
+	await expect(call).toHaveAttribute("href", /^tel:\+66/);
+	// Click with href removed (no navigation), then put it back.
+	await call.evaluate((a: HTMLAnchorElement) => {
+		const href = a.getAttribute("href") ?? "";
+		a.removeAttribute("href");
+		a.click();
+		a.setAttribute("href", href);
+	});
+}
+
+/** Call → No answer → save with the suggested follow-up (in 2 hours). */
+export async function logNoAnswer(page: Page, scope: Locator) {
+	await tapCall(scope);
+	await page.getByRole("button", { name: "ไม่รับสาย", exact: true }).click();
+	const dialog = page.getByRole("dialog", { name: "ไม่รับสาย" });
+	await expect(
+		dialog.getByRole("button", { name: /อีก 2 ชั่วโมง/ }),
+	).toHaveAttribute("aria-pressed", "true");
+	await dialog.getByRole("button", { name: "บันทึก", exact: true }).click();
+	await expect(dialog).toBeHidden();
+}

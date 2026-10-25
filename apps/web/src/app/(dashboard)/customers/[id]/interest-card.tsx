@@ -1,5 +1,14 @@
 "use client";
 
+import {
+	type InterestStage,
+	type InvalidReason,
+	interestStages,
+	invalidReasons,
+	type LostReason,
+	lostReasons,
+	openStages,
+} from "@Real-Estate-CRM/db/constants";
 import { Badge } from "@Real-Estate-CRM/ui/components/badge";
 import { Button } from "@Real-Estate-CRM/ui/components/button";
 import {
@@ -32,9 +41,11 @@ type VisibleInterest = Extract<
 export function InterestCard({
 	interest: i,
 	phoneE164,
+	customerName,
 }: {
 	interest: VisibleInterest;
 	phoneE164: string | null;
+	customerName: string;
 }) {
 	const t = useTranslations("customer");
 	const ts = useTranslations("stages");
@@ -66,6 +77,25 @@ export function InterestCard({
 		}),
 	);
 
+	const tl = useTranslations("lostReasons");
+	const ti = useTranslations("invalidReasons");
+	/** "→ Lost · Budget" for stage changes (brief §6 exits). */
+	const stageChange = (data: Record<string, unknown> | null) => {
+		const to = data?.to as InterestStage | undefined;
+		if (!to || !interestStages.includes(to)) return null;
+		const reason = data?.reason as string | undefined;
+		const reasonLabel =
+			to === "lost" &&
+			reason &&
+			(lostReasons as readonly string[]).includes(reason)
+				? tl(reason as LostReason)
+				: to === "invalid" &&
+						reason &&
+						(invalidReasons as readonly string[]).includes(reason)
+					? ti(reason as InvalidReason)
+					: null;
+		return ` → ${ts(to)}${reasonLabel ? ` · ${reasonLabel}` : ""}`;
+	};
 	const dateTime = (d: Date | string) =>
 		format.dateTime(new Date(d), { dateStyle: "medium", timeStyle: "short" });
 	const budget =
@@ -108,11 +138,14 @@ export function InterestCard({
 						<ClaimButton interestId={i.id} />
 					</div>
 				)}
-				{canAct && !inPool && (
+				{canAct && !inPool && openStages.includes(i.stage) && (
 					<LeadActions
-						interestId={i.id}
-						phoneE164={phoneE164}
-						nextFollowUpAt={i.nextFollowUpAt}
+						lead={{
+							interestId: i.id,
+							customerName,
+							phoneE164,
+							nextFollowUpAt: i.nextFollowUpAt,
+						}}
 					/>
 				)}
 				<dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
@@ -183,7 +216,10 @@ export function InterestCard({
 					<ol className="flex flex-col gap-3 border-l pl-4">
 						{i.activities.map((a) => (
 							<li key={a.id} className="text-sm">
-								<p className="font-medium">{ta(a.type)}</p>
+								<p className="font-medium">
+									{ta(a.type)}
+									{a.type === "stage_change" && stageChange(a.data)}
+								</p>
 								{a.note && <p className="whitespace-pre-wrap">{a.note}</p>}
 								<p className="text-muted-foreground text-xs">
 									{t("by", {

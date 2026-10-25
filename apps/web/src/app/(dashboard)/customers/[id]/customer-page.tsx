@@ -44,6 +44,7 @@ export function CustomerPage({ customerId }: { customerId: string }) {
 							<InterestCard
 								key={i.id}
 								interest={i}
+								customerName={c.name}
 								phoneE164={c.phones[0]?.phoneE164 ?? null}
 							/>
 						) : null,

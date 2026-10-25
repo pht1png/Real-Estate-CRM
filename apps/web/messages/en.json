@@ -86,7 +86,6 @@
 	},
 	"nav": {
 		"main": "Sales",
-		"today": "Today",
 		"settings": "Settings",
 		"members": "Members",
 		"projects": "Projects",
@@ -99,34 +98,10 @@
 		"capture": "New enquiry",
 		"sources": "Sources",
 		"campaigns": "Campaigns",
-		"rules": "Rules"
-	},
-	"today": {
-		"title": "Today",
-		"welcome": "Welcome, {name}",
-		"summary": "{role} at {organization}",
-		"comingSoon": "Your leads, follow-ups and visits for today will appear here.",
-		"claims": {
-			"title": "Contact today ({count})",
-			"description": "Leads you claimed or were given. Contact them before the deadline or they go back to the pool.",
-			"empty": "Nothing waiting for first contact."
-		},
-		"followUps": {
-			"title": "Follow-ups due ({count})",
-			"description": "Due today, overdue first.",
-			"empty": "No follow-ups due today."
-		},
-		"pool": {
-			"title": "New in my pools ({count})",
-			"description": "Unclaimed leads in your projects, priority first.",
-			"empty": "The pool is empty."
-		},
-		"contactBy": "Contact by {time} ({relative})",
-		"contactOverdue": "Deadline passed {relative}",
-		"dueAt": "Due {time} ({relative})",
-		"overdue": "Overdue since {time} ({relative})",
-		"noFollowUp": "No follow-up set",
-		"received": "Received {relative}"
+		"rules": "Rules",
+		"overview": "Overview",
+		"pool": "Pool",
+		"poolWaiting": "{count} leads waiting"
 	},
 	"noOrganization": {
 		"title": "No company access",
@@ -522,42 +497,149 @@
 		"default": "Default: {value}",
 		"saved": "Rules saved",
 		"claimCap": "Claim limit: uncontacted claimed leads per salesperson",
-		"deadlineRollHours": "Contact deadline: roll to the next working day when fewer office hours than this remain"
+		"deadlineRollHours": "Contact deadline: roll to the next working day when fewer office hours than this remain",
+		"unreachableAttempts": "Unreachable: no-answers before suggesting Lost",
+		"unreachableWindowDays": "Unreachable: within (days)",
+		"nurtureCheckDays": "Nurture: check in after (days)"
 	},
 	"leadActions": {
 		"claim": "Claim",
 		"claimed": "Lead claimed. Contact them before the deadline.",
-		"dial": "Dial",
-		"call": "Called",
-		"no_answer": "No answer",
+		"call": "Call",
+		"logCall": "Log a call",
 		"line": "LINE",
-		"followUp": "Follow-up",
-		"titles": {
-			"call": "Log a call",
-			"no_answer": "Log no answer",
-			"line": "Log a LINE message",
-			"followUp": "Reschedule follow-up"
+		"more": "More actions",
+		"changeFollowUp": "Change follow-up",
+		"addNote": "Add note",
+		"exits": {
+			"lost": "Mark lost",
+			"nurture": "Move to nurture",
+			"invalid": "Mark invalid"
 		},
-		"followUpHint": "Every open lead needs a next follow-up.",
-		"note": "Note",
-		"notePlaceholder": "What happened? (optional)",
+		"exitHints": {
+			"lost": "{name} leaves your active leads. A new enquiry reopens it.",
+			"nurture": "{name} leaves your list; a check-in comes back in 30 days.",
+			"invalid": "{name} leaves the funnel and isn't counted as lost."
+		},
+		"result": {
+			"title": "How did the call with {name} go?",
+			"description": "Choose the result. You'll set the next follow-up next.",
+			"answered": "Answered",
+			"no_answer": "No answer",
+			"wrong_number": "Wrong number"
+		},
+		"titles": {
+			"answered": "Call answered",
+			"no_answer": "No answer",
+			"line": "LINE message"
+		},
 		"nextFollowUp": "Next follow-up",
 		"picks": {
 			"in2h": "In 2 hours",
-			"tomorrow": "Tomorrow 10:00",
-			"in3days": "In 3 days",
+			"nextWorkingDay": "Next working day",
+			"in3WorkingDays": "In 3 working days",
 			"nextWeek": "Next week"
 		},
 		"followUpFuture": "Choose a time in the future.",
+		"note": "Note",
+		"notePlaceholder": "What happened? (optional)",
 		"save": "Save",
-		"saved": "Saved",
+		"reason": "Reason",
+		"reasonRequired": "Choose a reason.",
+		"noteRequired": "Note (required for Other)",
+		"noteRequiredError": "Add a note for Other.",
+		"toasts": {
+			"saved": "Saved. Next follow-up: {time}",
+			"noAnswer": "No answer logged (try {attempt}). Next try: {time}",
+			"unreachable": "No contact after {attempt} tries. Decide: lost or nurture.",
+			"noteSaved": "Note added",
+			"closed": {
+				"lost": "Marked lost",
+				"nurture": "Moved to nurture",
+				"invalid": "Marked invalid"
+			}
+		},
+		"unreachable": {
+			"title": "No contact after {attempts} tries",
+			"lost": "Mark lost",
+			"nurture": "Move to nurture"
+		},
 		"errors": {
 			"FORBIDDEN": "Only the lead's owner or a manager can do this. Claim the lead first if it is in the pool.",
 			"NOT_FOUND": "This lead is no longer available to you. Refresh and try again.",
-			"BAD_REQUEST": "Set a next follow-up in the future.",
+			"BAD_REQUEST": "Check the details: the next follow-up must be in the future and closed leads can't be changed.",
 			"CONFLICT": "Someone else claimed this lead first.",
 			"PRECONDITION_FAILED": "You've reached your claim limit. Contact your claimed leads first.",
 			"default": "Saving failed. Please try again."
 		}
+	},
+	"overview": {
+		"title": "Overview",
+		"welcome": "Welcome, {name}",
+		"summary": "{role} at {organization}",
+		"comingSoon": "Your overview will appear here.",
+		"cardsLabel": "My numbers",
+		"cards": {
+			"active": "Active leads",
+			"overdue": "Overdue follow-ups",
+			"unreachable": "Unreachable",
+			"qualified": "Qualified",
+			"opportunities": "Opportunities",
+			"deposited": "Deposited"
+		},
+		"hints": {
+			"active": "Still in play",
+			"oldest": "Oldest {relative}",
+			"none": "None",
+			"decide": "Decide now",
+			"qualified": "Contacted, not visited",
+			"opportunities": "Visited, still open",
+			"deposited": "Not yet transferred"
+		},
+		"todo": {
+			"title": "To do ({count})",
+			"showAll": "Show all",
+			"start": "Start",
+			"emptyTitle": "All caught up",
+			"empty": "Nothing needs you right now. New pool leads appear under Pool."
+		},
+		"reasons": {
+			"firstContact": "New · contact by {time} ({relative})",
+			"firstContactLate": "New · contact deadline passed {relative}",
+			"noFollowUp": "No follow-up set",
+			"overdue": "Follow-up overdue · {relative}",
+			"due": "Follow-up due {relative}",
+			"tries": "try {attempts} of {max}"
+		},
+		"callMode": {
+			"title": "Calling",
+			"progress": "Lead {current} of {total}",
+			"skip": "Skip",
+			"doneTitle": "Done for now",
+			"doneDescription": "You went through {total} leads.",
+			"close": "Back to Overview"
+		}
+	},
+	"pool": {
+		"title": "Pool",
+		"description": "Unclaimed leads in your projects, priority first. Claim one to make it yours.",
+		"project": "Project",
+		"emptyTitle": "The pool is empty",
+		"empty": "New leads from the pool appear here.",
+		"waiting": "Received {relative}"
+	},
+	"lostReasons": {
+		"budget": "Budget / price",
+		"mortgage": "Can't get a mortgage",
+		"location_product": "Location / product",
+		"bought_elsewhere": "Bought elsewhere",
+		"unreachable": "Unreachable",
+		"other": "Other"
+	},
+	"invalidReasons": {
+		"wrong_number": "Wrong number",
+		"spam": "Spam",
+		"duplicate": "Duplicate",
+		"agent_competitor": "Agent / competitor"
 	}
 }

@@ -11,7 +11,14 @@ import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-export type NavItem = { title: string; href: Route; icon: React.ReactNode };
+export type NavItem = {
+	title: string;
+	href: Route;
+	icon: React.ReactNode;
+	/** Extra text for screen readers, e.g. a badge count. */
+	srLabel?: string;
+	badge?: React.ReactNode;
+};
 
 /** A labelled sidebar group of links; the current page is highlighted. */
 export function NavGroup({
@@ -35,7 +42,9 @@ export function NavGroup({
 						>
 							{item.icon}
 							<span>{item.title}</span>
+							{item.srLabel && <span className="sr-only">{item.srLabel}</span>}
 						</SidebarMenuButton>
+						{item.badge}
 					</SidebarMenuItem>
 				))}
 			</SidebarMenu>

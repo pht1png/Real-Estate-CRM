@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 import { getServerSession } from "@/lib/session";
 
-import { Today } from "./today";
+import { Overview } from "./overview";
 
 export default async function DashboardPage() {
 	const session = await getServerSession();
@@ -11,5 +11,5 @@ export default async function DashboardPage() {
 		redirect("/login");
 	}
 
-	return <Today name={session.user.name} />;
+	return <Overview name={session.user.name} />;
 }

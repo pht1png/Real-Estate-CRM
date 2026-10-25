@@ -1,7 +1,7 @@
 import type { Database } from "@Real-Estate-CRM/db";
 import { type AuditEntry, insertAudit } from "@Real-Estate-CRM/db/audit";
 import * as schema from "@Real-Estate-CRM/db/schema/auth";
-import { interest } from "@Real-Estate-CRM/db/schema/crm";
+import { lead, opportunity } from "@Real-Estate-CRM/db/schema/crm";
 import { tryGetCurrentAuthEndpointContext } from "@better-auth/core/context";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
 import { betterAuth } from "better-auth";
@@ -212,20 +212,27 @@ export function createAuth(
 					// Until offboarding (M7) moves leads to a manager, a member who
 					// still owns open leads can't be removed.
 					beforeRemoveMember: async ({ member }) => {
-						const [owned] = await database
-							.select({ n: sql<number>`count(*)::int` })
-							.from(interest)
-							.where(
-								and(
-									eq(interest.ownerMemberId, member.id),
-									notInArray(interest.stage, [
-										"transferred",
-										"lost",
-										"invalid",
-									]),
+						const [[leads], [deals]] = await Promise.all([
+							database
+								.select({ n: sql<number>`count(*)::int` })
+								.from(lead)
+								.where(
+									and(
+										eq(lead.ownerMemberId, member.id),
+										notInArray(lead.status, ["converted", "disqualified"]),
+									),
 								),
-							);
-						if ((owned?.n ?? 0) > 0) {
+							database
+								.select({ n: sql<number>`count(*)::int` })
+								.from(opportunity)
+								.where(
+									and(
+										eq(opportunity.ownerMemberId, member.id),
+										notInArray(opportunity.stage, ["transferred", "lost"]),
+									),
+								),
+						]);
+						if ((leads?.n ?? 0) + (deals?.n ?? 0) > 0) {
 							throw new APIError("BAD_REQUEST", {
 								code: "MEMBER_OWNS_LEADS",
 								message:

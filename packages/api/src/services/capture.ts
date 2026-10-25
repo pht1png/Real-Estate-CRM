@@ -1,16 +1,19 @@
 import { roleCan } from "@Real-Estate-CRM/auth/permissions";
 import type { Database } from "@Real-Estate-CRM/db";
 import {
+	activity,
+	buyerIntents,
 	buyingTimelines,
-	closedStages,
+	closedLeadStatuses,
 	contactActivityTypes,
 	customer,
 	customerPhone,
-	interest,
-	interestActivity,
+	type FitResult,
+	lead,
+	liveOpportunityStages,
 	member,
+	opportunity,
 	projectMember,
-	soldStages,
 	unit,
 } from "@Real-Estate-CRM/db/schema/index";
 import { and, eq, gte, inArray, sql } from "drizzle-orm";
@@ -21,7 +24,9 @@ import { writeAudit } from "./audit";
 import { requireActiveCampaign } from "./campaign";
 import { badRequest, forbidden } from "./errors";
 import { ensureDefaultSources, requireActiveSource } from "./lead-source";
+import { deadlineFor } from "./pool";
 import { availablePriceRange } from "./project";
+import { autoQualifyIfFits, checkUnitTypes } from "./qualify";
 import { getRules } from "./rules";
 import { requireProject } from "./scope";
 import { scoreInterest } from "./scoring";
@@ -42,6 +47,10 @@ export const captureEnquiryInput = z
 		budgetMinSatang: satang.optional(),
 		budgetMaxSatang: satang.optional(),
 		buyingTimeline: z.enum(buyingTimelines).optional(),
+		unitTypeIds: z.array(z.uuid()).max(50).optional(),
+		buyerIntent: z.enum(buyerIntents).optional(),
+		/** When the enquiry really came in (forgot to log a walk-in): ≤ now, ≤ 30 days back. */
+		receivedAt: z.iso.datetime({ offset: true }).optional(),
 		note: z.string().trim().max(1000).optional(),
 	})
 	.refine(
@@ -54,12 +63,14 @@ export const captureEnquiryInput = z
 
 export type CaptureOutcome =
 	| "new_customer"
-	| "new_interest"
+	| "new_lead"
 	| "re_enquiry_kept"
 	| "re_enquiry_pooled"
 	| "re_enquiry_logged";
 
 type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+const MAX_RECEIVED_AGE_MS = 30 * 86_400_000;
 
 /** The member who may own a lead in this project: a salesperson or manager covering it. */
 async function requireOwnerCandidate(
@@ -94,20 +105,20 @@ async function requireOwnerCandidate(
 /** Whether the owner logged a real contact (call, LINE, meeting, visit) within the window. */
 async function ownerContactedSince(
 	tx: Tx,
-	interestId: string,
+	leadId: string,
 	ownerMemberId: string,
 	since: Date,
 ) {
 	const [row] = await tx
 		.select({ n: sql<number>`count(*)::int` })
-		.from(interestActivity)
+		.from(activity)
 		.innerJoin(member, eq(member.id, ownerMemberId))
 		.where(
 			and(
-				eq(interestActivity.interestId, interestId),
-				inArray(interestActivity.type, [...contactActivityTypes]),
-				eq(interestActivity.byUserId, member.userId),
-				gte(interestActivity.at, since),
+				eq(activity.leadId, leadId),
+				inArray(activity.type, [...contactActivityTypes]),
+				eq(activity.byUserId, member.userId),
+				gte(activity.at, since),
 			),
 		);
 	return (row?.n ?? 0) > 0;
@@ -115,8 +126,8 @@ async function ownerContactedSince(
 
 /**
  * Quick capture (brief §6): one enquiry → customer (deduped by phone) and an
- * interest in the project. Salesperson-logged enquiries are theirs at once;
- * managers pick an owner or the pool. An existing interest in the same project
+ * lead in the project. Salesperson-logged enquiries are theirs at once;
+ * managers pick an owner or the pool. An existing lead in the same project
  * gets an `enquiry` activity and the re-enquiry rule decides the owner.
  */
 export async function captureEnquiry(
@@ -125,11 +136,22 @@ export async function captureEnquiry(
 	input: z.infer<typeof captureEnquiryInput>,
 ): Promise<{
 	customerId: string;
-	interestId: string;
+	leadId: string;
 	outcome: CaptureOutcome;
+	fit: FitResult;
+	/** Qualified by the project's auto-qualify rule. */
+	qualified: boolean;
 }> {
 	const phone = normalizePhone(input.phone);
 	if (!phone) badRequest("Invalid phone number");
+	const receivedAt = input.receivedAt ? new Date(input.receivedAt) : new Date();
+	// A minute of slack for clock drift between the phone and the server.
+	if (receivedAt.getTime() > Date.now() + 60_000) {
+		badRequest("The received time can't be in the future");
+	}
+	if (receivedAt.getTime() < Date.now() - MAX_RECEIVED_AGE_MS) {
+		badRequest("The received time can be at most 30 days back");
+	}
 
 	const canAssign = roleCan(tenant.role, { lead: ["assign"] });
 	if (
@@ -165,6 +187,28 @@ export async function captureEnquiry(
 				badRequest("The campaign belongs to another channel");
 			}
 		}
+		// In person (walk-in, event): budget, timeline, unit types and intent are required.
+		if (source.inPerson) {
+			if (
+				input.budgetMinSatang === undefined ||
+				input.budgetMaxSatang === undefined ||
+				!input.buyingTimeline ||
+				!input.buyerIntent
+			) {
+				badRequest(
+					"In-person leads need budget, timeline, unit types and intent",
+				);
+			}
+		}
+		const unitTypeIds =
+			input.unitTypeIds !== undefined || source.inPerson
+				? await checkUnitTypes(
+						tx,
+						proj.id,
+						input.unitTypeIds ?? [],
+						source.inPerson,
+					)
+				: undefined;
 		if (ownerMemberId && !selfLogged) {
 			await requireOwnerCandidate(tx, tenant, ownerMemberId, proj.id);
 		} else if (
@@ -197,7 +241,7 @@ export async function captureEnquiry(
 				),
 			);
 		let customerId = existingPhone?.customerId;
-		let outcome: CaptureOutcome = "new_interest";
+		let outcome: CaptureOutcome = "new_lead";
 		if (!customerId) {
 			const [created] = await tx
 				.insert(customer)
@@ -248,13 +292,8 @@ export async function captureEnquiry(
 
 		const [existing] = await tx
 			.select()
-			.from(interest)
-			.where(
-				and(
-					eq(interest.customerId, customerId),
-					eq(interest.projectId, proj.id),
-				),
-			)
+			.from(lead)
+			.where(and(eq(lead.customerId, customerId), eq(lead.projectId, proj.id)))
 			.for("update");
 
 		const budgetMinSatang =
@@ -286,16 +325,21 @@ export async function captureEnquiry(
 			prioritySignals: score.signals,
 			scoringVersion: score.version,
 		};
-		const activity = (
-			values: Omit<typeof interestActivity.$inferInsert, "organizationId">,
+		const log = (
+			values: Omit<typeof activity.$inferInsert, "organizationId">,
 		) =>
 			tx
-				.insert(interestActivity)
+				.insert(activity)
 				.values({ organizationId: tenant.organizationId, ...values });
 
 		if (!existing) {
+			// Assigned by a manager: contact the same working day, like a claim.
+			const contactDeadlineAt =
+				ownerMemberId && !selfLogged
+					? await deadlineFor(tx, proj, rules.deadlineRollHours, now)
+					: null;
 			const [created] = await tx
-				.insert(interest)
+				.insert(lead)
 				.values({
 					organizationId: tenant.organizationId,
 					customerId,
@@ -306,69 +350,103 @@ export async function captureEnquiry(
 					budgetMinSatang,
 					budgetMaxSatang,
 					buyingTimeline,
+					unitTypeIds: unitTypeIds ?? [],
+					buyerIntent: input.buyerIntent ?? null,
 					priority: score.priority,
 					prioritySignals: score.signals,
 					scoringVersion: score.version,
 					scoredAt: now,
+					createdAt: receivedAt,
 					nextFollowUpAt: input.nextFollowUpAt
 						? new Date(input.nextFollowUpAt)
 						: null,
+					contactDeadlineAt,
 				})
-				.returning({ id: interest.id });
+				.returning({ id: lead.id });
 			if (!created) throw new Error("insert returned no row");
-			await activity({
-				interestId: created.id,
+			await log({
+				leadId: created.id,
 				type: "enquiry",
+				at: receivedAt,
 				byUserId: tenant.userId,
 				note: input.note,
 				campaignId: input.campaignId,
 				data: { ...snapshot, ownerMemberId },
 			});
 			if (ownerMemberId && !selfLogged) {
-				await activity({
-					interestId: created.id,
+				await log({
+					leadId: created.id,
 					type: "assignment",
 					byUserId: tenant.userId,
 					data: { from: null, to: ownerMemberId },
 				});
 				await writeAudit(tx, tenant, {
-					action: "interest.assign",
-					entityType: "interest",
+					action: "lead.assign",
+					entityType: "lead",
 					entityId: created.id,
 					before: { ownerMemberId: null },
 					after: { ownerMemberId },
 				});
 			}
-			return { customerId, interestId: created.id, outcome };
+			const { fit, qualified } = await autoQualifyIfFits(
+				tx,
+				tenant.organizationId,
+				proj,
+				{
+					id: created.id,
+					status: "new",
+					budgetMinSatang,
+					budgetMaxSatang,
+					buyingTimeline,
+					unitTypeIds: unitTypeIds ?? [],
+					buyerIntent: input.buyerIntent ?? null,
+				},
+			);
+			return { customerId, leadId: created.id, outcome, fit, qualified };
 		}
 
-		// Re-enquiry on the existing interest (brief §6).
-		await activity({
-			interestId: existing.id,
+		// Re-enquiry on the existing lead (brief §6). A live deal only logs it.
+		const [live] =
+			existing.status === "converted"
+				? await tx
+						.select({ id: opportunity.id })
+						.from(opportunity)
+						.where(
+							and(
+								eq(opportunity.leadId, existing.id),
+								inArray(opportunity.stage, [...liveOpportunityStages]),
+							),
+						)
+				: [];
+		await log({
+			leadId: existing.id,
+			opportunityId: live?.id,
 			type: "enquiry",
+			at: receivedAt,
 			byUserId: tenant.userId,
 			note: input.note,
 			campaignId: input.campaignId,
 			data: { ...snapshot, reEnquiry: true },
 		});
-		const changes: Partial<typeof interest.$inferInsert> = {
+		const changes: Partial<typeof lead.$inferInsert> = {
 			budgetMinSatang,
 			budgetMaxSatang,
 			buyingTimeline,
+			...(unitTypeIds && { unitTypeIds }),
+			...(input.buyerIntent && { buyerIntent: input.buyerIntent }),
 			priority: score.priority,
 			prioritySignals: score.signals,
 			scoringVersion: score.version,
 			scoredAt: now,
 		};
-		if (soldStages.includes(existing.stage)) {
-			await tx
-				.update(interest)
-				.set(changes)
-				.where(eq(interest.id, existing.id));
+		if (live) {
+			await tx.update(lead).set(changes).where(eq(lead.id, existing.id));
 			return {
 				customerId,
-				interestId: existing.id,
+				leadId: existing.id,
 				outcome: "re_enquiry_logged",
+				fit: "unknown",
+				qualified: false,
 			};
 		}
 
@@ -383,38 +461,61 @@ export async function captureEnquiry(
 				existing.ownerMemberId,
 				since,
 			));
-		if (closedStages.includes(existing.stage)) {
-			changes.stage = "new";
-			await activity({
-				interestId: existing.id,
+		// Disqualified, nurturing, or converted with every deal lost: start over.
+		if (
+			closedLeadStatuses.includes(existing.status) ||
+			existing.status === "converted"
+		) {
+			changes.status = "new";
+			changes.disqualifyReason = null;
+			changes.nurtureNextCheckAt = null;
+			await log({
+				leadId: existing.id,
 				type: "stage_change",
-				data: { from: existing.stage, to: "new", reason: "re_enquiry" },
+				data: { from: existing.status, to: "new", reason: "re_enquiry" },
 			});
 		}
 		if (!keep) {
 			changes.ownerMemberId = null;
 			changes.claimedAt = null;
-			await activity({
-				interestId: existing.id,
+			changes.contactDeadlineAt = null;
+			await log({
+				leadId: existing.id,
 				type: "re_engagement",
 				campaignId: input.campaignId,
 				data: { from: existing.ownerMemberId, to: null },
 			});
 			if (existing.ownerMemberId) {
 				await writeAudit(tx, tenant, {
-					action: "interest.assign",
-					entityType: "interest",
+					action: "lead.assign",
+					entityType: "lead",
 					entityId: existing.id,
 					before: { ownerMemberId: existing.ownerMemberId },
 					after: { ownerMemberId: null, reason: "re_enquiry" },
 				});
 			}
 		}
-		await tx.update(interest).set(changes).where(eq(interest.id, existing.id));
+		await tx.update(lead).set(changes).where(eq(lead.id, existing.id));
+		const { fit, qualified } = await autoQualifyIfFits(
+			tx,
+			tenant.organizationId,
+			proj,
+			{
+				id: existing.id,
+				status: changes.status ?? existing.status,
+				budgetMinSatang,
+				budgetMaxSatang,
+				buyingTimeline,
+				unitTypeIds: unitTypeIds ?? existing.unitTypeIds,
+				buyerIntent: input.buyerIntent ?? existing.buyerIntent,
+			},
+		);
 		return {
 			customerId,
-			interestId: existing.id,
+			leadId: existing.id,
 			outcome: keep ? "re_enquiry_kept" : "re_enquiry_pooled",
+			fit,
+			qualified,
 		};
 	});
 }

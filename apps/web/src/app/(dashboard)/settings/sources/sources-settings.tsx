@@ -9,7 +9,9 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@Real-Estate-CRM/ui/components/card";
+import { Checkbox } from "@Real-Estate-CRM/ui/components/checkbox";
 import { Input } from "@Real-Estate-CRM/ui/components/input";
+import { Label } from "@Real-Estate-CRM/ui/components/label";
 import { Spinner } from "@Real-Estate-CRM/ui/components/spinner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
@@ -71,6 +73,9 @@ export function SourcesSettings() {
 	const renameChannel = useMutation(
 		trpc.leadSource.renameChannel.mutationOptions(options),
 	);
+	const setInPerson = useMutation(
+		trpc.leadSource.setChannelInPerson.mutationOptions(options),
+	);
 	const createSource = useMutation(
 		trpc.leadSource.createSource.mutationOptions(options),
 	);
@@ -97,6 +102,25 @@ export function SourcesSettings() {
 								}
 							/>
 						</CardTitle>
+						<CardDescription className="flex items-start gap-2 pt-2">
+							<Checkbox
+								id={`in-person-${channel.id}`}
+								checked={channel.inPerson}
+								disabled={setInPerson.isPending}
+								onCheckedChange={(c) =>
+									setInPerson.mutate({
+										channelId: channel.id,
+										inPerson: !!c,
+									})
+								}
+							/>
+							<Label
+								htmlFor={`in-person-${channel.id}`}
+								className="leading-snug"
+							>
+								{t("inPerson")}
+							</Label>
+						</CardDescription>
 					</CardHeader>
 					<CardContent className="flex flex-col gap-3">
 						<ul className="flex flex-col gap-2">

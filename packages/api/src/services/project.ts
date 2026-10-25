@@ -1,5 +1,6 @@
 import type { Database } from "@Real-Estate-CRM/db";
 import {
+	defaultQualificationRules,
 	project,
 	projectClosedDate,
 	projectTypes,
@@ -37,6 +38,14 @@ export const updateProjectInput = z.strictObject({
 		.array(tag)
 		.max(100)
 		.refine((tags) => new Set(tags).size === tags.length, "Duplicate tag")
+		.optional(),
+	/** Fit check (brief §6); missing keys keep their current value. */
+	qualificationRules: z
+		.strictObject({
+			budgetTolerancePct: z.number().int().min(0).max(50).optional(),
+			qualifyWithinMonths: z.number().int().min(1).max(36).optional(),
+			autoQualify: z.boolean().optional(),
+		})
 		.optional(),
 });
 
@@ -159,6 +168,10 @@ export async function getProject(
 		officeHours: row.officeHours,
 		commissionBps: row.commissionBps,
 		unitTags: row.unitTags,
+		qualificationRules: {
+			...defaultQualificationRules,
+			...row.qualificationRules,
+		},
 		closedDates,
 		minPriceSatang: range?.minPriceSatang ?? null,
 		maxPriceSatang: range?.maxPriceSatang ?? null,
@@ -197,7 +210,16 @@ export async function updateProject(
 			}
 		}
 
-		await tx.update(project).set(changes).where(eq(project.id, projectId));
+		const set = {
+			...changes,
+			...(changes.qualificationRules && {
+				qualificationRules: {
+					...before.qualificationRules,
+					...changes.qualificationRules,
+				},
+			}),
+		};
+		await tx.update(project).set(set).where(eq(project.id, projectId));
 		const fields = Object.keys(changes) as (keyof typeof changes)[];
 		await writeAudit(tx, tenant, {
 			action: "project.update",

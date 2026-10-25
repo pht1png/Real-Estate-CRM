@@ -26,7 +26,9 @@ test("owner sets up a project and invites a salesperson, who joins with limited 
 		ownerEmail,
 	);
 	await expect(page).toHaveURL(/\/dashboard$/);
-	await expect(page.getByRole("heading", { name: /สวัสดี/ })).toBeVisible();
+	await expect(
+		page.getByRole("heading", { name: "ภาพรวม", level: 1 }),
+	).toBeVisible();
 
 	// Owner adds a project.
 	await page.getByRole("link", { name: "โครงการ" }).click();
@@ -68,7 +70,9 @@ test("owner sets up a project and invites a salesperson, who joins with limited 
 	await sales.getByRole("menuitem", { name: "English" }).click();
 	await expect(sales.getByText("Salesperson at Baan Suan Co")).toBeVisible();
 	await sales.reload();
-	await expect(sales.getByRole("link", { name: "Today" })).toBeVisible();
+	await expect(
+		sales.getByRole("link", { name: "Overview", exact: true }),
+	).toBeVisible();
 
 	await salesContext.close();
 });

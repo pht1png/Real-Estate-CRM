@@ -15,6 +15,7 @@ import {
 	defaultOfficeHours,
 	type OfficeHours,
 	projectTypes,
+	type QualificationRules,
 } from "../constants";
 import { member, organization, user } from "./auth";
 import { createdAt, updatedAt } from "./columns";
@@ -38,6 +39,11 @@ export const project = pgTable(
 		commissionBps: integer("commission_bps").notNull().default(0),
 		/** Allowed tags for this project's units. */
 		unitTags: text("unit_tags").array().notNull().default(sql`'{}'::text[]`),
+		/** Overrides of `defaultQualificationRules` (fit check, brief §6). */
+		qualificationRules: jsonb("qualification_rules")
+			.$type<Partial<QualificationRules>>()
+			.notNull()
+			.default({}),
 		createdAt: createdAt(),
 		updatedAt: updatedAt(),
 	},

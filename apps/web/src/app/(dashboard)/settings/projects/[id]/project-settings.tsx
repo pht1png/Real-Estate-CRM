@@ -20,6 +20,7 @@ import { ClosedDatesTab } from "./closed-dates-tab";
 import { GeneralTab } from "./general-tab";
 import { HoursTab } from "./hours-tab";
 import { ImportTab } from "./import-tab";
+import { QualificationTab } from "./qualification-tab";
 import { SectionsTab } from "./sections-tab";
 import { UnitTypesTab } from "./unit-types-tab";
 
@@ -27,6 +28,7 @@ const tabs = [
 	"general",
 	"hours",
 	"closed",
+	"qualification",
 	"sections",
 	"unitTypes",
 	"import",
@@ -75,6 +77,9 @@ export function ProjectSettings({ projectId }: { projectId: string }) {
 				</TabsContent>
 				<TabsContent value="closed">
 					<ClosedDatesTab project={p} />
+				</TabsContent>
+				<TabsContent value="qualification">
+					<QualificationTab project={p} />
 				</TabsContent>
 				<TabsContent value="sections">
 					<SectionsTab projectId={p.id} />

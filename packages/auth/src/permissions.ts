@@ -17,7 +17,8 @@ export const statements = {
 	// M2: manage = sections, unit types, import; price / block also for managers in scope.
 	unit: ["read", "manage", "price", "block"],
 	// M3: capture = quick capture; assign = choose an owner / send to pool.
-	lead: ["capture", "read", "assign"],
+	// M4: claim = take a lead from the pool (salespeople only, brief §6).
+	lead: ["capture", "read", "assign", "claim"],
 	customer: ["update"],
 	leadSource: ["manage"],
 	campaign: ["manage"],
@@ -57,7 +58,7 @@ export const roles = {
 	}),
 	salesperson: ac.newRole({
 		unit: ["read"],
-		lead: ["capture", "read"],
+		lead: ["capture", "read", "claim"],
 		customer: ["update"],
 	}),
 };

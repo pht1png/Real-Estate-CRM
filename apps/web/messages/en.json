@@ -86,7 +86,6 @@
 	},
 	"nav": {
 		"main": "Sales",
-		"today": "Today",
 		"settings": "Settings",
 		"members": "Members",
 		"projects": "Projects",
@@ -99,13 +98,12 @@
 		"capture": "New enquiry",
 		"sources": "Sources",
 		"campaigns": "Campaigns",
-		"rules": "Rules"
-	},
-	"today": {
-		"title": "Today",
-		"welcome": "Welcome, {name}",
-		"summary": "{role} at {organization}",
-		"comingSoon": "Your leads, follow-ups and visits for today will appear here."
+		"rules": "Rules",
+		"overview": "Overview",
+		"pool": "Pool",
+		"poolWaiting": "{count} leads waiting",
+		"todo": "To do",
+		"todoWaiting": "{count} to do"
 	},
 	"noOrganization": {
 		"title": "No company access",
@@ -216,7 +214,8 @@
 			"closed": "Closed dates",
 			"sections": "Sections",
 			"unitTypes": "Unit types",
-			"import": "Import units"
+			"import": "Import units",
+			"qualification": "Qualification"
 		},
 		"type": "Project type",
 		"timeZone": "Time zone",
@@ -253,7 +252,17 @@
 		"newUnitType": "New unit type",
 		"editUnitType": "Edit unit type",
 		"priceRangeShort": "Price range",
-		"openSettings": "Settings"
+		"openSettings": "Settings",
+		"qualification": {
+			"intro": "The system checks each lead's budget and timeline against this project and suggests the next step. Salespeople confirm; disqualifying is never automatic.",
+			"tolerance": "Budget tolerance (%)",
+			"toleranceHint": "A budget this far outside the available price range still fits.",
+			"months": "Qualify if buying within (months)",
+			"monthsHint": "Later than this is \"too early\" — suggested for Nurture.",
+			"auto": "Auto-qualify leads that fit",
+			"autoHint": "When on, a lead that fits and has unit types and intent becomes Qualified by itself.",
+			"saved": "Qualification rules saved"
+		}
 	},
 	"unitImport": {
 		"title": "Import units from CSV",
@@ -330,17 +339,6 @@
 		"unblocked": "Unit unblocked",
 		"priceLocked": "Price can't change after deposit"
 	},
-	"stages": {
-		"new": "New",
-		"contacted": "Contacted",
-		"visited": "Visited",
-		"deposited": "Deposited",
-		"contracted": "Contracted",
-		"transferred": "Transferred",
-		"lost": "Lost",
-		"nurture": "Nurture",
-		"invalid": "Invalid"
-	},
 	"activityTypes": {
 		"enquiry": "Enquiry",
 		"call": "Call",
@@ -349,9 +347,11 @@
 		"meeting": "Meeting",
 		"visit": "Visit",
 		"note": "Note",
-		"stage_change": "Stage change",
+		"stage_change": "Status change",
 		"re_engagement": "Back to pool (re-enquiry)",
-		"assignment": "Assigned"
+		"assignment": "Assigned",
+		"qualified": "Qualified",
+		"conversion": "Showroom visit confirmed"
 	},
 	"timelines": {
 		"under_1_month": "Within 1 month",
@@ -391,10 +391,10 @@
 		"save": "Save enquiry",
 		"outcomes": {
 			"new_customer": "New customer saved",
-			"new_interest": "Added to the existing customer",
 			"re_enquiry_kept": "Re-enquiry: stays with the current owner",
 			"re_enquiry_pooled": "Re-enquiry: back in the project pool",
-			"re_enquiry_logged": "Re-enquiry logged on the existing deal"
+			"re_enquiry_logged": "Re-enquiry logged on the existing deal",
+			"new_lead": "Added to the existing customer"
 		},
 		"missing": "Please fill in: {fields}",
 		"required": "Required",
@@ -403,6 +403,18 @@
 			"NOT_FOUND": "The project, source or campaign is no longer available. Refresh and try again.",
 			"BAD_REQUEST": "Some details are not valid. Check the phone number and dates.",
 			"default": "Saving failed. Please try again."
+		},
+		"receivedAt": "Received at",
+		"receivedAtHint": "When the customer actually came in or called. Change it if you're logging late.",
+		"budget": "Budget",
+		"unitTypes": "Unit types wanted",
+		"intent": "Buying for",
+		"moreRequired": "Details (required for in-person)",
+		"fit": {
+			"fits": "Fits this project — mark qualified on the customer page.",
+			"too_early": "Buying later than the project's window — consider Nurture.",
+			"budget_no_fit": "Budget doesn't fit this project.",
+			"autoQualified": "Qualified automatically (project rule)."
 		}
 	},
 	"customers": {
@@ -419,7 +431,13 @@
 		"phone": "Phone",
 		"followUp": "Next follow-up",
 		"empty": "No leads match",
-		"priority": "Priority"
+		"priority": "Priority",
+		"status": "Status",
+		"lastVisit": "Last visit",
+		"pipelines": {
+			"leads": "Leads",
+			"deals": "Deals"
+		}
 	},
 	"customer": {
 		"profile": "Shared profile",
@@ -440,7 +458,7 @@
 		"referrerSet": "Set referrer by phone",
 		"noReferrer": "No referrer",
 		"referrerNotFound": "No customer with this phone",
-		"interests": "Interests",
+		"interests": "Projects",
 		"otherProjects": "Other projects",
 		"summaryLine": "{project} · {stage} · {owner}",
 		"pool": "Pool",
@@ -462,7 +480,19 @@
 		"by": "{name} · {date}",
 		"system": "System",
 		"removePhoneTitle": "Remove {phone}?",
-		"removePhoneDescription": "The number is removed from this customer. Other numbers stay."
+		"removePhoneDescription": "The number is removed from this customer. Other numbers stay.",
+		"contactDeadline": "Contact by",
+		"inPoolHint": "This lead is in the pool.",
+		"vetting": "Lead (vetting)",
+		"leadStatus": "Status",
+		"qualifiedOn": "qualified {date}",
+		"intent": "Buying for",
+		"deal": "Deal",
+		"dealStage": "Stage",
+		"firstVisit": "First visit",
+		"visits": "{count} visits",
+		"dealTag": "Deal",
+		"fit": "Fit"
 	},
 	"sources": {
 		"title": "Sources",
@@ -473,7 +503,8 @@
 		"archive": "Archive",
 		"unarchive": "Restore",
 		"unknown": "Don't know",
-		"unknownHint": "Used when the customer can't say. Managers see its share per salesperson."
+		"unknownHint": "Used when the customer can't say. Managers see its share per salesperson.",
+		"inPerson": "Customer meets us in person (walk-in, event): capture needs budget, timeline, unit types and intent"
 	},
 	"campaigns": {
 		"title": "Campaigns",
@@ -497,6 +528,249 @@
 		"reEnquiryWindowDays": "Re-enquiry: stays with the owner if contacted within (days)",
 		"preScoreTimelineMonths": "Priority: buying within (months)",
 		"default": "Default: {value}",
-		"saved": "Rules saved"
+		"saved": "Rules saved",
+		"claimCap": "Claim limit: uncontacted claimed leads per salesperson",
+		"deadlineRollHours": "Contact deadline: roll to the next working day when fewer office hours than this remain",
+		"unreachableAttempts": "Unreachable: no-answers before suggesting Lost",
+		"unreachableWindowDays": "Unreachable: within (days)",
+		"nurtureCheckDays": "Nurture: check in after (days)"
+	},
+	"leadActions": {
+		"claim": "Claim",
+		"claimed": "Lead claimed. Contact them before the deadline.",
+		"call": "Call",
+		"logCall": "Log a call",
+		"line": "LINE",
+		"more": "More actions",
+		"changeFollowUp": "Change follow-up",
+		"addNote": "Add note",
+		"exits": {
+			"disqualify": "Disqualify",
+			"nurture": "Move to nurture",
+			"lost": "Mark lost"
+		},
+		"exitHints": {
+			"disqualify": "{name} leaves the lead queue. A new enquiry reopens it.",
+			"nurture": "{name} leaves your list; a check-in comes back in 30 days.",
+			"lost": "The deal with {name} ends. A new enquiry reopens the lead."
+		},
+		"result": {
+			"title": "How did the call with {name} go?",
+			"description": "Choose the result. You'll set the next follow-up next.",
+			"answered": "Answered",
+			"no_answer": "No answer",
+			"wrong_number": "Wrong number"
+		},
+		"titles": {
+			"answered": "Call answered",
+			"no_answer": "No answer",
+			"line": "LINE message"
+		},
+		"nextFollowUp": "Next follow-up",
+		"picks": {
+			"in2h": "In 2 hours",
+			"nextWorkingDay": "Next working day",
+			"in3WorkingDays": "In 3 working days",
+			"nextWeek": "Next week"
+		},
+		"followUpFuture": "Choose a time in the future.",
+		"note": "Note",
+		"notePlaceholder": "What happened? (optional)",
+		"save": "Save",
+		"reason": "Reason",
+		"reasonRequired": "Choose a reason.",
+		"noteRequired": "Write your reason",
+		"noteRequiredError": "Add a note for Other.",
+		"toasts": {
+			"saved": "Saved. Next follow-up: {time}",
+			"noAnswer": "No answer logged (try {attempt}). Next try: {time}",
+			"unreachable": "No contact after {attempt} tries. Decide: lost or nurture.",
+			"noteSaved": "Note added",
+			"closed": {
+				"disqualify": "Lead disqualified",
+				"nurture": "Moved to nurture",
+				"lost": "Deal marked lost"
+			},
+			"negotiating": "Deal moved to negotiating"
+		},
+		"unreachable": {
+			"title": "No contact after {attempts} tries",
+			"nurture": "Move to nurture",
+			"disqualify": "Disqualify (unreachable)"
+		},
+		"errors": {
+			"FORBIDDEN": "Only the lead's owner or a manager can do this. Claim the lead first if it is in the pool.",
+			"NOT_FOUND": "This lead is no longer available to you. Refresh and try again.",
+			"BAD_REQUEST": "Check the details: the next follow-up must be in the future and closed leads can't be changed.",
+			"CONFLICT": "Someone else claimed this lead first.",
+			"PRECONDITION_FAILED": "You've reached your claim limit. Contact your claimed leads first.",
+			"default": "Saving failed. Please try again."
+		},
+		"markQualified": "Mark qualified",
+		"confirmVisit": "Confirm visit",
+		"markNegotiating": "Negotiating",
+		"saveAndQualify": "Save & qualify",
+		"qualify": {
+			"title": "Mark qualified",
+			"description": "Confirm {name}'s budget, timing, what they want and why they're buying.",
+			"budget": "Budget (baht)",
+			"budgetMin": "From",
+			"budgetMax": "Up to",
+			"projectRange": "This project: {min} – {max}",
+			"budgetError": "Enter a budget range (from ≤ up to).",
+			"timeline": "Plans to buy",
+			"unitTypes": "Unit types wanted",
+			"intent": "Buying for",
+			"required": "Choose one.",
+			"saved": "Lead qualified"
+		},
+		"convert": {
+			"title": "Confirm visit",
+			"description": "Did {name} come to the showroom? This starts the deal.",
+			"visitedAt": "Visited at",
+			"future": "A visit can't be in the future. Booked visits convert when they happen.",
+			"confirm": "Customer visited",
+			"saved": "Visit confirmed. The lead is now a deal."
+		},
+		"fitSuggest": {
+			"fits": "Fits — mark qualified",
+			"too_early": "Too early — move to nurture",
+			"budget_no_fit": "Budget doesn't fit — disqualify"
+		}
+	},
+	"overview": {
+		"title": "Overview",
+		"welcome": "Welcome, {name}",
+		"summary": "{role} at {organization}",
+		"comingSoon": "Your overview will appear here.",
+		"callMode": {
+			"title": "Calling",
+			"progress": "Lead {current} of {total}",
+			"skip": "Skip",
+			"doneTitle": "Done for now",
+			"doneDescription": "You went through {total} leads.",
+			"close": "Back to Overview"
+		},
+		"thisMonth": "This month",
+		"rates": "Rates",
+		"leads": {
+			"title": "Leads",
+			"received": "{count} received",
+			"converted": "{count} converted",
+			"disqualified": "{count} disqualified",
+			"contactRate": "Contact {rate}",
+			"qualifyRate": "Qualify {rate}",
+			"conversionRate": "Lead → deal {rate}"
+		},
+		"deals": {
+			"title": "Opportunities",
+			"visits": "{count} visits",
+			"deposits": "{count} deposits",
+			"won": "{count} won",
+			"lost": "{count} lost",
+			"visitToDeposit": "Visit → deposit {rate}",
+			"winRate": "Win rate {rate}",
+			"closedWon": {
+				"title": "Closed-won this month",
+				"count": "{count} deals",
+				"volume": "Volume {value}",
+				"commission": "Commission (est.) {value}",
+				"fromM6": "Volume and commission come from deposits (M6)."
+			}
+		}
+	},
+	"pool": {
+		"title": "Pool",
+		"description": "Unclaimed leads in your projects, priority first. Claim one to make it yours.",
+		"project": "Project",
+		"emptyTitle": "The pool is empty",
+		"empty": "New leads from the pool appear here.",
+		"waiting": "Received {relative}"
+	},
+	"leadStatuses": {
+		"new": "New",
+		"attempting": "Attempting contact",
+		"connected": "Connected",
+		"qualified": "Qualified",
+		"nurturing": "Nurturing",
+		"converted": "Converted to deal",
+		"disqualified": "Disqualified"
+	},
+	"opportunityStages": {
+		"visited": "Visited",
+		"negotiating": "Negotiating",
+		"deposited": "Deposited",
+		"contracted": "Contracted",
+		"transferred": "Transferred",
+		"lost": "Lost"
+	},
+	"disqualifyReasons": {
+		"invalid_data": "Invalid / wrong number",
+		"spam": "Spam",
+		"duplicate": "Duplicate",
+		"agent_competitor": "Agent / competitor",
+		"job_seeker": "Job seeker",
+		"bad_budget_fit": "Budget doesn't fit",
+		"bad_location_fit": "Location doesn't fit",
+		"unreachable": "Unreachable",
+		"other": "Other"
+	},
+	"lostReasons": {
+		"bought_competitor": "Bought from a competitor",
+		"loan_rejected": "Bank loan rejected",
+		"cold_feet": "Changed mind",
+		"product_mismatch": "Product doesn't fit",
+		"timing_postponed": "Postponed",
+		"other": "Other"
+	},
+	"buyerIntents": {
+		"own_stay": "Own stay",
+		"investment": "Investment"
+	},
+	"pipeline": {
+		"lead": "Lead",
+		"opportunity": "Deal"
+	},
+	"fit": {
+		"fits": "Fits",
+		"too_early": "Too early",
+		"budget_no_fit": "Budget doesn't fit",
+		"unknown": "Not enough details"
+	},
+	"todo": {
+		"title": "To do",
+		"description": "Today's visits, what's due today and what slipped — leads in blue, deals in green.",
+		"start": "Start",
+		"arrivals": {
+			"title": "Showroom arrivals today ({count})",
+			"breakdown": "Qualified {qualified} · Unvetted (connected) {unvetted}",
+			"hint": "Unvetted guests: qualify them face to face during the tour before converting.",
+			"m5": "Booked visits arrive with appointments (M5). Walk-ins: use Confirm visit."
+		},
+		"dueToday": {
+			"title": "Due today ({count})",
+			"empty": "Nothing due today."
+		},
+		"stale": {
+			"title": "Stale / overdue ({count})",
+			"empty": "Nothing slipped."
+		},
+		"due": {
+			"firstContact": "contact by {time} ({relative})",
+			"today": "follow-up {time} ({relative})",
+			"overdue": "overdue · {relative}",
+			"noFollowUp": "no follow-up set",
+			"unreachable": "no contact after several tries"
+		},
+		"attrs": {
+			"status": "Status",
+			"stage": "Stage",
+			"project": "Project",
+			"phone": "Phone",
+			"due": "Due",
+			"tries": "Tries",
+			"fit": "Fit"
+		},
+		"triesValue": "{attempts} of {max}"
 	}
 }

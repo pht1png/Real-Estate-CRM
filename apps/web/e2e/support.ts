@@ -204,3 +204,58 @@ export async function fillAndSubmit(
 		await expect(page).toHaveURL(until, { timeout: 10_000 });
 	}).toPass({ timeout: 45_000 });
 }
+
+/** The owner (acting as manager) sends a Facebook lead to the Riverside pool. */
+export async function poolLead(owner: Page, name: string, phone: string) {
+	await openCapture(owner);
+	await choose(owner, "โครงการ", "Riverside");
+	// exact: the customer page behind the sheet has "เพิ่มเบอร์โทร".
+	await owner.getByLabel("เบอร์โทร", { exact: true }).fill(phone);
+	await owner.getByLabel("ชื่อลูกค้า").fill(name);
+	await choose(owner, "แหล่งที่มา", "Facebook");
+	await owner.getByRole("button", { name: "บันทึกลูกค้า", exact: true }).click();
+	// Saved once the customer page opens (a toast from an earlier lead could linger).
+	await expect(owner.getByRole("heading", { name, level: 1 })).toBeVisible();
+}
+
+/** Tap Call without leaving the page: the test browser has no dialler. */
+export async function tapCall(scope: Locator) {
+	const call = scope.getByRole("link", { name: "โทร", exact: true });
+	await expect(call).toHaveAttribute("href", /^tel:\+66/);
+	// Click with href removed (no navigation), then put it back.
+	await call.evaluate((a: HTMLAnchorElement) => {
+		const href = a.getAttribute("href") ?? "";
+		a.removeAttribute("href");
+		a.click();
+		a.setAttribute("href", href);
+	});
+}
+
+/** Call → No answer → save with the suggested follow-up (in 2 hours). */
+export async function logNoAnswer(page: Page, scope: Locator) {
+	await tapCall(scope);
+	await page.getByRole("button", { name: "ไม่รับสาย", exact: true }).click();
+	const dialog = page.getByRole("dialog", { name: "ไม่รับสาย" });
+	await expect(
+		dialog.getByRole("button", { name: /อีก 2 ชั่วโมง/ }),
+	).toHaveAttribute("aria-pressed", "true");
+	await dialog.getByRole("button", { name: "บันทึก", exact: true }).click();
+	await expect(dialog).toBeHidden();
+}
+
+/** In-person sources (walk-in) need budget, timeline and intent in quick capture. */
+export async function fillWalkInDetails(page: Page) {
+	await expect(
+		page.getByRole("button", { name: /รายละเอียด \(จำเป็น/ }),
+	).toBeVisible();
+	await page.getByLabel("งบตั้งแต่ (บาท)").fill("3000000");
+	await page.getByLabel("งบไม่เกิน (บาท)").fill("5000000");
+	await choose(page, "ระยะเวลาที่จะซื้อ", "1–3 เดือน");
+	await page.getByRole("button", { name: "อยู่เอง" }).click();
+}
+
+/** A date as a datetime-local value in the browser's time zone. */
+export function dateTimeLocal(d: Date) {
+	const pad = (n: number) => String(n).padStart(2, "0");
+	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}

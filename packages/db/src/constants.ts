@@ -40,29 +40,70 @@ export const unitStatuses = [
 ] as const;
 export type UnitStatus = (typeof unitStatuses)[number];
 
-/** Lead lifecycle (brief §2). "In the pool" = stage new with no owner. */
-export const interestStages = [
+/**
+ * Lead pipeline (the vetting queue, brief §2): a customer's enquiry about one
+ * project. A confirmed showroom visit converts it into an opportunity.
+ */
+export const leadStatuses = [
 	"new",
-	"contacted",
+	"attempting",
+	"connected",
+	"qualified",
+	"nurturing",
+	"converted",
+	"disqualified",
+] as const;
+export type LeadStatus = (typeof leadStatuses)[number];
+
+/** Leads still being worked: they need a next follow-up (brief §6). */
+export const openLeadStatuses: readonly LeadStatus[] = [
+	"new",
+	"attempting",
+	"connected",
+	"qualified",
+];
+
+/** Unowned leads in these statuses form the project pool. */
+export const poolLeadStatuses: readonly LeadStatus[] = [
+	"new",
+	"attempting",
+	"connected",
+];
+
+/** Lead exits; a re-enquiry reopens them as new. */
+export const closedLeadStatuses: readonly LeadStatus[] = [
+	"disqualified",
+	"nurturing",
+];
+
+/** Opportunity (deal) pipeline, from the first confirmed visit. */
+export const opportunityStages = [
 	"visited",
+	"negotiating",
 	"deposited",
 	"contracted",
 	"transferred",
 	"lost",
-	"nurture",
-	"invalid",
 ] as const;
-export type InterestStage = (typeof interestStages)[number];
+export type OpportunityStage = (typeof opportunityStages)[number];
 
-/** Stages that end the funnel (re-enquiry reopens them as new). */
-export const closedStages: readonly InterestStage[] = [
-	"lost",
-	"nurture",
-	"invalid",
+/** Deals still being worked before a deposit: they need a next follow-up. */
+export const openOpportunityStages: readonly OpportunityStage[] = [
+	"visited",
+	"negotiating",
 ];
 
-/** Stages after a deposit: re-enquiry only logs an activity. */
-export const soldStages: readonly InterestStage[] = [
+/** After a deposit: re-enquiry only logs an activity. */
+export const soldStages: readonly OpportunityStage[] = [
+	"deposited",
+	"contracted",
+	"transferred",
+];
+
+/** Opportunities that block a new one for the same lead (all but lost). */
+export const liveOpportunityStages: readonly OpportunityStage[] = [
+	"visited",
+	"negotiating",
 	"deposited",
 	"contracted",
 	"transferred",
@@ -79,6 +120,8 @@ export const activityTypes = [
 	"stage_change",
 	"re_engagement",
 	"assignment",
+	"qualified",
+	"conversion",
 ] as const;
 export type ActivityType = (typeof activityTypes)[number];
 
@@ -116,15 +159,84 @@ export type PaymentMethod = (typeof paymentMethods)[number];
 export const temperatures = ["warm", "hot"] as const;
 export type Temperature = (typeof temperatures)[number];
 
+export const buyerIntents = ["own_stay", "investment"] as const;
+export type BuyerIntent = (typeof buyerIntents)[number];
+
+/** Why a lead leaves the vetting queue (brief §6); "other" needs a note. */
+export const disqualifyReasons = [
+	"invalid_data",
+	"spam",
+	"duplicate",
+	"agent_competitor",
+	"job_seeker",
+	"bad_budget_fit",
+	"bad_location_fit",
+	"unreachable",
+	"other",
+] as const;
+export type DisqualifyReason = (typeof disqualifyReasons)[number];
+
+/** Why a deal is lost after a visit (brief §6); "other" needs a note. */
+export const lostReasons = [
+	"bought_competitor",
+	"loan_rejected",
+	"cold_feet",
+	"product_mismatch",
+	"timing_postponed",
+	"other",
+] as const;
+export type LostReason = (typeof lostReasons)[number];
+
 /** Per-company rules (brief §6), stored as overrides of these defaults. */
 export type Rules = {
 	/** Re-enquiry stays with the owner if they made contact within this many days. */
 	reEnquiryWindowDays: number;
 	/** Pre-score: buying within this many months counts as soon. */
 	preScoreTimelineMonths: number;
+	/** Max claimed leads a salesperson may hold before contacting them. */
+	claimCap: number;
+	/** Fewer office hours than this left at claim → deadline rolls to the next working day. */
+	deadlineRollHours: number;
+	/** This many no-answers within the window (since the last contact) → suggest Unreachable. */
+	unreachableAttempts: number;
+	unreachableWindowDays: number;
+	/** Nurture check-in after this many days. */
+	nurtureCheckDays: number;
 };
 
 export const defaultRules: Rules = {
 	reEnquiryWindowDays: 90,
 	preScoreTimelineMonths: 3,
+	claimCap: 5,
+	deadlineRollHours: 2,
+	unreachableAttempts: 3,
+	unreachableWindowDays: 7,
+	nurtureCheckDays: 30,
 };
+
+/**
+ * Per-project qualification check (brief §6): the system assesses fit, the
+ * salesperson confirms. Auto-qualify is opt-in; disqualify is never automatic.
+ */
+export type QualificationRules = {
+	/** Budget may be this % outside the available price range and still fit. */
+	budgetTolerancePct: number;
+	/** Buying within this many months fits; later is "too early" (→ Nurture). */
+	qualifyWithinMonths: number;
+	/** Mark leads that fit (with unit types and intent) Qualified automatically. */
+	autoQualify: boolean;
+};
+
+export const defaultQualificationRules: QualificationRules = {
+	budgetTolerancePct: 10,
+	qualifyWithinMonths: 6,
+	autoQualify: false,
+};
+
+export const fitResults = [
+	"fits",
+	"too_early",
+	"budget_no_fit",
+	"unknown",
+] as const;
+export type FitResult = (typeof fitResults)[number];

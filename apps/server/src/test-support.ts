@@ -166,3 +166,23 @@ export async function totpFromUri(uri: string, at = Date.now()) {
 		(mac[offset + 3] ?? 0);
 	return (code % 1_000_000).toString().padStart(6, "0");
 }
+
+type Caller = Awaited<ReturnType<typeof callerFor>>;
+
+/** Mark a lead qualified with typical details (converting requires it). */
+export async function qualifyLead(
+	caller: Caller,
+	leadId: string,
+	projectId: string,
+) {
+	const types = await caller.unitType.list({ projectId });
+	await caller.lead.qualify({
+		leadId,
+		budgetMinSatang: 300_000_000,
+		budgetMaxSatang: 450_000_000,
+		buyingTimeline: "1_3_months",
+		unitTypeIds: types.slice(0, 1).map((t) => t.id),
+		buyerIntent: "own_stay",
+		nextFollowUpAt: new Date(Date.now() + 86_400_000).toISOString(),
+	});
+}

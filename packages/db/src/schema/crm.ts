@@ -18,8 +18,12 @@ import {
 
 import {
 	activityTypes,
+	buyerIntents,
 	buyingTimelines,
-	interestStages,
+	disqualifyReasons,
+	leadStatuses,
+	lostReasons,
+	opportunityStages,
 	paymentMethods,
 	type Rules,
 	temperatures,
@@ -50,6 +54,8 @@ export const leadChannel = pgTable(
 			.notNull()
 			.references(() => organization.id),
 		name: text("name").notNull(),
+		/** The customer meets us in person (walk-in, event): capture needs full details. */
+		inPerson: boolean("in_person").notNull().default(false),
 		sortOrder: integer("sort_order").notNull().default(0),
 		createdAt: createdAt(),
 	},
@@ -185,9 +191,12 @@ export const customerPhone = pgTable(
 	],
 );
 
-/** A customer's interest in one project (never in a unit; brief §1). */
-export const interest = pgTable(
-	"interest",
+/**
+ * Lead pipeline (the vetting queue, brief §2): a customer's enquiry about one
+ * project. A confirmed showroom visit converts it into an opportunity.
+ */
+export const lead = pgTable(
+	"lead",
 	{
 		id: uuid("id").primaryKey().defaultRandom(),
 		organizationId: text("organization_id").notNull(),
@@ -197,7 +206,8 @@ export const interest = pgTable(
 		ownerMemberId: text("owner_member_id"),
 		sourceId: uuid("source_id").notNull(),
 		campaignId: uuid("campaign_id"),
-		stage: text("stage", { enum: interestStages }).notNull().default("new"),
+		status: text("status", { enum: leadStatuses }).notNull().default("new"),
+		disqualifyReason: text("disqualify_reason", { enum: disqualifyReasons }),
 		priority: boolean("priority").notNull().default(false),
 		/** Signals that made it priority, e.g. budget_in_range, timeline_soon. */
 		prioritySignals: text("priority_signals")
@@ -206,6 +216,7 @@ export const interest = pgTable(
 			.default(sql`'{}'::text[]`),
 		scoringVersion: text("scoring_version"),
 		scoredAt: timestamp("scored_at", { withTimezone: true }),
+		// Qualification profile (brief §6 "Qualified").
 		budgetMinSatang: satang("budget_min_satang"),
 		budgetMaxSatang: satang("budget_max_satang"),
 		buyingTimeline: text("buying_timeline", { enum: buyingTimelines }),
@@ -213,108 +224,194 @@ export const interest = pgTable(
 			.array()
 			.notNull()
 			.default(sql`'{}'::uuid[]`),
+		buyerIntent: text("buyer_intent", { enum: buyerIntents }),
 		paymentMethod: text("payment_method", { enum: paymentMethods }),
 		loanPrechecked: boolean("loan_prechecked").notNull().default(false),
-		visitCount: integer("visit_count").notNull().default(0),
-		temperature: text("temperature", { enum: temperatures }),
 		nextFollowUpAt: timestamp("next_follow_up_at", { withTimezone: true }),
 		claimedAt: timestamp("claimed_at", { withTimezone: true }),
 		contactDeadlineAt: timestamp("contact_deadline_at", { withTimezone: true }),
-		lostReason: text("lost_reason"),
-		invalidReason: text("invalid_reason"),
 		nurtureNextCheckAt: timestamp("nurture_next_check_at", {
 			withTimezone: true,
 		}),
 		ignoredNurtureCount: integer("ignored_nurture_count").notNull().default(0),
+		qualifiedAt: timestamp("qualified_at", { withTimezone: true }),
+		convertedAt: timestamp("converted_at", { withTimezone: true }),
 		createdAt: createdAt(),
 		updatedAt: updatedAt(),
 	},
 	(table) => [
-		unique("interest_customer_project_unique").on(
+		unique("lead_customer_project_unique").on(
 			table.customerId,
 			table.projectId,
 		),
-		unique("interest_org_id_unique").on(table.organizationId, table.id),
-		index("interest_project_owner_idx").on(
+		unique("lead_org_id_unique").on(table.organizationId, table.id),
+		index("lead_project_owner_idx").on(
 			table.projectId,
 			table.ownerMemberId,
-			table.stage,
+			table.status,
 		),
-		index("interest_owner_idx").on(table.ownerMemberId),
+		index("lead_owner_idx").on(table.ownerMemberId),
+		// Expiry job: only leads still waiting for first contact have a deadline.
+		index("lead_contact_deadline_idx")
+			.on(table.contactDeadlineAt)
+			.where(sql`${table.contactDeadlineAt} is not null`),
 		foreignKey({
-			name: "interest_customer_fkey",
+			name: "lead_customer_fkey",
 			columns: [table.organizationId, table.customerId],
 			foreignColumns: [customer.organizationId, customer.id],
 		}),
 		foreignKey({
-			name: "interest_project_fkey",
+			name: "lead_project_fkey",
 			columns: [table.organizationId, table.projectId],
 			foreignColumns: [project.organizationId, project.id],
 		}),
 		foreignKey({
-			name: "interest_owner_fkey",
+			name: "lead_owner_fkey",
 			columns: [table.organizationId, table.ownerMemberId],
 			foreignColumns: [member.organizationId, member.id],
 		}),
 		foreignKey({
-			name: "interest_source_fkey",
+			name: "lead_source_fkey",
 			columns: [table.organizationId, table.sourceId],
 			foreignColumns: [leadSource.organizationId, leadSource.id],
 		}),
-		// The campaign must belong to the interest's project.
+		// The campaign must belong to the lead's project.
 		foreignKey({
-			name: "interest_campaign_fkey",
+			name: "lead_campaign_fkey",
 			columns: [table.projectId, table.campaignId],
 			foreignColumns: [campaign.projectId, campaign.id],
 		}),
 		check(
-			"interest_stage_check",
-			sql`${table.stage} in (${inList(interestStages)})`,
+			"lead_status_check",
+			sql`${table.status} in (${inList(leadStatuses)})`,
 		),
 		check(
-			"interest_timeline_check",
+			"lead_disqualify_reason_check",
+			sql`${table.disqualifyReason} is null or ${table.disqualifyReason} in (${inList(disqualifyReasons)})`,
+		),
+		check(
+			"lead_timeline_check",
 			sql`${table.buyingTimeline} is null or ${table.buyingTimeline} in (${inList(buyingTimelines)})`,
 		),
 		check(
-			"interest_payment_check",
+			"lead_intent_check",
+			sql`${table.buyerIntent} is null or ${table.buyerIntent} in (${inList(buyerIntents)})`,
+		),
+		check(
+			"lead_payment_check",
 			sql`${table.paymentMethod} is null or ${table.paymentMethod} in (${inList(paymentMethods)})`,
 		),
 		check(
-			"interest_temperature_check",
-			sql`${table.temperature} is null or ${table.temperature} in (${inList(temperatures)})`,
-		),
-		check(
-			"interest_budget_check",
+			"lead_budget_check",
 			sql`${table.budgetMinSatang} is null or ${table.budgetMaxSatang} is null or ${table.budgetMinSatang} <= ${table.budgetMaxSatang}`,
 		),
 	],
 );
 
-/** Append-only history of an interest (a trigger rejects UPDATE/DELETE). */
-export const interestActivity = pgTable(
-	"interest_activity",
+/**
+ * Opportunity (deal) pipeline: created only by a confirmed showroom visit on
+ * a lead (brief §2). Deposits (M6) attach here.
+ */
+export const opportunity = pgTable(
+	"opportunity",
 	{
 		id: uuid("id").primaryKey().defaultRandom(),
 		organizationId: text("organization_id").notNull(),
-		interestId: uuid("interest_id").notNull(),
+		leadId: uuid("lead_id").notNull(),
+		customerId: uuid("customer_id").notNull(),
+		projectId: uuid("project_id").notNull(),
+		ownerMemberId: text("owner_member_id").notNull(),
+		stage: text("stage", { enum: opportunityStages })
+			.notNull()
+			.default("visited"),
+		lostReason: text("lost_reason", { enum: lostReasons }),
+		firstVisitAt: timestamp("first_visit_at", { withTimezone: true }).notNull(),
+		lastVisitAt: timestamp("last_visit_at", { withTimezone: true }).notNull(),
+		visitCount: integer("visit_count").notNull().default(1),
+		temperature: text("temperature", { enum: temperatures }),
+		nextFollowUpAt: timestamp("next_follow_up_at", { withTimezone: true }),
+		lostAt: timestamp("lost_at", { withTimezone: true }),
+		createdAt: createdAt(),
+		updatedAt: updatedAt(),
+	},
+	(table) => [
+		unique("opportunity_org_id_unique").on(table.organizationId, table.id),
+		// One live deal per lead; a lost one can be followed by a new visit.
+		uniqueIndex("opportunity_one_live_per_lead_uidx")
+			.on(table.leadId)
+			.where(sql`${table.stage} <> 'lost'`),
+		index("opportunity_owner_stage_idx").on(table.ownerMemberId, table.stage),
+		index("opportunity_project_stage_idx").on(table.projectId, table.stage),
+		foreignKey({
+			name: "opportunity_lead_fkey",
+			columns: [table.organizationId, table.leadId],
+			foreignColumns: [lead.organizationId, lead.id],
+		}),
+		foreignKey({
+			name: "opportunity_customer_fkey",
+			columns: [table.organizationId, table.customerId],
+			foreignColumns: [customer.organizationId, customer.id],
+		}),
+		foreignKey({
+			name: "opportunity_project_fkey",
+			columns: [table.organizationId, table.projectId],
+			foreignColumns: [project.organizationId, project.id],
+		}),
+		foreignKey({
+			name: "opportunity_owner_fkey",
+			columns: [table.organizationId, table.ownerMemberId],
+			foreignColumns: [member.organizationId, member.id],
+		}),
+		check(
+			"opportunity_stage_check",
+			sql`${table.stage} in (${inList(opportunityStages)})`,
+		),
+		check(
+			"opportunity_lost_reason_check",
+			sql`${table.lostReason} is null or ${table.lostReason} in (${inList(lostReasons)})`,
+		),
+		check(
+			"opportunity_temperature_check",
+			sql`${table.temperature} is null or ${table.temperature} in (${inList(temperatures)})`,
+		),
+	],
+);
+
+/**
+ * Append-only timeline of a lead and its deals (a trigger rejects
+ * UPDATE/DELETE). `opportunityId` is set for deal-phase entries.
+ */
+export const activity = pgTable(
+	"activity",
+	{
+		id: uuid("id").primaryKey().defaultRandom(),
+		organizationId: text("organization_id").notNull(),
+		leadId: uuid("lead_id").notNull(),
+		opportunityId: uuid("opportunity_id"),
 		type: text("type", { enum: activityTypes }).notNull(),
 		at: timestamp("at", { withTimezone: true }).defaultNow().notNull(),
 		/** null = done by the system (e.g. a rule). */
 		byUserId: text("by_user_id").references(() => user.id),
 		note: text("note"),
 		campaignId: uuid("campaign_id"),
-		/** Type-specific details: stage from/to, owner from/to, lead snapshot… */
+		/** Type-specific details: status from/to, owner from/to, lead snapshot… */
 		data: jsonb("data").$type<Record<string, unknown>>(),
 	},
 	(table) => [
-		index("interest_activity_interest_idx").on(table.interestId, table.at),
+		index("activity_lead_idx").on(table.leadId, table.at),
+		index("activity_opportunity_idx").on(table.opportunityId),
 		foreignKey({
-			name: "interest_activity_interest_fkey",
-			columns: [table.organizationId, table.interestId],
-			foreignColumns: [interest.organizationId, interest.id],
+			name: "activity_lead_fkey",
+			columns: [table.organizationId, table.leadId],
+			foreignColumns: [lead.organizationId, lead.id],
+		}),
+		foreignKey({
+			name: "activity_opportunity_fkey",
+			columns: [table.organizationId, table.opportunityId],
+			foreignColumns: [opportunity.organizationId, opportunity.id],
 		}),
 		check(
-			"interest_activity_type_check",
+			"activity_type_check",
 			sql`${table.type} in (${inList(activityTypes)})`,
 		),
 	],
@@ -324,8 +421,9 @@ export const crmRelations = defineRelationsPart(
 	{
 		customer,
 		customerPhone,
-		interest,
-		interestActivity,
+		lead,
+		opportunity,
+		activity,
 		leadSource,
 		leadChannel,
 		campaign,
@@ -338,19 +436,33 @@ export const crmRelations = defineRelationsPart(
 				from: r.customer.id,
 				to: r.customerPhone.customerId,
 			}),
-			interests: r.many.interest({
+			leads: r.many.lead({
 				from: r.customer.id,
-				to: r.interest.customerId,
+				to: r.lead.customerId,
+			}),
+			opportunities: r.many.opportunity({
+				from: r.customer.id,
+				to: r.opportunity.customerId,
 			}),
 		},
-		interest: {
+		lead: {
 			customer: r.one.customer({
-				from: r.interest.customerId,
+				from: r.lead.customerId,
 				to: r.customer.id,
 			}),
-			activities: r.many.interestActivity({
-				from: r.interest.id,
-				to: r.interestActivity.interestId,
+			activities: r.many.activity({
+				from: r.lead.id,
+				to: r.activity.leadId,
+			}),
+			opportunities: r.many.opportunity({
+				from: r.lead.id,
+				to: r.opportunity.leadId,
+			}),
+		},
+		opportunity: {
+			lead: r.one.lead({
+				from: r.opportunity.leadId,
+				to: r.lead.id,
 			}),
 		},
 		leadSource: {

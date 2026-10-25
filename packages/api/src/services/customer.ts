@@ -30,6 +30,7 @@ import { z } from "zod";
 import { formatPhone, normalizePhone } from "../phone";
 import { writeAudit } from "./audit";
 import { badRequest, conflict, notFound } from "./errors";
+import { assessFit, qualificationRulesOf } from "./fit";
 import {
 	canSeeLead,
 	visibleLeadCondition,
@@ -227,6 +228,7 @@ export async function getCustomer(
 						sourceName: leadSource.name,
 						campaignName: campaign.name,
 						campaignCode: campaign.code,
+						qualificationRules: project.qualificationRules,
 						minPriceSatang: sql<
 							number | null
 						>`(select min(u.list_price_satang)::float8 from unit u where u.project_id = ${lead.projectId} and u.status = 'available')`,
@@ -236,6 +238,7 @@ export async function getCustomer(
 					})
 					.from(lead)
 					.innerJoin(leadSource, eq(leadSource.id, lead.sourceId))
+					.innerJoin(project, eq(project.id, lead.projectId))
 					.leftJoin(campaign, eq(campaign.id, lead.campaignId))
 					.where(inArray(lead.id, visibleIds)),
 				db
@@ -309,6 +312,18 @@ export async function getCustomer(
 				convertedAt: l.convertedAt,
 				nextFollowUpAt: l.nextFollowUpAt,
 				contactDeadlineAt: l.contactDeadlineAt,
+				fit: assessFit(
+					{
+						budgetMinSatang: l.budgetMinSatang,
+						budgetMaxSatang: l.budgetMaxSatang,
+						buyingTimeline: l.buyingTimeline,
+						priceRange:
+							d.minPriceSatang !== null && d.maxPriceSatang !== null
+								? { min: d.minPriceSatang, max: d.maxPriceSatang }
+								: null,
+					},
+					qualificationRulesOf(d),
+				),
 				projectMinPriceSatang: d.minPriceSatang,
 				projectMaxPriceSatang: d.maxPriceSatang,
 				createdAt: l.createdAt,

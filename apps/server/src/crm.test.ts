@@ -11,7 +11,14 @@ import { TRPCError } from "@trpc/server";
 import { and, eq, sql } from "drizzle-orm";
 
 import { db } from "./services";
-import { addMember, callerAs, createOrg, post, signIn } from "./test-support";
+import {
+	addMember,
+	callerAs,
+	createOrg,
+	post,
+	qualifyLead,
+	signIn,
+} from "./test-support";
 
 async function codeOf(promise: Promise<unknown>) {
 	try {
@@ -58,6 +65,15 @@ async function setup() {
 		?.sources.find((s) => s.name === "Walk-in");
 	if (!online || !facebook || !walkIn)
 		throw new Error("default sources missing");
+	// These tests are about capture, dedupe and re-enquiry; the in-person
+	// details rule has its own tests (qualification.test.ts).
+	const offline = sources.channels.find((c) => c.name === "Offline");
+	if (offline) {
+		await admin.caller.leadSource.setChannelInPerson({
+			channelId: offline.id,
+			inPerson: false,
+		});
+	}
 	return {
 		org,
 		admin,
@@ -403,6 +419,7 @@ describe("duplicates and re-enquiry", () => {
 			.update(lead)
 			.set({ ownerMemberId: s.salesA.member.id })
 			.where(eq(lead.id, leadId));
+		await qualifyLead(s.salesA.caller, leadId, s.projectId);
 		const { opportunityId } = await s.salesA.caller.lead.convert({
 			leadId,
 			nextFollowUpAt: followUp(),
@@ -437,6 +454,7 @@ describe("duplicates and re-enquiry", () => {
 		);
 		const [again] = await db.select().from(lead).where(eq(lead.id, leadId));
 		expect(again?.status).toBe("new");
+		await qualifyLead(s.salesA.caller, leadId, s.projectId);
 		const second = await s.salesA.caller.lead.convert({
 			leadId,
 			nextFollowUpAt: followUp(),

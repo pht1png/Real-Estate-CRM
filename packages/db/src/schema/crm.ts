@@ -54,6 +54,8 @@ export const leadChannel = pgTable(
 			.notNull()
 			.references(() => organization.id),
 		name: text("name").notNull(),
+		/** The customer meets us in person (walk-in, event): capture needs full details. */
+		inPerson: boolean("in_person").notNull().default(false),
 		sortOrder: integer("sort_order").notNull().default(0),
 		createdAt: createdAt(),
 	},

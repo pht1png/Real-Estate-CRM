@@ -46,6 +46,8 @@ export async function convertLead(
 		if (!row) badRequest("Lead not found");
 		requireActor(tenant, row);
 		requireOpenLead(row);
+		// Brief §6: every deal starts from a qualified lead (walk-ins qualify on the tour).
+		if (row.status !== "qualified") badRequest("Qualify the lead first");
 		if (!row.ownerMemberId) badRequest("Claim or assign the lead first");
 		const visitedAt = input.visitedAt ? new Date(input.visitedAt) : now;
 		if (visitedAt > now) badRequest("The visit can't be in the future");

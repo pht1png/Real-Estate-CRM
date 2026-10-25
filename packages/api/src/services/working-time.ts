@@ -152,3 +152,18 @@ export function followUpPicks(cal: WorkingCalendar, now: Date) {
 		nextWeek: at(workingDateAfter(cal, addDays(today, 6), 1)),
 	};
 }
+
+/** Start (inclusive) and end (exclusive) of the calendar month of `now` in the zone. */
+export function monthBounds(timeZone: string, now = new Date()) {
+	const [year, month] = localDate(now, timeZone).split("-").map(Number) as [
+		number,
+		number,
+	];
+	const first = (y: number, m: number) =>
+		`${y}-${String(m).padStart(2, "0")}-01`;
+	const next = month === 12 ? first(year + 1, 1) : first(year, month + 1);
+	return {
+		start: zonedTime(first(year, month), "00:00", timeZone),
+		end: zonedTime(next, "00:00", timeZone),
+	};
+}

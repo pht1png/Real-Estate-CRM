@@ -2,11 +2,13 @@ import { roleCan } from "@Real-Estate-CRM/auth/permissions";
 import type { Database } from "@Real-Estate-CRM/db";
 import {
 	activity,
+	buyerIntents,
 	buyingTimelines,
 	closedLeadStatuses,
 	contactActivityTypes,
 	customer,
 	customerPhone,
+	type FitResult,
 	lead,
 	liveOpportunityStages,
 	member,
@@ -24,6 +26,7 @@ import { badRequest, forbidden } from "./errors";
 import { ensureDefaultSources, requireActiveSource } from "./lead-source";
 import { deadlineFor } from "./pool";
 import { availablePriceRange } from "./project";
+import { autoQualifyIfFits, checkUnitTypes } from "./qualify";
 import { getRules } from "./rules";
 import { requireProject } from "./scope";
 import { scoreInterest } from "./scoring";
@@ -44,6 +47,10 @@ export const captureEnquiryInput = z
 		budgetMinSatang: satang.optional(),
 		budgetMaxSatang: satang.optional(),
 		buyingTimeline: z.enum(buyingTimelines).optional(),
+		unitTypeIds: z.array(z.uuid()).max(50).optional(),
+		buyerIntent: z.enum(buyerIntents).optional(),
+		/** When the enquiry really came in (forgot to log a walk-in): ≤ now, ≤ 30 days back. */
+		receivedAt: z.iso.datetime({ offset: true }).optional(),
 		note: z.string().trim().max(1000).optional(),
 	})
 	.refine(
@@ -62,6 +69,8 @@ export type CaptureOutcome =
 	| "re_enquiry_logged";
 
 type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+const MAX_RECEIVED_AGE_MS = 30 * 86_400_000;
 
 /** The member who may own a lead in this project: a salesperson or manager covering it. */
 async function requireOwnerCandidate(
@@ -129,9 +138,20 @@ export async function captureEnquiry(
 	customerId: string;
 	leadId: string;
 	outcome: CaptureOutcome;
+	fit: FitResult;
+	/** Qualified by the project's auto-qualify rule. */
+	qualified: boolean;
 }> {
 	const phone = normalizePhone(input.phone);
 	if (!phone) badRequest("Invalid phone number");
+	const receivedAt = input.receivedAt ? new Date(input.receivedAt) : new Date();
+	// A minute of slack for clock drift between the phone and the server.
+	if (receivedAt.getTime() > Date.now() + 60_000) {
+		badRequest("The received time can't be in the future");
+	}
+	if (receivedAt.getTime() < Date.now() - MAX_RECEIVED_AGE_MS) {
+		badRequest("The received time can be at most 30 days back");
+	}
 
 	const canAssign = roleCan(tenant.role, { lead: ["assign"] });
 	if (
@@ -167,6 +187,28 @@ export async function captureEnquiry(
 				badRequest("The campaign belongs to another channel");
 			}
 		}
+		// In person (walk-in, event): budget, timeline, unit types and intent are required.
+		if (source.inPerson) {
+			if (
+				input.budgetMinSatang === undefined ||
+				input.budgetMaxSatang === undefined ||
+				!input.buyingTimeline ||
+				!input.buyerIntent
+			) {
+				badRequest(
+					"In-person leads need budget, timeline, unit types and intent",
+				);
+			}
+		}
+		const unitTypeIds =
+			input.unitTypeIds !== undefined || source.inPerson
+				? await checkUnitTypes(
+						tx,
+						proj.id,
+						input.unitTypeIds ?? [],
+						source.inPerson,
+					)
+				: undefined;
 		if (ownerMemberId && !selfLogged) {
 			await requireOwnerCandidate(tx, tenant, ownerMemberId, proj.id);
 		} else if (
@@ -308,10 +350,13 @@ export async function captureEnquiry(
 					budgetMinSatang,
 					budgetMaxSatang,
 					buyingTimeline,
+					unitTypeIds: unitTypeIds ?? [],
+					buyerIntent: input.buyerIntent ?? null,
 					priority: score.priority,
 					prioritySignals: score.signals,
 					scoringVersion: score.version,
 					scoredAt: now,
+					createdAt: receivedAt,
 					nextFollowUpAt: input.nextFollowUpAt
 						? new Date(input.nextFollowUpAt)
 						: null,
@@ -322,6 +367,7 @@ export async function captureEnquiry(
 			await log({
 				leadId: created.id,
 				type: "enquiry",
+				at: receivedAt,
 				byUserId: tenant.userId,
 				note: input.note,
 				campaignId: input.campaignId,
@@ -342,7 +388,21 @@ export async function captureEnquiry(
 					after: { ownerMemberId },
 				});
 			}
-			return { customerId, leadId: created.id, outcome };
+			const { fit, qualified } = await autoQualifyIfFits(
+				tx,
+				tenant.organizationId,
+				proj,
+				{
+					id: created.id,
+					status: "new",
+					budgetMinSatang,
+					budgetMaxSatang,
+					buyingTimeline,
+					unitTypeIds: unitTypeIds ?? [],
+					buyerIntent: input.buyerIntent ?? null,
+				},
+			);
+			return { customerId, leadId: created.id, outcome, fit, qualified };
 		}
 
 		// Re-enquiry on the existing lead (brief §6). A live deal only logs it.
@@ -362,6 +422,7 @@ export async function captureEnquiry(
 			leadId: existing.id,
 			opportunityId: live?.id,
 			type: "enquiry",
+			at: receivedAt,
 			byUserId: tenant.userId,
 			note: input.note,
 			campaignId: input.campaignId,
@@ -371,6 +432,8 @@ export async function captureEnquiry(
 			budgetMinSatang,
 			budgetMaxSatang,
 			buyingTimeline,
+			...(unitTypeIds && { unitTypeIds }),
+			...(input.buyerIntent && { buyerIntent: input.buyerIntent }),
 			priority: score.priority,
 			prioritySignals: score.signals,
 			scoringVersion: score.version,
@@ -382,6 +445,8 @@ export async function captureEnquiry(
 				customerId,
 				leadId: existing.id,
 				outcome: "re_enquiry_logged",
+				fit: "unknown",
+				qualified: false,
 			};
 		}
 
@@ -431,10 +496,26 @@ export async function captureEnquiry(
 			}
 		}
 		await tx.update(lead).set(changes).where(eq(lead.id, existing.id));
+		const { fit, qualified } = await autoQualifyIfFits(
+			tx,
+			tenant.organizationId,
+			proj,
+			{
+				id: existing.id,
+				status: changes.status ?? existing.status,
+				budgetMinSatang,
+				budgetMaxSatang,
+				buyingTimeline,
+				unitTypeIds: unitTypeIds ?? existing.unitTypeIds,
+				buyerIntent: input.buyerIntent ?? existing.buyerIntent,
+			},
+		);
 		return {
 			customerId,
 			leadId: existing.id,
 			outcome: keep ? "re_enquiry_kept" : "re_enquiry_pooled",
+			fit,
+			qualified,
 		};
 	});
 }

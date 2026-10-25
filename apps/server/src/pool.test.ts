@@ -14,7 +14,7 @@ import { and, eq } from "drizzle-orm";
 
 import { runScheduledJobs } from "./scheduler";
 import { db } from "./services";
-import { callerAs, createOrg } from "./test-support";
+import { callerAs, createOrg, qualifyLead } from "./test-support";
 
 async function codeOf(promise: Promise<unknown>) {
 	try {
@@ -297,6 +297,13 @@ async function claimed(s: Setup) {
 	return id;
 }
 
+/** A claimed lead that salesperson A has qualified (converting requires it). */
+async function qualified(s: Setup) {
+	const id = await claimed(s);
+	await qualifyLead(s.salesA.caller, id, s.projectId);
+	return id;
+}
+
 describe("call results and follow-ups", () => {
 	test("every result needs a future follow-up; the chosen time is stored", async () => {
 		const s = await setup();
@@ -498,8 +505,8 @@ describe("Mark qualified", () => {
 			contactDeadlineAt: null,
 		});
 		expect(r.qualifiedAt).not.toBeNull();
-		const today = await s.salesA.caller.today.get();
-		expect(today.stats.qualified).toBe(1);
+		const overview = await s.salesA.caller.overview.get();
+		expect(overview.leads.byStatus.qualified).toBe(1);
 	});
 
 	test("being reached is not qualified; only the salesperson marks it", async () => {
@@ -510,7 +517,9 @@ describe("Mark qualified", () => {
 			outcome: "answered",
 			nextFollowUpAt: later(),
 		});
-		expect((await s.salesA.caller.today.get()).stats.qualified).toBe(0);
+		expect(
+			(await s.salesA.caller.overview.get()).leads.byStatus.qualified,
+		).toBe(0);
 		expect(await codeOf(s.salesB.caller.lead.qualify(form(id, [])))).toBe(
 			"NOT_FOUND",
 		);
@@ -524,7 +533,7 @@ describe("Mark qualified", () => {
 describe("conversion: confirmed visit → opportunity", () => {
 	test("creates one deal at Visited; the lead becomes converted", async () => {
 		const s = await setup();
-		const id = await claimed(s);
+		const id = await qualified(s);
 		const visitedAt = new Date(Date.now() - 600_000);
 		const { opportunityId } = await s.salesA.caller.lead.convert({
 			leadId: id,
@@ -552,13 +561,13 @@ describe("conversion: confirmed visit → opportunity", () => {
 			.from(activity)
 			.where(and(eq(activity.leadId, id), eq(activity.type, "conversion")));
 		expect(conversion?.opportunityId).toBe(opportunityId);
-		const today = await s.salesA.caller.today.get();
-		expect(today.stats).toMatchObject({ opportunities: 1, active: 1 });
+		const overview = await s.salesA.caller.overview.get();
+		expect(overview.deals.byStage.visited).toBe(1);
 	});
 
 	test("a booked (future) visit can't convert; pool leads must be claimed first", async () => {
 		const s = await setup();
-		const id = await claimed(s);
+		const id = await qualified(s);
 		expect(
 			await codeOf(
 				s.salesA.caller.lead.convert({
@@ -581,7 +590,7 @@ describe("conversion: confirmed visit → opportunity", () => {
 
 	test("parallel confirmations create exactly one deal", async () => {
 		const s = await setup();
-		const id = await claimed(s);
+		const id = await qualified(s);
 		const results = await Promise.all(
 			[1, 2, 3].map(() =>
 				codeOf(
@@ -600,7 +609,7 @@ describe("conversion: confirmed visit → opportunity", () => {
 	test("company B can't convert company A's lead", async () => {
 		const a = await setup();
 		const b = await setup();
-		const id = await claimed(a);
+		const id = await qualified(a);
 		expect(
 			await codeOf(
 				b.manager.caller.lead.convert({ leadId: id, nextFollowUpAt: later() }),
@@ -668,14 +677,15 @@ describe("exits per pipeline", () => {
 			((nurtured.nurtureNextCheckAt?.getTime() ?? 0) - Date.now()) / 86_400_000;
 		expect(days).toBeGreaterThan(29.9);
 		expect(days).toBeLessThan(30.1);
-		const today = await s.salesA.caller.today.get();
-		expect(today.todo).toEqual([]);
-		expect(today.stats.active).toBe(0);
+		const todo = await s.salesA.caller.todo.list();
+		expect([...todo.dueToday, ...todo.stale]).toEqual([]);
+		const overview = await s.salesA.caller.overview.get();
+		expect(Object.values(overview.leads.byStatus)).toEqual([0, 0, 0, 0]);
 	});
 
 	test("Lost is for deals only, with a reason; Negotiating moves the deal on", async () => {
 		const s = await setup();
-		const id = await claimed(s);
+		const id = await qualified(s);
 		const { opportunityId } = await s.salesA.caller.lead.convert({
 			leadId: id,
 			nextFollowUpAt: later(),
@@ -713,7 +723,7 @@ describe("exits per pipeline", () => {
 
 	test("only the owner or a covering manager can close; company B can't", async () => {
 		const s = await setup();
-		const id = await claimed(s);
+		const id = await qualified(s);
 		const disqualify = { leadId: id, reason: "spam" as const };
 		expect(await codeOf(s.salesB.caller.lead.disqualify(disqualify))).toBe(
 			"NOT_FOUND",
@@ -793,25 +803,31 @@ describe("pool page", () => {
 	});
 });
 
-describe("Overview", () => {
-	test("To do: first contact by deadline, then due follow-ups; cards count my leads and deals", async () => {
+describe("To do", () => {
+	test("due today vs stale; leads and deals together, earliest first", async () => {
 		const s = await setup();
 		const fresh = await claimed(s);
-		const due = await claimed(s);
+		const overdue = await claimed(s);
+		const missing = await claimed(s);
 		const notYet = await claimed(s);
-		const dealLead = await claimed(s);
+		const dealLead = await qualified(s);
 		const answered = (leadId: string, at: Date) =>
 			s.salesA.caller.lead.logOutcome({
 				leadId,
 				outcome: "answered",
 				nextFollowUpAt: at.toISOString(),
 			});
-		await answered(due, inDays(1));
-		await answered(notYet, inDays(2));
+		await answered(overdue, inDays(1));
+		await answered(missing, inDays(1));
+		await answered(notYet, inDays(3));
 		await db
 			.update(lead)
 			.set({ nextFollowUpAt: new Date(Date.now() - 3_600_000) })
-			.where(eq(lead.id, due));
+			.where(eq(lead.id, overdue));
+		await db
+			.update(lead)
+			.set({ nextFollowUpAt: null })
+			.where(eq(lead.id, missing));
 		const { opportunityId } = await s.salesA.caller.lead.convert({
 			leadId: dealLead,
 			nextFollowUpAt: later(),
@@ -821,73 +837,157 @@ describe("Overview", () => {
 			.set({ nextFollowUpAt: new Date(Date.now() - 7_200_000) })
 			.where(eq(opportunity.id, opportunityId));
 
-		const today = await s.salesA.caller.today.get();
-		expect(today.todo.map((l) => [l.kind, l.id, l.reason])).toEqual([
+		const todo = await s.salesA.caller.todo.list();
+		expect(todo.dueToday.map((r) => [r.kind, r.id, r.reason])).toEqual([
 			["lead", fresh, "first_contact"],
-			["opportunity", opportunityId, "follow_up_due"],
-			["lead", due, "follow_up_due"],
 		]);
-		expect(today.todo[0]?.phoneE164).toMatch(/^\+66/);
-		expect(today.stats).toMatchObject({
-			active: 4,
-			overdue: { count: 2 },
-			qualified: 0,
-			opportunities: 1,
-			unreachable: 0,
+		expect(todo.stale.map((r) => [r.kind, r.id, r.reason])).toEqual([
+			["lead", missing, "no_follow_up"],
+			["opportunity", opportunityId, "overdue"],
+			["lead", overdue, "overdue"],
+		]);
+		expect(todo.arrivals).toEqual({ qualified: 0, unvetted: 0, items: [] });
+		expect(todo.dueToday[0]).toMatchObject({
+			status: "new",
+			stage: null,
+			phoneE164: expect.stringMatching(/^\+66/),
 		});
-		expect(today.stats.overdue.oldest).not.toBeNull();
-		// Other people's work isn't on my Overview.
-		expect((await s.salesB.caller.today.get()).todo).toEqual([]);
+		expect((await s.salesA.caller.todo.count()).count).toBe(4);
+		// Other people's work isn't on my To do.
+		const other = await s.salesB.caller.todo.list();
+		expect([...other.dueToday, ...other.stale]).toEqual([]);
 	});
 
-	test("deal cards follow the deal stage; unreachable leads show up to decide on", async () => {
+	test("unreachable leads are stale with the try count", async () => {
 		const s = await setup();
-		const toDeal = async (
-			stage: "negotiating" | "deposited" | "transferred",
-		) => {
-			const id = await claimed(s);
-			const { opportunityId } = await s.salesA.caller.lead.convert({
-				leadId: id,
-				nextFollowUpAt: later(3),
-			});
-			await db
-				.update(opportunity)
-				.set({ stage })
-				.where(eq(opportunity.id, opportunityId));
-		};
-		await toDeal("negotiating");
-		await toDeal("deposited");
-		await toDeal("transferred");
 		const quiet = await claimed(s);
 		for (let i = 0; i < 3; i++) {
 			await s.salesA.caller.lead.logOutcome({
 				leadId: quiet,
 				outcome: "no_answer",
-				nextFollowUpAt: later(3),
+				nextFollowUpAt: inDays(3).toISOString(),
 			});
 		}
-
-		const today = await s.salesA.caller.today.get();
-		expect(today.stats).toMatchObject({
-			active: 3,
-			opportunities: 1,
-			deposited: 1,
-			unreachable: 1,
-			qualified: 0,
-		});
-		expect(today.todo.find((l) => l.id === quiet)).toMatchObject({
+		const todo = await s.salesA.caller.todo.list();
+		expect(todo.stale.find((r) => r.id === quiet)).toMatchObject({
+			reason: "unreachable",
 			attempts: 3,
 			unreachable: true,
-			reason: "first_contact",
 		});
 	});
 
-	test("company B's Overview never counts company A's leads", async () => {
+	test("lead rows carry the fit check; deals don't", async () => {
+		const s = await setup();
+		const id = await claimed(s);
+		await db
+			.update(lead)
+			.set({
+				budgetMinSatang: 300_000_000,
+				budgetMaxSatang: 400_000_000,
+				buyingTimeline: "1_3_months",
+			})
+			.where(eq(lead.id, id));
+		await s.admin.caller.unit.importCommit({
+			projectId: s.projectId,
+			csv: [
+				"section,unit_number,unit_type,list_price",
+				"Tower,T-1,1 Bed,3500000",
+			].join("\n"),
+		});
+		const todo = await s.salesA.caller.todo.list();
+		expect(todo.dueToday.find((r) => r.id === id)?.fit).toBe("fits");
+	});
+
+	test("company B's To do never shows company A's leads", async () => {
 		const a = await setup();
 		const b = await setup();
 		await claimed(a);
-		const today = await b.salesA.caller.today.get();
-		expect(today.todo).toEqual([]);
-		expect(today.stats.active).toBe(0);
+		const todo = await b.salesA.caller.todo.list();
+		expect([...todo.dueToday, ...todo.stale]).toEqual([]);
+		expect((await b.salesA.caller.todo.count()).count).toBe(0);
+	});
+});
+
+describe("Overview", () => {
+	test("lead statuses, deal stages, this month and rates", async () => {
+		const s = await setup();
+		await claimed(s); // new
+		const attempting = await claimed(s);
+		await s.salesA.caller.lead.logOutcome({
+			leadId: attempting,
+			outcome: "no_answer",
+			nextFollowUpAt: later(),
+		});
+		const dropped = await claimed(s);
+		await s.salesA.caller.lead.disqualify({ leadId: dropped, reason: "spam" });
+		const won = await qualified(s);
+		const lostLead = await qualified(s);
+		const deal = await s.salesA.caller.lead.convert({
+			leadId: won,
+			nextFollowUpAt: later(),
+		});
+		const lost = await s.salesA.caller.lead.convert({
+			leadId: lostLead,
+			nextFollowUpAt: later(),
+		});
+		await s.salesA.caller.opportunity.setStage({
+			opportunityId: deal.opportunityId,
+			stage: "negotiating",
+		});
+		await s.salesA.caller.opportunity.markLost({
+			opportunityId: lost.opportunityId,
+			reason: "cold_feet",
+		});
+
+		const o = await s.salesA.caller.overview.get();
+		expect(o.leads.byStatus).toEqual({
+			new: 1,
+			attempting: 1,
+			connected: 0,
+			qualified: 0,
+		});
+		expect(o.leads.thisMonth).toEqual({
+			received: 5,
+			converted: 2,
+			disqualified: 1,
+		});
+		// 2 of 5 were reached by a call (qualify helper doesn't call), 2 qualified, 2 converted.
+		expect(o.leads.rates).toEqual({
+			contact: 0,
+			qualify: 2 / 5,
+			conversion: 2 / 5,
+		});
+		expect(o.deals.byStage).toEqual({
+			visited: 0,
+			negotiating: 1,
+			deposited: 0,
+			contracted: 0,
+		});
+		expect(o.deals.thisMonth).toEqual({
+			visits: 2,
+			deposits: 0,
+			won: 0,
+			lost: 1,
+		});
+		expect(o.deals.rates).toEqual({ visitToDeposit: 0, win: 0 });
+		expect(o.deals.closedWon).toEqual({
+			count: 0,
+			volumeSatang: null,
+			commissionSatang: null,
+		});
+	});
+
+	test("rates are null when there's nothing to divide; company B sees nothing of A", async () => {
+		const a = await setup();
+		await claimed(a);
+		const b = await setup();
+		const o = await b.salesA.caller.overview.get();
+		expect(o.leads.thisMonth.received).toBe(0);
+		expect(o.leads.rates).toEqual({
+			contact: null,
+			qualify: null,
+			conversion: null,
+		});
+		expect(o.deals.rates).toEqual({ visitToDeposit: null, win: null });
 	});
 });

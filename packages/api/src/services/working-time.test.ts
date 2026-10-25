@@ -5,6 +5,7 @@ import {
 	contactDeadline,
 	followUpPicks,
 	localDate,
+	monthBounds,
 	nextOpening,
 	type WorkingCalendar,
 	zonedTime,
@@ -153,5 +154,26 @@ describe("followUpPicks", () => {
 		expect(
 			followUpPicks(late, bkk("2026-11-02", "12:00")).nextWorkingDay,
 		).toEqual(bkk("2026-11-03", "11:00"));
+	});
+});
+
+describe("monthBounds", () => {
+	test("the Bangkok calendar month, even when UTC is still in the previous one", () => {
+		// 2026-10-31 18:30 UTC is already 1 November in Bangkok.
+		const { start, end } = monthBounds(
+			"Asia/Bangkok",
+			new Date("2026-10-31T18:30:00Z"),
+		);
+		expect(start).toEqual(bkk("2026-11-01", "00:00"));
+		expect(end).toEqual(bkk("2026-12-01", "00:00"));
+	});
+
+	test("December rolls into next year", () => {
+		const { start, end } = monthBounds(
+			"Asia/Bangkok",
+			bkk("2026-12-15", "12:00"),
+		);
+		expect(start).toEqual(bkk("2026-12-01", "00:00"));
+		expect(end).toEqual(bkk("2027-01-01", "00:00"));
 	});
 });

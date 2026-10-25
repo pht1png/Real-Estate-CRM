@@ -213,3 +213,30 @@ export const defaultRules: Rules = {
 	unreachableWindowDays: 7,
 	nurtureCheckDays: 30,
 };
+
+/**
+ * Per-project qualification check (brief §6): the system assesses fit, the
+ * salesperson confirms. Auto-qualify is opt-in; disqualify is never automatic.
+ */
+export type QualificationRules = {
+	/** Budget may be this % outside the available price range and still fit. */
+	budgetTolerancePct: number;
+	/** Buying within this many months fits; later is "too early" (→ Nurture). */
+	qualifyWithinMonths: number;
+	/** Mark leads that fit (with unit types and intent) Qualified automatically. */
+	autoQualify: boolean;
+};
+
+export const defaultQualificationRules: QualificationRules = {
+	budgetTolerancePct: 10,
+	qualifyWithinMonths: 6,
+	autoQualify: false,
+};
+
+export const fitResults = [
+	"fits",
+	"too_early",
+	"budget_no_fit",
+	"unknown",
+] as const;
+export type FitResult = (typeof fitResults)[number];

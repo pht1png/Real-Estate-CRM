@@ -42,9 +42,10 @@ import {
 	leadRouter,
 	leadSourceRouter,
 	opportunityRouter,
+	overviewRouter,
 	poolRouter,
 	rulesRouter,
-	todayRouter,
+	todoRouter,
 } from "./crm";
 import { sectionRouter, unitRouter, unitTypeRouter } from "./inventory";
 
@@ -102,7 +103,8 @@ export const appRouter = router({
 	leadSource: leadSourceRouter,
 	campaign: campaignRouter,
 	rules: rulesRouter,
-	today: todayRouter,
+	overview: overviewRouter,
+	todo: todoRouter,
 	pool: poolRouter,
 	projectScope: router({
 		list: requirePermission({ projectScope: ["assign"] })

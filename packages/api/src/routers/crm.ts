@@ -56,6 +56,7 @@ import {
 import {
 	archiveSource,
 	archiveSourceInput,
+	channelInPersonInput,
 	createChannel,
 	createChannelInput,
 	createSource,
@@ -65,7 +66,9 @@ import {
 	renameChannelInput,
 	renameSource,
 	renameSourceInput,
+	setChannelInPerson,
 } from "../services/lead-source";
+import { getOverview } from "../services/overview";
 import {
 	claimInput,
 	claimLead,
@@ -79,7 +82,7 @@ import {
 	updateRules,
 	updateRulesInput,
 } from "../services/rules";
-import { getToday } from "../services/today";
+import { getTodo, todoCount } from "../services/todo";
 
 const read = requirePermission({ lead: ["read"] });
 const capture = requirePermission({ lead: ["capture"] });
@@ -163,8 +166,13 @@ export const poolRouter = router({
 	count: read.query(({ ctx }) => poolCount(ctx.db, ctx.tenant)),
 });
 
-export const todayRouter = router({
-	get: read.query(({ ctx }) => getToday(ctx.db, ctx.tenant)),
+export const overviewRouter = router({
+	get: read.query(({ ctx }) => getOverview(ctx.db, ctx.tenant)),
+});
+
+export const todoRouter = router({
+	list: read.query(({ ctx }) => getTodo(ctx.db, ctx.tenant)),
+	count: read.query(({ ctx }) => todoCount(ctx.db, ctx.tenant)),
 });
 
 export const customerRouter = router({
@@ -199,6 +207,11 @@ export const leadSourceRouter = router({
 	renameChannel: manageSources
 		.input(renameChannelInput)
 		.mutation(({ ctx, input }) => renameChannel(ctx.db, ctx.tenant, input)),
+	setChannelInPerson: manageSources
+		.input(channelInPersonInput)
+		.mutation(({ ctx, input }) =>
+			setChannelInPerson(ctx.db, ctx.tenant, input),
+		),
 	createSource: manageSources
 		.input(createSourceInput)
 		.mutation(({ ctx, input }) => createSource(ctx.db, ctx.tenant, input)),

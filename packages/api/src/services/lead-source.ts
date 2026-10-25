@@ -1,6 +1,6 @@
 import type { Database } from "@Real-Estate-CRM/db";
 import { leadChannel, leadSource } from "@Real-Estate-CRM/db/schema/index";
-import { and, asc, eq, isNull, max } from "drizzle-orm";
+import { and, asc, eq, isNull, max, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { writeAudit } from "./audit";
@@ -8,10 +8,22 @@ import { badRequest, conflict, isUniqueViolation, notFound } from "./errors";
 import type { Tenant } from "./tenancy";
 
 /** Starting list for every company (brief §5); admins rename, add or archive. */
-const DEFAULTS: { channel: string; sources: string[] }[] = [
-	{ channel: "Online", sources: ["Facebook", "Google", "Website", "LINE"] },
-	{ channel: "Offline", sources: ["Walk-in", "Billboard", "Event"] },
-	{ channel: "Referral", sources: ["Existing owner", "Friends & family"] },
+const DEFAULTS: { channel: string; inPerson: boolean; sources: string[] }[] = [
+	{
+		channel: "Online",
+		inPerson: false,
+		sources: ["Facebook", "Google", "Website", "LINE"],
+	},
+	{
+		channel: "Offline",
+		inPerson: true,
+		sources: ["Walk-in", "Billboard", "Event"],
+	},
+	{
+		channel: "Referral",
+		inPerson: false,
+		sources: ["Existing owner", "Friends & family"],
+	},
 ];
 export const UNKNOWN_SOURCE_NAME = "Don't know";
 
@@ -33,7 +45,12 @@ export async function ensureDefaultSources(tx: Tx, organizationId: string) {
 	for (const [i, d] of DEFAULTS.entries()) {
 		const [channel] = await tx
 			.insert(leadChannel)
-			.values({ organizationId, name: d.channel, sortOrder: i })
+			.values({
+				organizationId,
+				name: d.channel,
+				inPerson: d.inPerson,
+				sortOrder: i,
+			})
 			.onConflictDoNothing()
 			.returning({ id: leadChannel.id });
 		if (!channel) continue;
@@ -66,13 +83,21 @@ export const archiveSourceInput = z.strictObject({
 	sourceId: z.uuid(),
 	archived: z.boolean(),
 });
+export const channelInPersonInput = z.strictObject({
+	channelId: z.uuid(),
+	inPerson: z.boolean(),
+});
 
 /** Channels with their sources (archived included, flagged) and the "Don't know" source. */
 export async function listLeadSources(db: Database, tenant: Tenant) {
 	await db.transaction((tx) => ensureDefaultSources(tx, tenant.organizationId));
 	const [channels, sources] = await Promise.all([
 		db
-			.select({ id: leadChannel.id, name: leadChannel.name })
+			.select({
+				id: leadChannel.id,
+				name: leadChannel.name,
+				inPerson: leadChannel.inPerson,
+			})
 			.from(leadChannel)
 			.where(eq(leadChannel.organizationId, tenant.organizationId))
 			.orderBy(asc(leadChannel.sortOrder), asc(leadChannel.name)),
@@ -106,8 +131,13 @@ export async function requireActiveSource(
 	sourceId: string,
 ) {
 	const [row] = await db
-		.select({ id: leadSource.id, channelId: leadSource.channelId })
+		.select({
+			id: leadSource.id,
+			channelId: leadSource.channelId,
+			inPerson: sql<boolean>`coalesce(${leadChannel.inPerson}, false)`,
+		})
 		.from(leadSource)
+		.leftJoin(leadChannel, eq(leadChannel.id, leadSource.channelId))
 		.where(
 			and(
 				eq(leadSource.id, sourceId),
@@ -150,6 +180,33 @@ export async function createChannel(
 		if (isUniqueViolation(error)) conflict("A channel with this name exists");
 		throw error;
 	}
+}
+
+/** Admins mark channels where the customer meets us in person (capture needs details). */
+export async function setChannelInPerson(
+	db: Database,
+	tenant: Tenant,
+	input: z.infer<typeof channelInPersonInput>,
+) {
+	await db.transaction(async (tx) => {
+		const updated = await tx
+			.update(leadChannel)
+			.set({ inPerson: input.inPerson })
+			.where(
+				and(
+					eq(leadChannel.id, input.channelId),
+					eq(leadChannel.organizationId, tenant.organizationId),
+				),
+			)
+			.returning({ id: leadChannel.id });
+		if (updated.length === 0) notFound("Channel");
+		await writeAudit(tx, tenant, {
+			action: "lead_channel.in_person",
+			entityType: "lead_channel",
+			entityId: input.channelId,
+			after: { inPerson: input.inPerson },
+		});
+	});
 }
 
 export async function renameChannel(

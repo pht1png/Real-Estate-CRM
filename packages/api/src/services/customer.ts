@@ -43,7 +43,7 @@ export const customerIdInput = z.strictObject({ customerId: z.uuid() });
 export const listLeadsInput = z.strictObject({
 	query: z.string().trim().max(120).optional(),
 	projectId: z.uuid().optional(),
-	stage: z.enum(interestStages).optional(),
+	stages: z.array(z.enum(interestStages)).max(interestStages.length).optional(),
 	ownership: z.enum(["mine", "pool", "all"]).optional(),
 });
 export const updateCustomerInput = z.strictObject({
@@ -325,7 +325,9 @@ export async function listLeads(
 			and(
 				visibleInterestCondition(tenant),
 				input.projectId ? eq(interest.projectId, input.projectId) : undefined,
-				input.stage ? eq(interest.stage, input.stage) : undefined,
+				input.stages?.length
+					? inArray(interest.stage, input.stages)
+					: undefined,
 				input.ownership === "mine"
 					? eq(interest.ownerMemberId, tenant.memberId)
 					: undefined,

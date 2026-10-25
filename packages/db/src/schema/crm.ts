@@ -20,6 +20,8 @@ import {
 	activityTypes,
 	buyingTimelines,
 	interestStages,
+	invalidReasons,
+	lostReasons,
 	paymentMethods,
 	type Rules,
 	temperatures,
@@ -220,8 +222,8 @@ export const interest = pgTable(
 		nextFollowUpAt: timestamp("next_follow_up_at", { withTimezone: true }),
 		claimedAt: timestamp("claimed_at", { withTimezone: true }),
 		contactDeadlineAt: timestamp("contact_deadline_at", { withTimezone: true }),
-		lostReason: text("lost_reason"),
-		invalidReason: text("invalid_reason"),
+		lostReason: text("lost_reason", { enum: lostReasons }),
+		invalidReason: text("invalid_reason", { enum: invalidReasons }),
 		nurtureNextCheckAt: timestamp("nurture_next_check_at", {
 			withTimezone: true,
 		}),
@@ -286,6 +288,14 @@ export const interest = pgTable(
 		check(
 			"interest_temperature_check",
 			sql`${table.temperature} is null or ${table.temperature} in (${inList(temperatures)})`,
+		),
+		check(
+			"interest_lost_reason_check",
+			sql`${table.lostReason} is null or ${table.lostReason} in (${inList(lostReasons)})`,
+		),
+		check(
+			"interest_invalid_reason_check",
+			sql`${table.invalidReason} is null or ${table.invalidReason} in (${inList(invalidReasons)})`,
 		),
 		check(
 			"interest_budget_check",

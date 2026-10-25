@@ -123,6 +123,35 @@ export type PaymentMethod = (typeof paymentMethods)[number];
 export const temperatures = ["warm", "hot"] as const;
 export type Temperature = (typeof temperatures)[number];
 
+/** Lost reasons (brief §6); "other" needs a note. */
+export const lostReasons = [
+	"budget",
+	"mortgage",
+	"location_product",
+	"bought_elsewhere",
+	"unreachable",
+	"other",
+] as const;
+export type LostReason = (typeof lostReasons)[number];
+
+/** Invalid leaves the funnel and isn't counted as Lost (brief §6). */
+export const invalidReasons = [
+	"wrong_number",
+	"spam",
+	"duplicate",
+	"agent_competitor",
+] as const;
+export type InvalidReason = (typeof invalidReasons)[number];
+
+/** Stages still in play for an owner: everything except closed exits and transferred. */
+export const activeStages: readonly InterestStage[] = [
+	"new",
+	"contacted",
+	"visited",
+	"deposited",
+	"contracted",
+];
+
 /** Per-company rules (brief §6), stored as overrides of these defaults. */
 export type Rules = {
 	/** Re-enquiry stays with the owner if they made contact within this many days. */
@@ -133,6 +162,11 @@ export type Rules = {
 	claimCap: number;
 	/** Fewer office hours than this left at claim → deadline rolls to the next working day. */
 	deadlineRollHours: number;
+	/** This many no-answers within the window (since the last contact) → suggest Unreachable. */
+	unreachableAttempts: number;
+	unreachableWindowDays: number;
+	/** Nurture check-in after this many days. */
+	nurtureCheckDays: number;
 };
 
 export const defaultRules: Rules = {
@@ -140,4 +174,7 @@ export const defaultRules: Rules = {
 	preScoreTimelineMonths: 3,
 	claimCap: 5,
 	deadlineRollHours: 2,
+	unreachableAttempts: 3,
+	unreachableWindowDays: 7,
+	nurtureCheckDays: 30,
 };

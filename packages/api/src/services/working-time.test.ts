@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
 	contactDeadline,
+	followUpPicks,
 	localDate,
 	nextOpening,
 	type WorkingCalendar,
@@ -119,5 +120,38 @@ describe("contactDeadline", () => {
 		expect(
 			contactDeadline(shortSaturday, bkk("2026-11-07", "12:30"), 2),
 		).toEqual(bkk("2026-11-07", "15:00"));
+	});
+});
+
+describe("followUpPicks", () => {
+	test("in office hours: 2 hours ahead, rounded up to the quarter hour", () => {
+		const picks = followUpPicks(bangkok, bkk("2026-11-02", "10:07"));
+		expect(picks.in2h).toEqual(bkk("2026-11-02", "12:15"));
+		expect(picks.nextWorkingDay).toEqual(bkk("2026-11-03", "10:00"));
+		expect(picks.in3WorkingDays).toEqual(bkk("2026-11-05", "10:00"));
+		expect(picks.nextWeek).toEqual(bkk("2026-11-09", "10:00"));
+	});
+
+	test("near closing, 'in 2 hours' becomes the next opening; picks skip closed days", () => {
+		// Friday 17:52 → office closed at 19:52 → Saturday opening.
+		const holiday = { ...bangkok, closedDates: new Set(["2026-11-09"]) };
+		const picks = followUpPicks(holiday, bkk("2026-11-06", "17:52"));
+		expect(picks.in2h).toEqual(bkk("2026-11-07", "09:00"));
+		// Saturday; then Sunday (closed) and Monday (holiday) are skipped.
+		expect(picks.nextWorkingDay).toEqual(bkk("2026-11-07", "10:00"));
+		expect(picks.in3WorkingDays).toEqual(bkk("2026-11-11", "10:00"));
+	});
+
+	test("an office opening after 10:00 uses its opening time", () => {
+		const late = {
+			...bangkok,
+			officeHours: {
+				...bangkok.officeHours,
+				tue: { open: "11:00", close: "19:00" },
+			},
+		};
+		expect(
+			followUpPicks(late, bkk("2026-11-02", "12:00")).nextWorkingDay,
+		).toEqual(bkk("2026-11-03", "11:00"));
 	});
 });

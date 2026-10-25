@@ -41,6 +41,7 @@ import {
 	customerRouter,
 	leadRouter,
 	leadSourceRouter,
+	poolRouter,
 	rulesRouter,
 	todayRouter,
 } from "./crm";
@@ -100,6 +101,7 @@ export const appRouter = router({
 	campaign: campaignRouter,
 	rules: rulesRouter,
 	today: todayRouter,
+	pool: poolRouter,
 	projectScope: router({
 		list: requirePermission({ projectScope: ["assign"] })
 			.input(listProjectScopeInput)

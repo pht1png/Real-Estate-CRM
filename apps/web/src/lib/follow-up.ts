@@ -6,17 +6,10 @@ export function toDateTimeLocal(d: Date) {
 }
 
 /** 10:00 local time, `days` from today. */
-export function daysAtTen(days: number) {
+function daysAtTen(days: number) {
 	const d = new Date();
 	d.setDate(d.getDate() + days);
 	d.setHours(10, 0, 0, 0);
-	return toDateTimeLocal(d);
-}
-
-/** `hours` from now, rounded up to the next quarter hour. */
-export function hoursFromNow(hours: number) {
-	const d = new Date(Date.now() + hours * 3_600_000);
-	d.setMinutes(Math.ceil(d.getMinutes() / 15) * 15, 0, 0);
 	return toDateTimeLocal(d);
 }
 

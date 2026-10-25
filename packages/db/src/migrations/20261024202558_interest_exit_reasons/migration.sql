@@ -1,0 +1,2 @@
+ALTER TABLE "interest" ADD CONSTRAINT "interest_lost_reason_check" CHECK ("lost_reason" is null or "lost_reason" in ('budget', 'mortgage', 'location_product', 'bought_elsewhere', 'unreachable', 'other'));--> statement-breakpoint
+ALTER TABLE "interest" ADD CONSTRAINT "interest_invalid_reason_check" CHECK ("invalid_reason" is null or "invalid_reason" in ('wrong_number', 'spam', 'duplicate', 'agent_competitor'));

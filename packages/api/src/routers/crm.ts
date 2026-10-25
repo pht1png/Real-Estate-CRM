@@ -1,7 +1,9 @@
 import { orgProcedure, requirePermission, router } from "../index";
 import {
-	logActivity,
-	logActivityInput,
+	getFollowUpPicks,
+	interestIdInput,
+	logOutcome,
+	logOutcomeInput,
 	setFollowUp,
 	setFollowUpInput,
 } from "../services/activity";
@@ -33,6 +35,7 @@ import {
 	updateCustomer,
 	updateCustomerInput,
 } from "../services/customer";
+import { closeLead, closeLeadInput } from "../services/exit";
 import {
 	archiveSource,
 	archiveSourceInput,
@@ -46,7 +49,13 @@ import {
 	renameSource,
 	renameSourceInput,
 } from "../services/lead-source";
-import { claimInput, claimLead } from "../services/pool";
+import {
+	claimInput,
+	claimLead,
+	listPool,
+	listPoolInput,
+	poolCount,
+} from "../services/pool";
 import {
 	getRulesForTenant,
 	updateRules,
@@ -77,12 +86,25 @@ export const leadRouter = router({
 	claim: claim
 		.input(claimInput)
 		.mutation(({ ctx, input }) => claimLead(ctx.db, ctx.tenant, input)),
-	logActivity: read
-		.input(logActivityInput)
-		.mutation(({ ctx, input }) => logActivity(ctx.db, ctx.tenant, input)),
+	logOutcome: read
+		.input(logOutcomeInput)
+		.mutation(({ ctx, input }) => logOutcome(ctx.db, ctx.tenant, input)),
+	close: read
+		.input(closeLeadInput)
+		.mutation(({ ctx, input }) => closeLead(ctx.db, ctx.tenant, input)),
+	followUpPicks: read
+		.input(interestIdInput)
+		.query(({ ctx, input }) => getFollowUpPicks(ctx.db, ctx.tenant, input)),
 	setFollowUp: read
 		.input(setFollowUpInput)
 		.mutation(({ ctx, input }) => setFollowUp(ctx.db, ctx.tenant, input)),
+});
+
+export const poolRouter = router({
+	list: read
+		.input(listPoolInput)
+		.query(({ ctx, input }) => listPool(ctx.db, ctx.tenant, input)),
+	count: read.query(({ ctx }) => poolCount(ctx.db, ctx.tenant)),
 });
 
 export const todayRouter = router({

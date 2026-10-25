@@ -113,3 +113,42 @@ export function contactDeadline(
 	}
 	return currentOrNextOfficeDay(cal, day.close)?.close ?? null;
 }
+
+const QUARTER_HOUR = 15 * 60_000;
+
+/** 10:00 on a working date, or its opening when 10:00 is outside office hours. */
+function morningOf(cal: WorkingCalendar, date: string) {
+	const day = officeDay(cal, date);
+	if (!day) return null;
+	const ten = zonedTime(date, "10:00", cal.timeZone);
+	return ten >= day.open && ten < day.close ? ten : day.open;
+}
+
+/** The `n`th date after `date` (n ≥ 1) on which the office opens. */
+function workingDateAfter(cal: WorkingCalendar, date: string, n: number) {
+	let found = 0;
+	for (let i = 1; i < MAX_DAYS; i++) {
+		const next = addDays(date, i);
+		if (officeDay(cal, next) && ++found === n) return next;
+	}
+	return null;
+}
+
+/**
+ * Follow-up quick picks that land inside office hours: in 2 hours (or the
+ * next opening), the next working day, 3 working days and a week ahead
+ * (10:00, or opening time if the office opens later).
+ */
+export function followUpPicks(cal: WorkingCalendar, now: Date) {
+	const today = localDate(now, cal.timeZone);
+	const soon = new Date(
+		Math.ceil((now.getTime() + 2 * HOUR) / QUARTER_HOUR) * QUARTER_HOUR,
+	);
+	const at = (date: string | null) => (date ? morningOf(cal, date) : null);
+	return {
+		in2h: nextOpening(cal, soon),
+		nextWorkingDay: at(workingDateAfter(cal, today, 1)),
+		in3WorkingDays: at(workingDateAfter(cal, today, 3)),
+		nextWeek: at(workingDateAfter(cal, addDays(today, 6), 1)),
+	};
+}

@@ -15,6 +15,9 @@ export const updateRulesInput = z.strictObject({
 	preScoreTimelineMonths: z.number().int().min(1).max(24).optional(),
 	claimCap: z.number().int().min(1).max(50).optional(),
 	deadlineRollHours: z.number().int().min(0).max(8).optional(),
+	unreachableAttempts: z.number().int().min(1).max(20).optional(),
+	unreachableWindowDays: z.number().int().min(1).max(60).optional(),
+	nurtureCheckDays: z.number().int().min(1).max(365).optional(),
 });
 
 type Executor = Pick<Database, "select">;

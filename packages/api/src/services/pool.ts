@@ -1,19 +1,34 @@
 import type { Database } from "@Real-Estate-CRM/db";
 import { type AuditEntry, insertAudit } from "@Real-Estate-CRM/db/audit";
 import {
+	campaign,
+	customer,
 	interest,
 	interestActivity,
+	leadSource,
 	member,
 	project,
 	projectClosedDate,
 	user,
 } from "@Real-Estate-CRM/db/schema/index";
 import { TRPCError } from "@trpc/server";
-import { and, eq, gte, inArray, isNotNull, lte, sql } from "drizzle-orm";
+import {
+	and,
+	asc,
+	desc,
+	eq,
+	gte,
+	inArray,
+	isNotNull,
+	isNull,
+	lte,
+	sql,
+} from "drizzle-orm";
 import { z } from "zod";
 
 import { writeAudit } from "./audit";
 import { badRequest, conflict, notFound } from "./errors";
+import { visibleInterestCondition } from "./lead-access";
 import { getRules } from "./rules";
 import { coversProject, type Tenant } from "./tenancy";
 import {
@@ -23,6 +38,7 @@ import {
 } from "./working-time";
 
 export const claimInput = z.strictObject({ interestId: z.uuid() });
+export const listPoolInput = z.strictObject({ projectId: z.uuid().optional() });
 
 type Executor = Pick<Database, "select">;
 
@@ -220,4 +236,57 @@ export async function returnExpiredClaims(
 		}
 		return expired.length;
 	});
+}
+
+/** Unclaimed leads in the tenant's projects (brief §6 pool). */
+function inPool(tenant: Tenant) {
+	return and(
+		visibleInterestCondition(tenant),
+		isNull(interest.ownerMemberId),
+		eq(interest.stage, "new"),
+	);
+}
+
+/** Pool page: priority first, then the longest waiting. */
+export async function listPool(
+	db: Database,
+	tenant: Tenant,
+	input: z.infer<typeof listPoolInput>,
+) {
+	await returnExpiredClaims(db, { organizationId: tenant.organizationId });
+	return db
+		.select({
+			interestId: interest.id,
+			customerId: customer.id,
+			customerName: customer.name,
+			projectId: project.id,
+			projectName: project.name,
+			priority: interest.priority,
+			sourceName: leadSource.name,
+			campaignCode: campaign.code,
+			createdAt: interest.createdAt,
+		})
+		.from(interest)
+		.innerJoin(customer, eq(customer.id, interest.customerId))
+		.innerJoin(project, eq(project.id, interest.projectId))
+		.innerJoin(leadSource, eq(leadSource.id, interest.sourceId))
+		.leftJoin(campaign, eq(campaign.id, interest.campaignId))
+		.where(
+			and(
+				inPool(tenant),
+				input.projectId ? eq(interest.projectId, input.projectId) : undefined,
+			),
+		)
+		.orderBy(desc(interest.priority), asc(interest.createdAt))
+		.limit(200);
+}
+
+/** Sidebar badge: how many leads wait to be claimed. */
+export async function poolCount(db: Database, tenant: Tenant) {
+	await returnExpiredClaims(db, { organizationId: tenant.organizationId });
+	const [row] = await db
+		.select({ count: sql<number>`count(*)::int` })
+		.from(interest)
+		.where(inPool(tenant));
+	return { count: row?.count ?? 0 };
 }

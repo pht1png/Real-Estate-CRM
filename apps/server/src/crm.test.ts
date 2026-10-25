@@ -649,6 +649,9 @@ describe("rules", () => {
 			preScoreTimelineMonths: 3,
 			claimCap: 5,
 			deadlineRollHours: 2,
+			unreachableAttempts: 3,
+			unreachableWindowDays: 7,
+			nurtureCheckDays: 30,
 		});
 		expect(
 			await codeOf(s.salesA.caller.rules.update({ reEnquiryWindowDays: 30 })),

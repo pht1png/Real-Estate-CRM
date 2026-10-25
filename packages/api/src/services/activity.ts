@@ -5,25 +5,36 @@ import {
 	interest,
 	interestActivity,
 	openStages,
+	project,
 } from "@Real-Estate-CRM/db/schema/index";
-import { eq } from "drizzle-orm";
+import { eq, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { badRequest, forbidden } from "./errors";
+import { badRequest, forbidden, notFound } from "./errors";
 import { requireVisibleInterest } from "./lead-access";
+import { loadCalendar } from "./pool";
+import { getRules } from "./rules";
 import type { Tenant } from "./tenancy";
+import { followUpPicks } from "./working-time";
 
-/** One-tap actions available in M4; visits, stages and deposits come later. */
-export const oneTapActivityTypes = ["call", "no_answer", "line"] as const;
+/** Call results (brief §7): each one ends with the next follow-up. */
+export const callOutcomes = ["answered", "no_answer", "line"] as const;
+const outcomeActivity = {
+	answered: "call",
+	no_answer: "no_answer",
+	line: "line",
+} as const;
 
 const futureDateTime = z.iso.datetime({ offset: true });
 
-export const logActivityInput = z.strictObject({
+export const logOutcomeInput = z.strictObject({
 	interestId: z.uuid(),
-	type: z.enum(oneTapActivityTypes),
+	outcome: z.enum(callOutcomes),
 	note: z.string().trim().max(1000).optional(),
-	nextFollowUpAt: futureDateTime.optional(),
+	nextFollowUpAt: futureDateTime,
 });
+
+export const interestIdInput = z.strictObject({ interestId: z.uuid() });
 
 export const setFollowUpInput = z.strictObject({
 	interestId: z.uuid(),
@@ -31,7 +42,10 @@ export const setFollowUpInput = z.strictObject({
 });
 
 /** The owner works their lead; managers covering the project may act on any of them. */
-function requireActor(tenant: Tenant, row: { ownerMemberId: string | null }) {
+export function requireActor(
+	tenant: Tenant,
+	row: { ownerMemberId: string | null },
+) {
 	if (row.ownerMemberId === tenant.memberId) return;
 	if (roleCan(tenant.role, { lead: ["assign"] })) return;
 	forbidden(
@@ -65,38 +79,80 @@ function resolveFollowUp(
 }
 
 /**
- * Call / No answer / LINE (brief §7). A real contact (call, LINE) clears the
- * contact deadline; every owned open lead keeps a next follow-up (brief §6).
+ * `interest.id` with its table name: Drizzle drops the qualifier in
+ * single-table selects, and a bare "id" inside a subquery means the inner row.
  */
-export async function logActivity(
+export const outerInterestId = sql.raw(`"interest"."id"`);
+
+const contactTypes = sql.join(
+	contactActivityTypes.map((t) => sql`${t}`),
+	sql`, `,
+);
+
+/**
+ * No-answers in a row on the interest: since `since` and after its last real
+ * contact (call, LINE, meeting, visit). Correlated to the outer `interest` row.
+ */
+export function noAnswerStreak(since: Date): SQL<number> {
+	return sql<number>`(select count(*)::int from interest_activity na
+		where na.interest_id = ${outerInterestId} and na.type = 'no_answer' and na.at >= ${since}
+		and na.at > coalesce((select max(c.at) from interest_activity c
+			where c.interest_id = ${outerInterestId} and c.type in (${contactTypes})), '-infinity'::timestamptz))`;
+}
+
+/** Start of the Unreachable window (brief §6: 3 no-answers over 7 days). */
+export const streakSince = (windowDays: number, now = new Date()) =>
+	new Date(now.getTime() - windowDays * 86_400_000);
+
+/**
+ * Log a call result or a LINE contact with the next follow-up (brief §6–7).
+ * Answered and LINE count as contact and clear the contact deadline. A No
+ * answer returns the try count and whether the lead is now unreachable.
+ */
+export async function logOutcome(
 	db: Database,
 	tenant: Tenant,
-	input: z.infer<typeof logActivityInput>,
+	input: z.infer<typeof logOutcomeInput>,
 ) {
 	const now = new Date();
-	await db.transaction(async (tx) => {
+	return db.transaction(async (tx) => {
 		const row = await requireVisibleInterest(tx, tenant, input.interestId);
 		requireActor(tenant, row);
+		if (!(openStages as readonly string[]).includes(row.stage)) {
+			badRequest("Only open leads take call results");
+		}
 		const nextFollowUpAt = resolveFollowUp(row, input.nextFollowUpAt, now);
-		const contacted = contactActivityTypes.includes(input.type);
+		const type = outcomeActivity[input.outcome];
 		await tx.insert(interestActivity).values({
 			organizationId: tenant.organizationId,
 			interestId: row.id,
-			type: input.type,
+			type,
 			at: now,
 			byUserId: tenant.userId,
 			note: input.note || null,
-			data: input.nextFollowUpAt
-				? { nextFollowUpAt: input.nextFollowUpAt }
-				: null,
+			data: { nextFollowUpAt: input.nextFollowUpAt },
 		});
 		await tx
 			.update(interest)
 			.set({
 				nextFollowUpAt,
-				...(contacted && { contactDeadlineAt: null }),
+				...(contactActivityTypes.includes(type) && {
+					contactDeadlineAt: null,
+				}),
 			})
 			.where(eq(interest.id, row.id));
+
+		if (input.outcome !== "no_answer")
+			return { attempt: 0, unreachable: false };
+		const rules = await getRules(tx, tenant.organizationId);
+		const [streak] = await tx
+			.select({
+				n: noAnswerStreak(streakSince(rules.unreachableWindowDays, now)),
+			})
+			.from(interest)
+			.where(eq(interest.id, row.id));
+		const attempt = streak?.n ?? 1;
+		return { attempt, unreachable: attempt >= rules.unreachableAttempts };
 	});
 }
 
@@ -119,4 +175,20 @@ export async function setFollowUp(
 			.set({ nextFollowUpAt })
 			.where(eq(interest.id, row.id));
 	});
+}
+
+/** Quick-pick follow-up times inside the project's office hours. */
+export async function getFollowUpPicks(
+	db: Database,
+	tenant: Tenant,
+	input: z.infer<typeof interestIdInput>,
+) {
+	const row = await requireVisibleInterest(db, tenant, input.interestId);
+	const [proj] = await db
+		.select()
+		.from(project)
+		.where(eq(project.id, row.projectId));
+	if (!proj) notFound("Project");
+	const now = new Date();
+	return followUpPicks(await loadCalendar(db, proj, now), now);
 }

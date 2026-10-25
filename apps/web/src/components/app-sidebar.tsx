@@ -14,6 +14,7 @@ import {
 	FolderKanbanIcon,
 	InboxIcon,
 	LayoutDashboardIcon,
+	ListTodoIcon,
 	MegaphoneIcon,
 	SignpostIcon,
 	SlidersHorizontalIcon,
@@ -28,7 +29,12 @@ import { useCan } from "@/hooks/use-me";
 import { NavGroup, type NavItem } from "./nav-main";
 import { NavUser } from "./nav-user";
 import { OrgSwitcher } from "./org-switcher";
-import { PoolBadge, usePoolCount } from "./pool-badge";
+import {
+	CountBadge,
+	PoolBadge,
+	usePoolCount,
+	useTodoCount,
+} from "./pool-badge";
 
 export function AppSidebar({
 	user,
@@ -39,6 +45,7 @@ export function AppSidebar({
 	const t = useTranslations("nav");
 	const can = useCan();
 	const poolCount = usePoolCount();
+	const todoCount = useTodoCount();
 
 	// Each entry shows only for roles with its permission (the server enforces it too).
 	const visible = (items: (NavItem & { permission?: Permissions })[]) =>
@@ -46,6 +53,15 @@ export function AppSidebar({
 
 	const main = visible([
 		{ title: t("overview"), href: "/dashboard", icon: <LayoutDashboardIcon /> },
+		{
+			title: t("todo"),
+			href: "/todo",
+			icon: <ListTodoIcon />,
+			permission: { lead: ["read"] },
+			srLabel:
+				todoCount > 0 ? t("todoWaiting", { count: todoCount }) : undefined,
+			badge: <CountBadge count={todoCount} tone="neutral" />,
+		},
 		{
 			title: t("pool"),
 			href: "/pool",

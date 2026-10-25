@@ -101,7 +101,9 @@
 		"rules": "Rules",
 		"overview": "Overview",
 		"pool": "Pool",
-		"poolWaiting": "{count} leads waiting"
+		"poolWaiting": "{count} leads waiting",
+		"todo": "To do",
+		"todoWaiting": "{count} to do"
 	},
 	"noOrganization": {
 		"title": "No company access",
@@ -212,7 +214,8 @@
 			"closed": "Closed dates",
 			"sections": "Sections",
 			"unitTypes": "Unit types",
-			"import": "Import units"
+			"import": "Import units",
+			"qualification": "Qualification"
 		},
 		"type": "Project type",
 		"timeZone": "Time zone",
@@ -249,7 +252,17 @@
 		"newUnitType": "New unit type",
 		"editUnitType": "Edit unit type",
 		"priceRangeShort": "Price range",
-		"openSettings": "Settings"
+		"openSettings": "Settings",
+		"qualification": {
+			"intro": "The system checks each lead's budget and timeline against this project and suggests the next step. Salespeople confirm; disqualifying is never automatic.",
+			"tolerance": "Budget tolerance (%)",
+			"toleranceHint": "A budget this far outside the available price range still fits.",
+			"months": "Qualify if buying within (months)",
+			"monthsHint": "Later than this is \"too early\" — suggested for Nurture.",
+			"auto": "Auto-qualify leads that fit",
+			"autoHint": "When on, a lead that fits and has unit types and intent becomes Qualified by itself.",
+			"saved": "Qualification rules saved"
+		}
 	},
 	"unitImport": {
 		"title": "Import units from CSV",
@@ -390,6 +403,18 @@
 			"NOT_FOUND": "The project, source or campaign is no longer available. Refresh and try again.",
 			"BAD_REQUEST": "Some details are not valid. Check the phone number and dates.",
 			"default": "Saving failed. Please try again."
+		},
+		"receivedAt": "Received at",
+		"receivedAtHint": "When the customer actually came in or called. Change it if you're logging late.",
+		"budget": "Budget",
+		"unitTypes": "Unit types wanted",
+		"intent": "Buying for",
+		"moreRequired": "Details (required for in-person)",
+		"fit": {
+			"fits": "Fits this project — mark qualified on the customer page.",
+			"too_early": "Buying later than the project's window — consider Nurture.",
+			"budget_no_fit": "Budget doesn't fit this project.",
+			"autoQualified": "Qualified automatically (project rule)."
 		}
 	},
 	"customers": {
@@ -466,7 +491,8 @@
 		"dealStage": "Stage",
 		"firstVisit": "First visit",
 		"visits": "{count} visits",
-		"dealTag": "Deal"
+		"dealTag": "Deal",
+		"fit": "Fit"
 	},
 	"sources": {
 		"title": "Sources",
@@ -477,7 +503,8 @@
 		"archive": "Archive",
 		"unarchive": "Restore",
 		"unknown": "Don't know",
-		"unknownHint": "Used when the customer can't say. Managers see its share per salesperson."
+		"unknownHint": "Used when the customer can't say. Managers see its share per salesperson.",
+		"inPerson": "Customer meets us in person (walk-in, event): capture needs budget, timeline, unit types and intent"
 	},
 	"campaigns": {
 		"title": "Campaigns",
@@ -552,7 +579,7 @@
 		"save": "Save",
 		"reason": "Reason",
 		"reasonRequired": "Choose a reason.",
-		"noteRequired": "Note (required for Other)",
+		"noteRequired": "Write your reason",
 		"noteRequiredError": "Add a note for Other.",
 		"toasts": {
 			"saved": "Saved. Next follow-up: {time}",
@@ -604,6 +631,11 @@
 			"future": "A visit can't be in the future. Booked visits convert when they happen.",
 			"confirm": "Customer visited",
 			"saved": "Visit confirmed. The lead is now a deal."
+		},
+		"fitSuggest": {
+			"fits": "Fits — mark qualified",
+			"too_early": "Too early — move to nurture",
+			"budget_no_fit": "Budget doesn't fit — disqualify"
 		}
 	},
 	"overview": {
@@ -611,39 +643,6 @@
 		"welcome": "Welcome, {name}",
 		"summary": "{role} at {organization}",
 		"comingSoon": "Your overview will appear here.",
-		"cardsLabel": "My numbers",
-		"cards": {
-			"active": "Active leads",
-			"overdue": "Overdue follow-ups",
-			"unreachable": "Unreachable",
-			"qualified": "Qualified",
-			"opportunities": "Open deals",
-			"deposited": "Deposited"
-		},
-		"hints": {
-			"active": "Still in play",
-			"oldest": "Oldest {relative}",
-			"none": "None",
-			"decide": "Decide now",
-			"qualified": "Marked qualified",
-			"opportunities": "Open deals",
-			"deposited": "Not yet transferred"
-		},
-		"todo": {
-			"title": "To do ({count})",
-			"showAll": "Show all",
-			"start": "Start",
-			"emptyTitle": "All caught up",
-			"empty": "Nothing needs you right now. New pool leads appear under Pool."
-		},
-		"reasons": {
-			"firstContact": "New · contact by {time} ({relative})",
-			"firstContactLate": "New · contact deadline passed {relative}",
-			"noFollowUp": "No follow-up set",
-			"overdue": "Follow-up overdue · {relative}",
-			"due": "Follow-up due {relative}",
-			"tries": "try {attempts} of {max}"
-		},
 		"callMode": {
 			"title": "Calling",
 			"progress": "Lead {current} of {total}",
@@ -651,6 +650,33 @@
 			"doneTitle": "Done for now",
 			"doneDescription": "You went through {total} leads.",
 			"close": "Back to Overview"
+		},
+		"thisMonth": "This month",
+		"rates": "Rates",
+		"leads": {
+			"title": "Leads",
+			"received": "{count} received",
+			"converted": "{count} converted",
+			"disqualified": "{count} disqualified",
+			"contactRate": "Contact {rate}",
+			"qualifyRate": "Qualify {rate}",
+			"conversionRate": "Lead → deal {rate}"
+		},
+		"deals": {
+			"title": "Opportunities",
+			"visits": "{count} visits",
+			"deposits": "{count} deposits",
+			"won": "{count} won",
+			"lost": "{count} lost",
+			"visitToDeposit": "Visit → deposit {rate}",
+			"winRate": "Win rate {rate}",
+			"closedWon": {
+				"title": "Closed-won this month",
+				"count": "{count} deals",
+				"volume": "Volume {value}",
+				"commission": "Commission (est.) {value}",
+				"fromM6": "Volume and commission come from deposits (M6)."
+			}
 		}
 	},
 	"pool": {
@@ -700,5 +726,51 @@
 	"buyerIntents": {
 		"own_stay": "Own stay",
 		"investment": "Investment"
+	},
+	"pipeline": {
+		"lead": "Lead",
+		"opportunity": "Deal"
+	},
+	"fit": {
+		"fits": "Fits",
+		"too_early": "Too early",
+		"budget_no_fit": "Budget doesn't fit",
+		"unknown": "Not enough details"
+	},
+	"todo": {
+		"title": "To do",
+		"description": "Today's visits, what's due today and what slipped — leads in blue, deals in green.",
+		"start": "Start",
+		"arrivals": {
+			"title": "Showroom arrivals today ({count})",
+			"breakdown": "Qualified {qualified} · Unvetted (connected) {unvetted}",
+			"hint": "Unvetted guests: qualify them face to face during the tour before converting.",
+			"m5": "Booked visits arrive with appointments (M5). Walk-ins: use Confirm visit."
+		},
+		"dueToday": {
+			"title": "Due today ({count})",
+			"empty": "Nothing due today."
+		},
+		"stale": {
+			"title": "Stale / overdue ({count})",
+			"empty": "Nothing slipped."
+		},
+		"due": {
+			"firstContact": "contact by {time} ({relative})",
+			"today": "follow-up {time} ({relative})",
+			"overdue": "overdue · {relative}",
+			"noFollowUp": "no follow-up set",
+			"unreachable": "no contact after several tries"
+		},
+		"attrs": {
+			"status": "Status",
+			"stage": "Stage",
+			"project": "Project",
+			"phone": "Phone",
+			"due": "Due",
+			"tries": "Tries",
+			"fit": "Fit"
+		},
+		"triesValue": "{attempts} of {max}"
 	}
 }

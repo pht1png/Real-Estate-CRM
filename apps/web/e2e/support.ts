@@ -214,7 +214,8 @@ export async function poolLead(owner: Page, name: string, phone: string) {
 	await owner.getByLabel("ชื่อลูกค้า").fill(name);
 	await choose(owner, "แหล่งที่มา", "Facebook");
 	await owner.getByRole("button", { name: "บันทึกลูกค้า", exact: true }).click();
-	await expect(owner.getByText("บันทึกลูกค้าใหม่แล้ว").first()).toBeVisible();
+	// Saved once the customer page opens (a toast from an earlier lead could linger).
+	await expect(owner.getByRole("heading", { name, level: 1 })).toBeVisible();
 }
 
 /** Tap Call without leaving the page: the test browser has no dialler. */
@@ -240,4 +241,21 @@ export async function logNoAnswer(page: Page, scope: Locator) {
 	).toHaveAttribute("aria-pressed", "true");
 	await dialog.getByRole("button", { name: "บันทึก", exact: true }).click();
 	await expect(dialog).toBeHidden();
+}
+
+/** In-person sources (walk-in) need budget, timeline and intent in quick capture. */
+export async function fillWalkInDetails(page: Page) {
+	await expect(
+		page.getByRole("button", { name: /รายละเอียด \(จำเป็น/ }),
+	).toBeVisible();
+	await page.getByLabel("งบตั้งแต่ (บาท)").fill("3000000");
+	await page.getByLabel("งบไม่เกิน (บาท)").fill("5000000");
+	await choose(page, "ระยะเวลาที่จะซื้อ", "1–3 เดือน");
+	await page.getByRole("button", { name: "อยู่เอง" }).click();
+}
+
+/** A date as a datetime-local value in the browser's time zone. */
+export function dateTimeLocal(d: Date) {
+	const pad = (n: number) => String(n).padStart(2, "0");
+	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }

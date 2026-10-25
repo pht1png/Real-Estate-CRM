@@ -9,56 +9,17 @@ import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 
 import { LeadActions, UnreachablePrompt } from "@/components/lead-actions";
+import {
+	AttributeList,
+	PipelineCard,
+	TypeBadge,
+} from "@/components/pipeline-card";
 import { usePipelineLabel } from "@/hooks/use-pipeline-label";
 
-export type TodoLead =
-	inferRouterOutputs<AppRouter>["today"]["get"]["todo"][number];
+type Todo = inferRouterOutputs<AppRouter>["todo"]["list"];
+export type TodoLead = Todo["dueToday"][number];
 
-/** Why the lead is on the list, and how urgent it is. */
-export function ReasonLine({
-	lead: l,
-	now,
-	unreachableAttempts,
-}: {
-	lead: TodoLead;
-	now: Date;
-	unreachableAttempts: number;
-}) {
-	const t = useTranslations("overview.reasons");
-	const format = useFormatter();
-	const relative = (d: Date | string) => format.relativeTime(new Date(d), now);
-	const time = (d: Date | string) =>
-		format.dateTime(new Date(d), { timeStyle: "short" });
-	const tries =
-		l.attempts > 0
-			? ` · ${t("tries", { attempts: l.attempts, max: unreachableAttempts })}`
-			: "";
-
-	if (l.reason === "first_contact" && l.contactDeadlineAt) {
-		const late = new Date(l.contactDeadlineAt) <= now;
-		return (
-			<p className={cn("text-sm", late && "text-destructive font-medium")}>
-				{t(late ? "firstContactLate" : "firstContact", {
-					time: time(l.contactDeadlineAt),
-					relative: relative(l.contactDeadlineAt),
-				})}
-				{tries}
-			</p>
-		);
-	}
-	if (l.reason === "no_follow_up") {
-		return <p className="text-destructive text-sm">{t("noFollowUp")}</p>;
-	}
-	if (!l.nextFollowUpAt) return null;
-	const overdue = new Date(l.nextFollowUpAt) < now;
-	return (
-		<p className={cn("text-sm", overdue && "text-destructive font-medium")}>
-			{t(overdue ? "overdue" : "due", { relative: relative(l.nextFollowUpAt) })}
-			{tries}
-		</p>
-	);
-}
-
+/** A to-do card: lead (blue) or deal (green), type badge top left, aligned attributes. */
 export function TodoRow({
 	lead: l,
 	now,
@@ -72,13 +33,86 @@ export function TodoRow({
 	onDone?: () => void;
 	size?: "default" | "lg";
 }) {
+	const t = useTranslations("todo");
 	const tc = useTranslations("customers");
+	const tf = useTranslations("fit");
+	const format = useFormatter();
 	const pipelineLabel = usePipelineLabel();
-	const target = l;
+	// Deal rows carry null where an action target expects "not given".
+	const target = {
+		...l,
+		qualification: l.qualification ?? undefined,
+		priceRange: l.priceRange ?? undefined,
+	};
+	const relative = (d: Date | string) => format.relativeTime(new Date(d), now);
+	const time = (d: Date | string) =>
+		format.dateTime(new Date(d), { timeStyle: "short" });
+
+	const due = (() => {
+		switch (l.reason) {
+			case "first_contact":
+				return l.contactDeadlineAt
+					? {
+							value: t("due.firstContact", {
+								time: time(l.contactDeadlineAt),
+								relative: relative(l.contactDeadlineAt),
+							}),
+						}
+					: { value: "" };
+			case "no_follow_up":
+				return { value: t("due.noFollowUp"), tone: "danger" as const };
+			case "overdue":
+				return l.nextFollowUpAt
+					? {
+							value: t("due.overdue", { relative: relative(l.nextFollowUpAt) }),
+							tone: "danger" as const,
+						}
+					: { value: "" };
+			case "unreachable":
+				return { value: t("due.unreachable"), tone: "danger" as const };
+			default:
+				return l.nextFollowUpAt
+					? {
+							value: t("due.today", {
+								time: time(l.nextFollowUpAt),
+								relative: relative(l.nextFollowUpAt),
+							}),
+						}
+					: { value: "" };
+		}
+	})();
+	const items = [
+		{
+			label: l.kind === "lead" ? t("attrs.status") : t("attrs.stage"),
+			value: pipelineLabel(l.status, l.stage),
+		},
+		{ label: t("attrs.project"), value: l.projectName },
+		...(l.primaryPhone
+			? [{ label: t("attrs.phone"), value: l.primaryPhone }]
+			: []),
+		{ label: t("attrs.due"), ...due },
+		...(l.attempts > 0
+			? [
+					{
+						label: t("attrs.tries"),
+						value: t("triesValue", {
+							attempts: l.attempts,
+							max: unreachableAttempts,
+						}),
+						tone: l.unreachable ? ("danger" as const) : undefined,
+					},
+				]
+			: []),
+		...(l.kind === "lead" && l.fit && l.fit !== "unknown"
+			? [{ label: t("attrs.fit"), value: tf(l.fit) }]
+			: []),
+	];
+
 	return (
-		<>
+		<PipelineCard kind={l.kind}>
 			<div className="flex items-start justify-between gap-2">
-				<div className="min-w-0">
+				<div className="flex min-w-0 flex-col gap-1">
+					<TypeBadge kind={l.kind} />
 					<Link
 						href={`/customers/${l.customerId}` as Route}
 						className={cn(
@@ -88,23 +122,10 @@ export function TodoRow({
 					>
 						{l.customerName}
 					</Link>
-					<p className="text-muted-foreground truncate text-sm">
-						{l.projectName}
-						{l.primaryPhone && ` · ${l.primaryPhone}`}
-					</p>
 				</div>
-				<div className="flex shrink-0 gap-1">
-					{l.priority && <Badge>{tc("priority")}</Badge>}
-					<Badge variant={l.kind === "opportunity" ? "default" : "secondary"}>
-						{pipelineLabel(l.status, l.stage)}
-					</Badge>
-				</div>
+				{l.priority && <Badge>{tc("priority")}</Badge>}
 			</div>
-			<ReasonLine
-				lead={l}
-				now={now}
-				unreachableAttempts={unreachableAttempts}
-			/>
+			<AttributeList items={items} />
 			{l.unreachable && (
 				<UnreachablePrompt
 					target={target}
@@ -113,6 +134,6 @@ export function TodoRow({
 				/>
 			)}
 			<LeadActions target={target} onDone={onDone} size={size} />
-		</>
+		</PipelineCard>
 	);
 }

@@ -22,7 +22,6 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@Real-Estate-CRM/ui/components/card";
-import { Separator } from "@Real-Estate-CRM/ui/components/separator";
 import { Textarea } from "@Real-Estate-CRM/ui/components/textarea";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useFormatter, useTranslations } from "next-intl";
@@ -30,8 +29,12 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { ClaimButton, LeadActions } from "@/components/lead-actions";
+import {
+	AttributeList,
+	PipelineCard,
+	TypeBadge,
+} from "@/components/pipeline-card";
 import { useCan, useMe } from "@/hooks/use-me";
-import { usePipelineLabel } from "@/hooks/use-pipeline-label";
 import { useFormatBaht } from "@/lib/money";
 import { useTRPC } from "@/utils/trpc";
 
@@ -42,7 +45,10 @@ type VisibleLead = Extract<CustomerDetail["leads"][number], { visible: true }>;
 const isIn = <T extends string>(list: readonly T[], v: unknown): v is T =>
 	typeof v === "string" && (list as readonly string[]).includes(v);
 
-/** One project for this customer: the lead (vetting) and, once visited, its deal. */
+/**
+ * One project for this customer: the deal (green) once a visit converted the
+ * lead, and the lead (blue, vetting) with its qualification; one timeline.
+ */
 export function LeadCard({
 	lead: l,
 	phoneE164,
@@ -60,12 +66,12 @@ export function LeadCard({
 	const ta = useTranslations("activityTypes");
 	const tt = useTranslations("timelines");
 	const ti = useTranslations("buyerIntents");
+	const tf = useTranslations("fit");
 	const tsig = useTranslations("signals");
 	const tcust = useTranslations("customers");
 	const tc = useTranslations("common");
 	const format = useFormatter();
 	const formatBaht = useFormatBaht();
-	const pipelineLabel = usePipelineLabel();
 	const trpc = useTRPC();
 	const queryClient = useQueryClient();
 	const [note, setNote] = useState("");
@@ -134,147 +140,170 @@ export function LeadCard({
 				<CardDescription>
 					{t("owner")}: {l.ownerName ?? t("pool")}
 				</CardDescription>
-				<CardAction className="flex gap-2">
-					{l.priority && <Badge>{tcust("priority")}</Badge>}
-					<Badge variant={deal ? "default" : "secondary"}>
-						{pipelineLabel(l.status, deal?.stage ?? null)}
-					</Badge>
-				</CardAction>
+				{l.priority && (
+					<CardAction>
+						<Badge>{tcust("priority")}</Badge>
+					</CardAction>
+				)}
 			</CardHeader>
 			<CardContent className="flex flex-col gap-4">
-				{l.priority && l.prioritySignals.length > 0 && (
-					<p className="text-sm">
-						{l.prioritySignals
-							.map((s) => tsig(s as "budget_in_range"))
-							.join(" · ")}
-					</p>
-				)}
-				{inPool && leadOpen && can({ lead: ["claim"] }) && (
-					<div className="flex flex-wrap items-center gap-2">
-						<p className="text-muted-foreground text-sm">{t("inPoolHint")}</p>
-						<ClaimButton leadId={l.id} />
-					</div>
-				)}
-				{deal && dealOpen && canAct(deal.ownerMemberId) && (
-					<LeadActions
-						target={{
-							kind: "opportunity",
-							id: deal.id,
-							customerName,
-							phoneE164,
-							nextFollowUpAt: deal.nextFollowUpAt,
-							stage: deal.stage,
-						}}
-					/>
-				)}
-				{!deal?.id && !inPool && leadOpen && canAct(l.ownerMemberId) && (
-					<LeadActions
-						target={{
-							kind: "lead",
-							id: l.id,
-							customerName,
-							phoneE164,
-							nextFollowUpAt: l.nextFollowUpAt,
-							status: l.status,
-							projectId: l.projectId,
-							priceRange,
-							qualification: {
-								budgetMinSatang: l.budgetMinSatang,
-								budgetMaxSatang: l.budgetMaxSatang,
-								buyingTimeline: l.buyingTimeline,
-								unitTypeIds: l.unitTypeIds,
-								buyerIntent: l.buyerIntent,
-							},
-						}}
-					/>
-				)}
-
 				{deal && (
-					<section aria-label={t("deal")} className="flex flex-col gap-2">
-						<h4 className="text-sm font-medium">{t("deal")}</h4>
-						<dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-							<dt className="text-muted-foreground">{t("dealStage")}</dt>
-							<dd>
-								{tos(deal.stage)}
-								{deal.lostReason && ` · ${tlr(deal.lostReason)}`}
-							</dd>
-							<dt className="text-muted-foreground">{t("firstVisit")}</dt>
-							<dd>
-								{dateTime(deal.firstVisitAt)}
-								{deal.visitCount > 1 &&
-									` · ${t("visits", { count: deal.visitCount })}`}
-							</dd>
-							{dealOpen && (
-								<>
-									<dt className="text-muted-foreground">{t("followUp")}</dt>
-									<dd>
-										{deal.nextFollowUpAt
-											? dateTime(deal.nextFollowUpAt)
-											: tc("none")}
-									</dd>
-								</>
-							)}
-						</dl>
-					</section>
+					<PipelineCard kind="opportunity">
+						<TypeBadge kind="opportunity" />
+						<AttributeList
+							items={[
+								{
+									label: t("dealStage"),
+									value: deal.lostReason
+										? `${tos(deal.stage)} · ${tlr(deal.lostReason)}`
+										: tos(deal.stage),
+								},
+								{
+									label: t("firstVisit"),
+									value:
+										deal.visitCount > 1
+											? `${dateTime(deal.firstVisitAt)} · ${t("visits", { count: deal.visitCount })}`
+											: dateTime(deal.firstVisitAt),
+								},
+								...(dealOpen
+									? [
+											{
+												label: t("followUp"),
+												value: deal.nextFollowUpAt
+													? dateTime(deal.nextFollowUpAt)
+													: tc("none"),
+												tone: deal.nextFollowUpAt
+													? undefined
+													: ("danger" as const),
+											},
+										]
+									: []),
+							]}
+						/>
+						{dealOpen && canAct(deal.ownerMemberId) && (
+							<LeadActions
+								target={{
+									kind: "opportunity",
+									id: deal.id,
+									customerName,
+									phoneE164,
+									nextFollowUpAt: deal.nextFollowUpAt,
+									stage: deal.stage,
+								}}
+							/>
+						)}
+					</PipelineCard>
 				)}
 
-				<section aria-label={t("vetting")} className="flex flex-col gap-2">
-					<h4 className="text-sm font-medium">{t("vetting")}</h4>
-					<dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-						<dt className="text-muted-foreground">{t("leadStatus")}</dt>
-						<dd>
-							{tls(l.status)}
-							{l.disqualifyReason && ` · ${tdr(l.disqualifyReason)}`}
-							{l.qualifiedAt &&
-								` · ${t("qualifiedOn", { date: dateTime(l.qualifiedAt) })}`}
-						</dd>
-						<dt className="text-muted-foreground">{t("source")}</dt>
-						<dd>{l.sourceName}</dd>
-						{l.campaignName && (
-							<>
-								<dt className="text-muted-foreground">{t("campaign")}</dt>
-								<dd>
-									{l.campaignName} ({l.campaignCode})
-								</dd>
-							</>
-						)}
-						<dt className="text-muted-foreground">{t("budget")}</dt>
-						<dd>
-							{budget}
-							{priceRange && (
-								<span className="text-muted-foreground block text-xs">
-									{t("projectRange", {
-										min: formatBaht(priceRange.min),
-										max: formatBaht(priceRange.max),
-									})}
-								</span>
-							)}
-						</dd>
-						<dt className="text-muted-foreground">{t("timeline")}</dt>
-						<dd>{l.buyingTimeline ? tt(l.buyingTimeline) : t("notSet")}</dd>
-						<dt className="text-muted-foreground">{t("intent")}</dt>
-						<dd>{l.buyerIntent ? ti(l.buyerIntent) : t("notSet")}</dd>
-						{leadOpen && (
-							<>
-								<dt className="text-muted-foreground">{t("followUp")}</dt>
-								<dd>
-									{l.nextFollowUpAt ? dateTime(l.nextFollowUpAt) : tc("none")}
-								</dd>
-							</>
-						)}
-						{l.contactDeadlineAt && (
-							<>
-								<dt className="text-muted-foreground">
-									{t("contactDeadline")}
-								</dt>
-								<dd className={deadlinePassed ? "text-destructive" : undefined}>
-									{dateTime(l.contactDeadlineAt)}
-								</dd>
-							</>
-						)}
-					</dl>
-				</section>
-				<Separator />
+				<PipelineCard kind="lead">
+					<TypeBadge kind="lead" />
+					{l.priority && l.prioritySignals.length > 0 && (
+						<p className="text-sm">
+							{l.prioritySignals
+								.map((s) => tsig(s as "budget_in_range"))
+								.join(" · ")}
+						</p>
+					)}
+					<AttributeList
+						items={[
+							{
+								label: t("leadStatus"),
+								value: [
+									tls(l.status),
+									l.disqualifyReason && tdr(l.disqualifyReason),
+									l.qualifiedAt &&
+										t("qualifiedOn", { date: dateTime(l.qualifiedAt) }),
+								]
+									.filter(Boolean)
+									.join(" · "),
+							},
+							...(leadOpen && l.fit !== "unknown"
+								? [{ label: t("fit"), value: tf(l.fit) }]
+								: []),
+							{ label: t("source"), value: l.sourceName },
+							...(l.campaignName
+								? [
+										{
+											label: t("campaign"),
+											value: `${l.campaignName} (${l.campaignCode})`,
+										},
+									]
+								: []),
+							{
+								label: t("budget"),
+								value: priceRange ? (
+									<>
+										{budget}
+										<span className="text-muted-foreground block text-xs">
+											{t("projectRange", {
+												min: formatBaht(priceRange.min),
+												max: formatBaht(priceRange.max),
+											})}
+										</span>
+									</>
+								) : (
+									budget
+								),
+							},
+							{
+								label: t("timeline"),
+								value: l.buyingTimeline ? tt(l.buyingTimeline) : t("notSet"),
+							},
+							{
+								label: t("intent"),
+								value: l.buyerIntent ? ti(l.buyerIntent) : t("notSet"),
+							},
+							...(leadOpen
+								? [
+										{
+											label: t("followUp"),
+											value: l.nextFollowUpAt
+												? dateTime(l.nextFollowUpAt)
+												: tc("none"),
+										},
+									]
+								: []),
+							...(l.contactDeadlineAt
+								? [
+										{
+											label: t("contactDeadline"),
+											value: dateTime(l.contactDeadlineAt),
+											tone: deadlinePassed ? ("danger" as const) : undefined,
+										},
+									]
+								: []),
+						]}
+					/>
+					{inPool && leadOpen && can({ lead: ["claim"] }) && (
+						<div className="flex flex-wrap items-center gap-2">
+							<p className="text-muted-foreground text-sm">{t("inPoolHint")}</p>
+							<ClaimButton leadId={l.id} />
+						</div>
+					)}
+					{!inPool && leadOpen && canAct(l.ownerMemberId) && (
+						<LeadActions
+							target={{
+								kind: "lead",
+								id: l.id,
+								customerName,
+								phoneE164,
+								nextFollowUpAt: l.nextFollowUpAt,
+								status: l.status,
+								fit: l.fit,
+								projectId: l.projectId,
+								priceRange,
+								qualification: {
+									budgetMinSatang: l.budgetMinSatang,
+									budgetMaxSatang: l.budgetMaxSatang,
+									buyingTimeline: l.buyingTimeline,
+									unitTypeIds: l.unitTypeIds,
+									buyerIntent: l.buyerIntent,
+								},
+							}}
+						/>
+					)}
+				</PipelineCard>
+
 				<section className="flex flex-col gap-3">
 					<h4 className="font-medium">{t("timelineTitle")}</h4>
 					<form
@@ -309,14 +338,12 @@ export function LeadCard({
 					<ol className="flex flex-col gap-3 border-l pl-4">
 						{l.activities.map((a) => (
 							<li key={a.id} className="text-sm">
-								<p className="font-medium">
-									{ta(a.type)}
-									{a.type === "stage_change" && change(a.data)}
-									{a.opportunityId && (
-										<Badge variant="outline" className="ml-2">
-											{t("dealTag")}
-										</Badge>
-									)}
+								<p className="flex flex-wrap items-center gap-2 font-medium">
+									<TypeBadge kind={a.opportunityId ? "opportunity" : "lead"} />
+									<span>
+										{ta(a.type)}
+										{a.type === "stage_change" && change(a.data)}
+									</span>
 								</p>
 								{a.note && <p className="whitespace-pre-wrap">{a.note}</p>}
 								<p className="text-muted-foreground text-xs">

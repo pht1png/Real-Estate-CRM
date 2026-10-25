@@ -220,8 +220,14 @@ export function CustomerList() {
 				}}
 			>
 				<TabsList>
-					<TabsTrigger value="leads">{t("pipelines.leads")}</TabsTrigger>
-					<TabsTrigger value="deals">{t("pipelines.deals")}</TabsTrigger>
+					<TabsTrigger value="leads">
+						<span aria-hidden className="bg-lead size-2 rounded-full" />
+						{t("pipelines.leads")}
+					</TabsTrigger>
+					<TabsTrigger value="deals">
+						<span aria-hidden className="bg-deal size-2 rounded-full" />
+						{t("pipelines.deals")}
+					</TabsTrigger>
 				</TabsList>
 			</Tabs>
 			<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

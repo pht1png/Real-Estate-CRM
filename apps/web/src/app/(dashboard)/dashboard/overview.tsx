@@ -1,6 +1,9 @@
 "use client";
 
-import { Button } from "@Real-Estate-CRM/ui/components/button";
+import type {
+	LeadStatus,
+	OpportunityStage,
+} from "@Real-Estate-CRM/db/constants";
 import { Card, CardContent } from "@Real-Estate-CRM/ui/components/card";
 import {
 	Empty,
@@ -12,30 +15,26 @@ import {
 import { Spinner } from "@Real-Estate-CRM/ui/components/spinner";
 import { cn } from "@Real-Estate-CRM/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2Icon, LayoutDashboardIcon, PlayIcon } from "lucide-react";
+import { LayoutDashboardIcon } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
-import { useFormatter, useNow, useTranslations } from "next-intl";
-import { useState } from "react";
+import { useFormatter, useTranslations } from "next-intl";
+import type { ReactNode } from "react";
 
+import { type Pipeline, TypeBadge } from "@/components/pipeline-card";
 import { useMe, useRoleLabel } from "@/hooks/use-me";
+import { useFormatBaht } from "@/lib/money";
 import { useTRPC } from "@/utils/trpc";
 
-import { CallMode } from "./call-mode";
-import { type TodoLead, TodoRow } from "./todo-row";
-
-type Filter = "all" | "overdue" | "unreachable";
-
-/** Roles that own leads see their work; others keep the welcome card until M7. */
+/** Roles that own leads see their numbers; others keep the welcome card until M7. */
 const WORKING_ROLES = ["salesperson", "sales_manager"];
 
-/** My leads (vetting) or deals in the customer list, filtered by status/stage. */
-const leadsLink = (statuses?: string[]) =>
-	`/customers?ownership=mine${statuses ? `&status=${statuses.join(",")}` : ""}` as Route;
-const dealsLink = (stages: string[]) =>
-	`/customers?pipeline=deals&ownership=mine&stage=${stages.join(",")}` as Route;
+const leadsLink = (status: LeadStatus) =>
+	`/customers?ownership=mine&status=${status}` as Route;
+const dealsLink = (stage: OpportunityStage) =>
+	`/customers?pipeline=deals&ownership=mine&stage=${stage}` as Route;
 
-export function Today({ name }: { name: string }) {
+export function Overview({ name }: { name: string }) {
 	const t = useTranslations("overview");
 	const { data: me } = useMe();
 	const roleLabel = useRoleLabel();
@@ -72,205 +71,177 @@ export function Today({ name }: { name: string }) {
 
 function OverviewBody() {
 	const t = useTranslations("overview");
+	const tls = useTranslations("leadStatuses");
+	const tos = useTranslations("opportunityStages");
 	const format = useFormatter();
+	const formatBaht = useFormatBaht();
 	const trpc = useTRPC();
-	// Refetch each minute so expired claims and newly due follow-ups show up.
 	const overview = useQuery(
-		trpc.today.get.queryOptions(undefined, { refetchInterval: 60_000 }),
+		trpc.overview.get.queryOptions(undefined, { refetchInterval: 60_000 }),
 	);
-	const now = useNow({ updateInterval: 60_000 });
-	const [filter, setFilter] = useState<Filter>("all");
-	const [calling, setCalling] = useState(false);
-
 	if (!overview.data) return <Spinner />;
-	const { stats, todo, unreachableAttempts } = overview.data;
-	const isOverdue = (l: TodoLead) =>
-		!!l.nextFollowUpAt && new Date(l.nextFollowUpAt) < now;
-	const shown = todo.filter((l) =>
-		filter === "overdue"
-			? isOverdue(l)
-			: filter === "unreachable"
-				? l.unreachable
-				: true,
-	);
-	const toggle = (f: Filter) => setFilter((v) => (v === f ? "all" : f));
+	const { leads, deals } = overview.data;
+	const pct = (v: number | null) =>
+		v === null ? "—" : format.number(v, { style: "percent" });
+	const money = (v: number | null) => (v === null ? "—" : formatBaht(v));
 
 	return (
-		<>
-			<section aria-label={t("cardsLabel")} className="flex flex-col gap-3">
-				<div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-					<StatCard
-						label={t("cards.active")}
-						value={stats.active}
-						hint={t("hints.active")}
-						href={leadsLink()}
-					/>
-					<StatCard
-						label={t("cards.overdue")}
-						value={stats.overdue.count}
-						hint={
-							stats.overdue.oldest
-								? t("hints.oldest", {
-										relative: format.relativeTime(
-											new Date(stats.overdue.oldest),
-											now,
-										),
-									})
-								: t("hints.none")
-						}
-						alert={stats.overdue.count > 0}
-						pressed={filter === "overdue"}
-						onClick={() => toggle("overdue")}
-					/>
-					<StatCard
-						label={t("cards.unreachable")}
-						value={stats.unreachable}
-						hint={stats.unreachable > 0 ? t("hints.decide") : t("hints.none")}
-						alert={stats.unreachable > 0}
-						pressed={filter === "unreachable"}
-						onClick={() => toggle("unreachable")}
-					/>
-					<StatCard
-						label={t("cards.qualified")}
-						value={stats.qualified}
-						hint={t("hints.qualified")}
-						href={leadsLink(["qualified"])}
-					/>
-					<StatCard
-						label={t("cards.opportunities")}
-						value={stats.opportunities}
-						hint={t("hints.opportunities")}
-						href={dealsLink(["visited", "negotiating"])}
-					/>
-					<StatCard
-						label={t("cards.deposited")}
-						value={stats.deposited}
-						hint={t("hints.deposited")}
-						href={dealsLink(["deposited", "contracted"])}
-					/>
-				</div>
-			</section>
-
-			<section aria-labelledby="overview-todo" className="flex flex-col gap-3">
-				<div className="flex items-center justify-between gap-2">
-					<h2 id="overview-todo" className="text-lg font-semibold">
-						{t("todo.title", { count: shown.length })}
-					</h2>
-					<div className="flex gap-2">
-						{filter !== "all" && (
-							<Button
-								variant="ghost"
-								size="sm"
-								onClick={() => setFilter("all")}
-							>
-								{t("todo.showAll")}
-							</Button>
-						)}
-						{shown.length > 0 && (
-							<Button size="sm" onClick={() => setCalling(true)}>
-								<PlayIcon data-icon="inline-start" />
-								{t("todo.start")}
-							</Button>
-						)}
-					</div>
-				</div>
-				{shown.length === 0 ? (
-					<Empty className="border">
-						<EmptyHeader>
-							<EmptyMedia variant="icon">
-								<CheckCircle2Icon />
-							</EmptyMedia>
-							<EmptyTitle>{t("todo.emptyTitle")}</EmptyTitle>
-							<EmptyDescription>{t("todo.empty")}</EmptyDescription>
-						</EmptyHeader>
-					</Empty>
-				) : (
-					<ul className="flex flex-col gap-3">
-						{shown.map((l) => (
-							<li key={`${l.kind}:${l.id}`}>
-								<Card size="sm">
-									<CardContent className="flex flex-col gap-3">
-										<TodoRow
-											lead={l}
-											now={now}
-											unreachableAttempts={unreachableAttempts}
-										/>
-									</CardContent>
-								</Card>
-							</li>
-						))}
-					</ul>
+		<div className="grid gap-6 xl:grid-cols-2">
+			<PipelineSection
+				kind="lead"
+				id="overview-leads"
+				title={t("leads.title")}
+				cards={(["new", "attempting", "connected", "qualified"] as const).map(
+					(s) => ({
+						label: tls(s),
+						value: leads.byStatus[s],
+						href: leadsLink(s),
+					}),
 				)}
-			</section>
-			{calling && (
-				<CallMode
-					leads={shown}
-					now={now}
-					unreachableAttempts={unreachableAttempts}
-					onClose={() => setCalling(false)}
+			>
+				<StatLine
+					label={t("thisMonth")}
+					items={[
+						t("leads.received", { count: leads.thisMonth.received }),
+						t("leads.converted", { count: leads.thisMonth.converted }),
+						t("leads.disqualified", { count: leads.thisMonth.disqualified }),
+					]}
 				/>
-			)}
-		</>
+				<StatLine
+					label={t("rates")}
+					items={[
+						t("leads.contactRate", { rate: pct(leads.rates.contact) }),
+						t("leads.qualifyRate", { rate: pct(leads.rates.qualify) }),
+						t("leads.conversionRate", { rate: pct(leads.rates.conversion) }),
+					]}
+				/>
+			</PipelineSection>
+
+			<PipelineSection
+				kind="opportunity"
+				id="overview-deals"
+				title={t("deals.title")}
+				cards={(
+					["visited", "negotiating", "deposited", "contracted"] as const
+				).map((s) => ({
+					label: tos(s),
+					value: deals.byStage[s],
+					href: dealsLink(s),
+				}))}
+			>
+				<StatLine
+					label={t("thisMonth")}
+					items={[
+						t("deals.visits", { count: deals.thisMonth.visits }),
+						t("deals.deposits", { count: deals.thisMonth.deposits }),
+						t("deals.won", { count: deals.thisMonth.won }),
+						t("deals.lost", { count: deals.thisMonth.lost }),
+					]}
+				/>
+				<StatLine
+					label={t("rates")}
+					items={[
+						t("deals.visitToDeposit", {
+							rate: pct(deals.rates.visitToDeposit),
+						}),
+						t("deals.winRate", { rate: pct(deals.rates.win) }),
+					]}
+				/>
+				<Card size="sm">
+					<CardContent className="flex flex-col gap-1">
+						<span className="text-muted-foreground text-xs font-medium">
+							{t("deals.closedWon.title")}
+						</span>
+						<div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+							<span className="text-2xl font-semibold tabular-nums">
+								{t("deals.closedWon.count", { count: deals.closedWon.count })}
+							</span>
+							<span className="tabular-nums">
+								{t("deals.closedWon.volume", {
+									value: money(deals.closedWon.volumeSatang),
+								})}
+							</span>
+							<span className="tabular-nums">
+								{t("deals.closedWon.commission", {
+									value: money(deals.closedWon.commissionSatang),
+								})}
+							</span>
+						</div>
+						{deals.closedWon.volumeSatang === null && (
+							<span className="text-muted-foreground text-xs">
+								{t("deals.closedWon.fromM6")}
+							</span>
+						)}
+					</CardContent>
+				</Card>
+			</PipelineSection>
+		</div>
 	);
 }
 
-function StatCard({
-	label,
-	value,
-	hint,
-	alert,
-	href,
-	pressed,
-	onClick,
+const sectionTone = {
+	lead: "border-t-4 border-t-lead",
+	opportunity: "border-t-4 border-t-deal",
+} as const;
+const cardTone = {
+	lead: "bg-lead-muted/60 hover:bg-lead-muted",
+	opportunity: "bg-deal-muted/60 hover:bg-deal-muted",
+} as const;
+
+function PipelineSection({
+	kind,
+	id,
+	title,
+	cards,
+	children,
 }: {
-	label: string;
-	value: number;
-	hint: string;
-	alert?: boolean;
-	href?: Route;
-	pressed?: boolean;
-	onClick?: () => void;
+	kind: Pipeline;
+	id: string;
+	title: string;
+	cards: { label: string; value: number; href: Route }[];
+	children: ReactNode;
 }) {
-	const body = (
-		<Card
-			size="sm"
-			className={cn(
-				"hover:bg-muted/50 h-full transition-colors",
-				alert && "bg-destructive/5 ring-destructive/40",
-				pressed && "ring-primary ring-2",
-			)}
-		>
-			<CardContent className="flex flex-col gap-1">
-				<span className="text-muted-foreground text-xs font-medium">
-					{label}
-				</span>
-				<span
-					className={cn(
-						"text-3xl font-semibold tabular-nums",
-						alert && "text-destructive",
-					)}
-				>
-					{value}
-				</span>
-				<span className="text-muted-foreground truncate text-xs">{hint}</span>
-			</CardContent>
-		</Card>
-	);
-	if (href) {
-		return (
-			<Link href={href} className="block focus-visible:outline-2">
-				{body}
-			</Link>
-		);
-	}
 	return (
-		<button
-			type="button"
-			aria-pressed={pressed}
-			className="block text-left focus-visible:outline-2"
-			onClick={onClick}
+		<section
+			aria-labelledby={id}
+			className={cn("flex flex-col gap-3 pt-3", sectionTone[kind])}
 		>
-			{body}
-		</button>
+			<div className="flex items-center gap-2">
+				<TypeBadge kind={kind} />
+				<h2 id={id} className="text-lg font-semibold">
+					{title}
+				</h2>
+			</div>
+			<div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+				{cards.map((c) => (
+					<Link
+						key={c.label}
+						href={c.href}
+						className="block focus-visible:outline-2"
+					>
+						<Card size="sm" className={cn("h-full", cardTone[kind])}>
+							<CardContent className="flex flex-col gap-1">
+								<span className="text-muted-foreground text-xs font-medium">
+									{c.label}
+								</span>
+								<span className="text-3xl font-semibold tabular-nums">
+									{c.value}
+								</span>
+							</CardContent>
+						</Card>
+					</Link>
+				))}
+			</div>
+			{children}
+		</section>
+	);
+}
+
+function StatLine({ label, items }: { label: string; items: string[] }) {
+	return (
+		<p className="text-sm">
+			<span className="text-muted-foreground mr-2">{label}</span>
+			<span className="tabular-nums">{items.join(" · ")}</span>
+		</p>
 	);
 }

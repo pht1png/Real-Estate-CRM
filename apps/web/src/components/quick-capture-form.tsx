@@ -2,7 +2,9 @@
 
 import { normalizePhone } from "@Real-Estate-CRM/api/phone";
 import {
+	type BuyerIntent,
 	type BuyingTimeline,
+	buyerIntents,
 	buyingTimelines,
 } from "@Real-Estate-CRM/db/constants";
 import { Alert, AlertDescription } from "@Real-Estate-CRM/ui/components/alert";
@@ -40,10 +42,10 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-
+import { ChoiceChips } from "@/components/choice-chips";
 import { useCan, useMe } from "@/hooks/use-me";
 import { usePipelineLabel } from "@/hooks/use-pipeline-label";
-import { defaultFollowUp } from "@/lib/follow-up";
+import { defaultFollowUp, toDateTimeLocal } from "@/lib/follow-up";
 import { bahtToSatang } from "@/lib/money";
 import { useTRPC } from "@/utils/trpc";
 
@@ -111,6 +113,7 @@ export function QuickCaptureForm({ onDone }: { onDone: () => void }) {
 	const t = useTranslations("capture");
 	const pipelineLabel = usePipelineLabel();
 	const tt = useTranslations("timelines");
+	const ti = useTranslations("buyerIntents");
 	const tsrc = useTranslations("sources");
 	const trpc = useTRPC();
 	const queryClient = useQueryClient();
@@ -140,6 +143,13 @@ export function QuickCaptureForm({ onDone }: { onDone: () => void }) {
 	const [budgetMax, setBudgetMax] = useState("");
 	const [timeline, setTimeline] = useState<string>(NONE);
 	const [note, setNote] = useState("");
+	const [unitTypeIds, setUnitTypeIds] = useState<string[]>([]);
+	const [intent, setIntent] = useState<BuyerIntent | "">("");
+	// When the enquiry really came in (forgot to log a walk-in at once).
+	const [receivedAt, setReceivedAt] = useState(() =>
+		toDateTimeLocal(new Date()),
+	);
+	const [detailsOpen, setDetailsOpen] = useState(false);
 	const [lookupPhone, setLookupPhone] = useState<string | null>(null);
 	const [submitted, setSubmitted] = useState(false);
 
@@ -165,6 +175,14 @@ export function QuickCaptureForm({ onDone }: { onDone: () => void }) {
 	const selectedSource = sources.data?.channels
 		.flatMap((c) => c.sources)
 		.find((s) => s.id === sourceId);
+	// In person (walk-in, event): the details section is required (brief §6).
+	const inPerson = !!sources.data?.channels.find(
+		(c) => c.id === selectedSource?.channelId,
+	)?.inPerson;
+	const unitTypes = useQuery(
+		trpc.unitType.list.queryOptions({ projectId }, { enabled: !!projectId }),
+	);
+	const hasTypes = (unitTypes.data?.length ?? 0) > 0;
 	const campaignItems = [
 		{ value: NONE, label: t("noCampaign") },
 		...(campaigns.data ?? [])
@@ -197,6 +215,12 @@ export function QuickCaptureForm({ onDone }: { onDone: () => void }) {
 		name: name.trim() === "",
 		source: !sourceId,
 		followUp: selfOwned && !followUp,
+		receivedAt:
+			!receivedAt || new Date(receivedAt).getTime() > Date.now() + 60_000,
+		budget: inPerson && (!bahtToSatang(budgetMin) || !bahtToSatang(budgetMax)),
+		timeline: inPerson && timeline === NONE,
+		unitTypes: inPerson && hasTypes && unitTypeIds.length === 0,
+		intent: inPerson && !intent,
 	};
 	const missingLabels = (
 		[
@@ -205,6 +229,11 @@ export function QuickCaptureForm({ onDone }: { onDone: () => void }) {
 			["name", t("name")],
 			["source", t("source")],
 			["followUp", t("followUp")],
+			["receivedAt", t("receivedAt")],
+			["budget", t("budget")],
+			["timeline", t("timeline")],
+			["unitTypes", t("unitTypes")],
+			["intent", t("intent")],
 		] as const
 	)
 		.filter(([key]) => missing[key])
@@ -214,11 +243,18 @@ export function QuickCaptureForm({ onDone }: { onDone: () => void }) {
 	const capture = useMutation(
 		trpc.lead.capture.mutationOptions({
 			onSuccess: async (result) => {
-				toast.success(t(`outcomes.${result.outcome}`));
+				toast.success(t(`outcomes.${result.outcome}`), {
+					description: result.qualified
+						? t("fit.autoQualified")
+						: result.fit !== "unknown"
+							? t(`fit.${result.fit}`)
+							: undefined,
+				});
 				onDone();
 				await queryClient.invalidateQueries(trpc.lead.pathFilter());
 				await queryClient.invalidateQueries(trpc.customer.pathFilter());
-				await queryClient.invalidateQueries(trpc.today.pathFilter());
+				await queryClient.invalidateQueries(trpc.overview.pathFilter());
+				await queryClient.invalidateQueries(trpc.todo.pathFilter());
 				router.push(`/customers/${result.customerId}` as Route);
 			},
 			onError: (e) => {
@@ -252,6 +288,11 @@ export function QuickCaptureForm({ onDone }: { onDone: () => void }) {
 					budgetMaxSatang: bahtToSatang(budgetMax) ?? undefined,
 					buyingTimeline:
 						timeline === NONE ? undefined : (timeline as BuyingTimeline),
+					unitTypeIds: unitTypeIds.length ? unitTypeIds : undefined,
+					buyerIntent: intent || undefined,
+					receivedAt: new Date(
+						Math.min(new Date(receivedAt).getTime(), Date.now()),
+					).toISOString(),
 					note: note.trim() || undefined,
 				});
 			}}
@@ -404,6 +445,19 @@ export function QuickCaptureForm({ onDone }: { onDone: () => void }) {
 						/>
 					</Field>
 				)}
+				<Field data-invalid={show("receivedAt") || undefined}>
+					<FieldLabel htmlFor="cap-received">{t("receivedAt")}</FieldLabel>
+					<Input
+						id="cap-received"
+						name="receivedAt"
+						type="datetime-local"
+						value={receivedAt}
+						max={toDateTimeLocal(new Date())}
+						aria-invalid={show("receivedAt") || undefined}
+						onChange={(e) => setReceivedAt(e.target.value)}
+					/>
+					<FieldDescription>{t("receivedAtHint")}</FieldDescription>
+				</Field>
 				{selfOwned && (
 					<Field data-invalid={show("followUp") || undefined}>
 						<FieldLabel htmlFor="cap-follow-up">{t("followUp")}</FieldLabel>
@@ -418,8 +472,12 @@ export function QuickCaptureForm({ onDone }: { onDone: () => void }) {
 						{show("followUp") && <FieldError>{t("required")}</FieldError>}
 					</Field>
 				)}
-				<Collapsible>
+				<Collapsible
+					open={inPerson || detailsOpen}
+					onOpenChange={(open) => setDetailsOpen(open)}
+				>
 					<CollapsibleTrigger
+						disabled={inPerson}
 						render={
 							<Button
 								type="button"
@@ -429,13 +487,13 @@ export function QuickCaptureForm({ onDone }: { onDone: () => void }) {
 							/>
 						}
 					>
-						{t("more")}
+						{inPerson ? t("moreRequired") : t("more")}
 						<ChevronDownIcon data-icon="inline-end" />
 					</CollapsibleTrigger>
 					<CollapsibleContent>
 						<FieldGroup className="pt-3">
 							<div className="grid grid-cols-2 gap-3">
-								<Field>
+								<Field data-invalid={show("budget") || undefined}>
 									<FieldLabel htmlFor="cap-bmin">{t("budgetMin")}</FieldLabel>
 									<Input
 										id="cap-bmin"
@@ -445,7 +503,7 @@ export function QuickCaptureForm({ onDone }: { onDone: () => void }) {
 										onChange={(e) => setBudgetMin(e.target.value)}
 									/>
 								</Field>
-								<Field>
+								<Field data-invalid={show("budget") || undefined}>
 									<FieldLabel htmlFor="cap-bmax">{t("budgetMax")}</FieldLabel>
 									<Input
 										id="cap-bmax"
@@ -456,7 +514,8 @@ export function QuickCaptureForm({ onDone }: { onDone: () => void }) {
 									/>
 								</Field>
 							</div>
-							<Field>
+							{show("budget") && <FieldError>{t("required")}</FieldError>}
+							<Field data-invalid={show("timeline") || undefined}>
 								<FieldLabel htmlFor="cap-timeline">{t("timeline")}</FieldLabel>
 								<SimpleSelect
 									id="cap-timeline"
@@ -468,6 +527,29 @@ export function QuickCaptureForm({ onDone }: { onDone: () => void }) {
 									]}
 								/>
 							</Field>
+							{show("timeline") && <FieldError>{t("required")}</FieldError>}
+							{hasTypes && (
+								<ChoiceChips
+									legend={t("unitTypes")}
+									multiple
+									invalid={show("unitTypes")}
+									error={t("required")}
+									options={(unitTypes.data ?? []).map((u) => ({
+										value: u.id,
+										label: u.name,
+									}))}
+									value={unitTypeIds}
+									onChange={setUnitTypeIds}
+								/>
+							)}
+							<ChoiceChips
+								legend={t("intent")}
+								invalid={show("intent")}
+								error={t("required")}
+								options={buyerIntents.map((v) => ({ value: v, label: ti(v) }))}
+								value={intent ? [intent] : []}
+								onChange={(v) => setIntent((v[0] as BuyerIntent) ?? "")}
+							/>
 							<Field>
 								<FieldLabel htmlFor="cap-note">{t("note")}</FieldLabel>
 								<Textarea

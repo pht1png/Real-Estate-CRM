@@ -1,6 +1,8 @@
 "use client";
 
 import type {
+	DisqualifyReason,
+	FitResult,
 	LeadStatus,
 	OpportunityStage,
 } from "@Real-Estate-CRM/db/constants";
@@ -33,6 +35,7 @@ import {
 	PhoneIcon,
 	PhoneMissedIcon,
 	PhoneOffIcon,
+	SparklesIcon,
 	StickyNoteIcon,
 	ThumbsDownIcon,
 	TimerResetIcon,
@@ -91,6 +94,8 @@ export type ActionTarget = FormTarget & {
 	phoneE164?: string | null;
 	status?: LeadStatus | null;
 	stage?: OpportunityStage | null;
+	/** Qualification check (brief §6): suggests the next step, never acts alone. */
+	fit?: FitResult | null;
 };
 
 type Pane =
@@ -98,9 +103,13 @@ type Pane =
 	| { kind: "outcome"; outcome: "answered" | "no_answer" | "line" }
 	| { kind: "followUp" }
 	| { kind: "note" }
-	| { kind: "qualify" }
+	| { kind: "qualify"; thenConvert?: boolean }
 	| { kind: "convert" }
-	| { kind: "close"; exit: "disqualify" | "nurture" | "lost" };
+	| {
+			kind: "close";
+			exit: "disqualify" | "nurture" | "lost";
+			reason?: DisqualifyReason;
+	  };
 
 /**
  * One-tap actions (brief §7) on a lead or a deal: Call (dialler + result),
@@ -138,116 +147,158 @@ export function LeadActions({
 		}),
 	);
 
+	// One-tap suggestion from the fit check; the salesperson confirms.
+	const suggest =
+		isLead &&
+		target.status !== "qualified" &&
+		target.fit &&
+		target.fit !== "unknown"
+			? target.fit
+			: null;
+	const suggestion = suggest && (
+		<Button
+			size="sm"
+			variant="secondary"
+			className="self-start"
+			onClick={() =>
+				setPane(
+					suggest === "fits"
+						? { kind: "qualify" }
+						: suggest === "too_early"
+							? { kind: "close", exit: "nurture" }
+							: { kind: "close", exit: "disqualify", reason: "bad_budget_fit" },
+				)
+			}
+		>
+			<SparklesIcon data-icon="inline-start" />
+			{t(`fitSuggest.${suggest}`)}
+		</Button>
+	);
+	// Converting needs a qualified lead: qualify first, face to face, then confirm.
+	const confirmVisit = () =>
+		setPane(
+			target.status === "qualified"
+				? { kind: "convert" }
+				: { kind: "qualify", thenConvert: true },
+		);
+
 	return (
-		<div className="flex gap-2">
-			{target.phoneE164 ? (
-				<a
-					href={`tel:${target.phoneE164}`}
-					className={cn(
-						buttonVariants({ size: big ? "lg" : "default" }),
-						"flex-1",
-					)}
-					onClick={() => setPane({ kind: "result" })}
-				>
-					<PhoneIcon data-icon="inline-start" />
-					{t("call")}
-				</a>
-			) : (
+		<div className="flex flex-col gap-2">
+			{suggestion}
+			<div className="flex gap-2">
+				{target.phoneE164 ? (
+					<a
+						href={`tel:${target.phoneE164}`}
+						className={cn(
+							buttonVariants({ size: big ? "lg" : "default" }),
+							"flex-1",
+						)}
+						onClick={() => setPane({ kind: "result" })}
+					>
+						<PhoneIcon data-icon="inline-start" />
+						{t("call")}
+					</a>
+				) : (
+					<Button
+						size={big ? "lg" : "default"}
+						className="flex-1"
+						onClick={() => setPane({ kind: "result" })}
+					>
+						<PhoneIcon data-icon="inline-start" />
+						{t("logCall")}
+					</Button>
+				)}
 				<Button
+					variant="outline"
 					size={big ? "lg" : "default"}
-					className="flex-1"
-					onClick={() => setPane({ kind: "result" })}
+					onClick={() => setPane({ kind: "outcome", outcome: "line" })}
 				>
-					<PhoneIcon data-icon="inline-start" />
-					{t("logCall")}
+					<MessageCircleIcon data-icon="inline-start" />
+					{t("line")}
 				</Button>
-			)}
-			<Button
-				variant="outline"
-				size={big ? "lg" : "default"}
-				onClick={() => setPane({ kind: "outcome", outcome: "line" })}
-			>
-				<MessageCircleIcon data-icon="inline-start" />
-				{t("line")}
-			</Button>
-			<DropdownMenu>
-				<DropdownMenuTrigger
-					render={
-						<Button
-							variant="outline"
-							size={big ? "icon-lg" : "icon"}
-							aria-label={t("more")}
-						/>
-					}
-				>
-					<EllipsisIcon />
-				</DropdownMenuTrigger>
-				<DropdownMenuContent align="end">
-					<DropdownMenuGroup>
-						{isLead && (
-							<>
-								<DropdownMenuItem onClick={() => setPane({ kind: "qualify" })}>
-									<BadgeCheckIcon />
-									{t("markQualified")}
-								</DropdownMenuItem>
-								<DropdownMenuItem onClick={() => setPane({ kind: "convert" })}>
-									<DoorOpenIcon />
-									{t("confirmVisit")}
-								</DropdownMenuItem>
-							</>
-						)}
-						{!isLead && target.stage === "visited" && (
-							<DropdownMenuItem
-								onClick={() =>
-									negotiate.mutate({
-										opportunityId: target.id,
-										stage: "negotiating",
-									})
-								}
-							>
-								<HandshakeIcon />
-								{t("markNegotiating")}
-							</DropdownMenuItem>
-						)}
-						<DropdownMenuItem onClick={() => setPane({ kind: "followUp" })}>
-							<CalendarClockIcon />
-							{t("changeFollowUp")}
-						</DropdownMenuItem>
-						<DropdownMenuItem onClick={() => setPane({ kind: "note" })}>
-							<StickyNoteIcon />
-							{t("addNote")}
-						</DropdownMenuItem>
-					</DropdownMenuGroup>
-					<DropdownMenuSeparator />
-					<DropdownMenuGroup>
-						{isLead ? (
-							<>
+				<DropdownMenu>
+					<DropdownMenuTrigger
+						render={
+							<Button
+								variant="outline"
+								size={big ? "icon-lg" : "icon"}
+								aria-label={t("more")}
+							/>
+						}
+					>
+						<EllipsisIcon />
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end">
+						<DropdownMenuGroup>
+							{isLead && (
+								<>
+									<DropdownMenuItem
+										onClick={() => setPane({ kind: "qualify" })}
+									>
+										<BadgeCheckIcon />
+										{t("markQualified")}
+									</DropdownMenuItem>
+									<DropdownMenuItem onClick={confirmVisit}>
+										<DoorOpenIcon />
+										{t("confirmVisit")}
+									</DropdownMenuItem>
+								</>
+							)}
+							{!isLead && target.stage === "visited" && (
 								<DropdownMenuItem
-									onClick={() => setPane({ kind: "close", exit: "nurture" })}
+									onClick={() =>
+										negotiate.mutate({
+											opportunityId: target.id,
+											stage: "negotiating",
+										})
+									}
 								>
-									<TimerResetIcon />
-									{t("exits.nurture")}
+									<HandshakeIcon />
+									{t("markNegotiating")}
 								</DropdownMenuItem>
+							)}
+							<DropdownMenuItem onClick={() => setPane({ kind: "followUp" })}>
+								<CalendarClockIcon />
+								{t("changeFollowUp")}
+							</DropdownMenuItem>
+							<DropdownMenuItem onClick={() => setPane({ kind: "note" })}>
+								<StickyNoteIcon />
+								{t("addNote")}
+							</DropdownMenuItem>
+						</DropdownMenuGroup>
+						<DropdownMenuSeparator />
+						<DropdownMenuGroup>
+							{isLead ? (
+								<>
+									<DropdownMenuItem
+										onClick={() => setPane({ kind: "close", exit: "nurture" })}
+									>
+										<TimerResetIcon />
+										{t("exits.nurture")}
+									</DropdownMenuItem>
+									<DropdownMenuItem
+										variant="destructive"
+										onClick={() =>
+											setPane({ kind: "close", exit: "disqualify" })
+										}
+									>
+										<XCircleIcon />
+										{t("exits.disqualify")}
+									</DropdownMenuItem>
+								</>
+							) : (
 								<DropdownMenuItem
 									variant="destructive"
-									onClick={() => setPane({ kind: "close", exit: "disqualify" })}
+									onClick={() => setPane({ kind: "close", exit: "lost" })}
 								>
-									<XCircleIcon />
-									{t("exits.disqualify")}
+									<ThumbsDownIcon />
+									{t("exits.lost")}
 								</DropdownMenuItem>
-							</>
-						) : (
-							<DropdownMenuItem
-								variant="destructive"
-								onClick={() => setPane({ kind: "close", exit: "lost" })}
-							>
-								<ThumbsDownIcon />
-								{t("exits.lost")}
-							</DropdownMenuItem>
-						)}
-					</DropdownMenuGroup>
-				</DropdownMenuContent>
-			</DropdownMenu>
+							)}
+						</DropdownMenuGroup>
+					</DropdownMenuContent>
+				</DropdownMenu>
+			</div>
 			<Dialog
 				open={pane !== null}
 				onOpenChange={(open) => {
@@ -282,13 +333,26 @@ export function LeadActions({
 					)}
 					{pane?.kind === "note" && <NoteForm target={target} onDone={done} />}
 					{pane?.kind === "qualify" && (
-						<QualifyForm target={target} onDone={done} />
+						<QualifyForm
+							target={target}
+							onDone={done}
+							onNext={
+								pane.thenConvert
+									? () => setPane({ kind: "convert" })
+									: undefined
+							}
+						/>
 					)}
 					{pane?.kind === "convert" && (
 						<ConvertForm target={target} onDone={done} />
 					)}
 					{pane?.kind === "close" && (
-						<CloseForm target={target} exit={pane.exit} onDone={done} />
+						<CloseForm
+							target={target}
+							exit={pane.exit}
+							presetReason={pane.reason}
+							onDone={done}
+						/>
 					)}
 				</DialogContent>
 			</Dialog>

@@ -38,6 +38,7 @@ import { toDateTimeLocal } from "@/lib/follow-up";
 import { bahtToSatang, satangToBahtInput, useFormatBaht } from "@/lib/money";
 import { useTRPC } from "@/utils/trpc";
 
+import { ChoiceChips } from "./choice-chips";
 import { type Target, useFollowUp } from "./follow-up-picker";
 
 const ERROR_CODES = [
@@ -63,7 +64,8 @@ export function useRefreshLeads() {
 	const queryClient = useQueryClient();
 	return () =>
 		Promise.all([
-			queryClient.invalidateQueries(trpc.today.pathFilter()),
+			queryClient.invalidateQueries(trpc.overview.pathFilter()),
+			queryClient.invalidateQueries(trpc.todo.pathFilter()),
 			queryClient.invalidateQueries(trpc.pool.pathFilter()),
 			queryClient.invalidateQueries(trpc.customer.pathFilter()),
 			queryClient.invalidateQueries(trpc.lead.pathFilter()),
@@ -342,58 +344,6 @@ export function NoteForm({
 	);
 }
 
-/** Toggle buttons for one choice out of a short list (mobile friendly). */
-function ChoiceGroup<T extends string>({
-	legend,
-	options,
-	value,
-	onChange,
-	invalid,
-	error,
-	multiple,
-}: {
-	legend: string;
-	options: { value: T; label: string }[];
-	value: T[];
-	onChange: (v: T[]) => void;
-	invalid?: boolean;
-	error?: string;
-	multiple?: boolean;
-}) {
-	return (
-		<FieldSet data-invalid={invalid || undefined}>
-			<FieldLegend variant="label">{legend}</FieldLegend>
-			<div className="grid grid-cols-2 gap-2">
-				{options.map((o) => {
-					const on = value.includes(o.value);
-					return (
-						<Button
-							key={o.value}
-							type="button"
-							size="sm"
-							variant={on ? "default" : "outline"}
-							aria-pressed={on}
-							className="h-auto justify-start py-2 text-left whitespace-normal"
-							onClick={() =>
-								onChange(
-									multiple
-										? on
-											? value.filter((v) => v !== o.value)
-											: [...value, o.value]
-										: [o.value],
-								)
-							}
-						>
-							{o.label}
-						</Button>
-					);
-				})}
-			</div>
-			{invalid && error && <FieldError>{error}</FieldError>}
-		</FieldSet>
-	);
-}
-
 /**
  * Mark qualified (brief §6): the salesperson confirms a budget that fits,
  * when they plan to buy, which unit types they want and why they're buying.
@@ -401,9 +351,12 @@ function ChoiceGroup<T extends string>({
 export function QualifyForm({
 	target,
 	onDone,
+	onNext,
 }: {
 	target: FormTarget;
 	onDone: () => void;
+	/** Chained flow (qualify → confirm visit): go on without refreshing lists yet. */
+	onNext?: () => void;
 }) {
 	const t = useTranslations("leadActions.qualify");
 	const ta = useTranslations("leadActions");
@@ -439,6 +392,8 @@ export function QualifyForm({
 		trpc.lead.qualify.mutationOptions({
 			onSuccess: async () => {
 				toast.success(t("saved"));
+				// Refreshing now could drop this row (and the dialog) from a list.
+				if (onNext) return onNext();
 				onDone();
 				await refresh();
 			},
@@ -518,7 +473,7 @@ export function QualifyForm({
 						<FieldError>{t("budgetError")}</FieldError>
 					)}
 				</FieldSet>
-				<ChoiceGroup
+				<ChoiceChips
 					legend={t("timeline")}
 					options={buyingTimelines.map((v) => ({ value: v, label: tt(v) }))}
 					value={timeline}
@@ -527,7 +482,7 @@ export function QualifyForm({
 					error={t("required")}
 				/>
 				{hasTypes && (
-					<ChoiceGroup
+					<ChoiceChips
 						legend={t("unitTypes")}
 						multiple
 						options={(unitTypes.data ?? []).map((u) => ({
@@ -540,7 +495,7 @@ export function QualifyForm({
 						error={t("required")}
 					/>
 				)}
-				<ChoiceGroup
+				<ChoiceChips
 					legend={t("intent")}
 					options={buyerIntents.map((v) => ({ value: v, label: ti(v) }))}
 					value={intent}
@@ -636,10 +591,13 @@ export function ConvertForm({
 export function CloseForm({
 	target,
 	exit,
+	presetReason,
 	onDone,
 }: {
 	target: FormTarget;
 	exit: "disqualify" | "nurture" | "lost";
+	/** Pre-chosen reason (e.g. from the fit check); still needs a confirm. */
+	presetReason?: string;
 	onDone: () => void;
 }) {
 	const t = useTranslations("leadActions");
@@ -648,7 +606,9 @@ export function CloseForm({
 	const trpc = useTRPC();
 	const refresh = useRefreshLeads();
 	const onError = useLeadError();
-	const [reason, setReason] = useState<string[]>([]);
+	const [reason, setReason] = useState<string[]>(
+		presetReason ? [presetReason] : [],
+	);
 	const [note, setNote] = useState("");
 	const [submitted, setSubmitted] = useState(false);
 	const onSuccess = async () => {
@@ -709,7 +669,7 @@ export function CloseForm({
 			</DialogHeader>
 			<FieldGroup className="py-4">
 				{options.length > 0 && (
-					<ChoiceGroup
+					<ChoiceChips
 						legend={t("reason")}
 						options={options}
 						value={reason}

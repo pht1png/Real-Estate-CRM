@@ -2,17 +2,21 @@ import type { Database } from "@Real-Estate-CRM/db";
 import {
 	contactActivityTypes,
 	lead,
+	openOpportunityStatuses,
 	opportunity,
 	project,
+	soldStatuses,
 } from "@Real-Estate-CRM/db/schema/index";
 import { type AnyColumn, and, eq, inArray, type SQL, sql } from "drizzle-orm";
 
 import { outerLeadId } from "./activity";
+import { qualificationRulesOf } from "./fit";
 import {
 	visibleLeadCondition,
 	visibleOpportunityCondition,
 } from "./lead-access";
 import { returnExpiredClaims } from "./pool";
+import { liveTemperature } from "./temperature";
 import type { Tenant } from "./tenancy";
 import { monthBounds } from "./working-time";
 
@@ -44,9 +48,10 @@ async function tenantTimeZone(db: Database, tenant: Tenant) {
 }
 
 /**
- * Salesperson Overview (brief §7): my leads and my deals, each with counts per
- * status / stage, this month's numbers and rates. Reasons are left to manager
- * reports (M7). Closed-won money needs deposits (M6).
+ * Salesperson Overview (brief §7): my leads and my opportunities, each with
+ * counts per status, this month's numbers and rates, plus how many open
+ * opportunities are hot or warm. Reasons are left to manager reports (M7).
+ * Closed-won money needs deposits (M6).
  */
 export async function getOverview(db: Database, tenant: Tenant) {
 	await returnExpiredClaims(db, { organizationId: tenant.organizationId });
@@ -56,14 +61,14 @@ export async function getOverview(db: Database, tenant: Tenant) {
 	const received = inMonth(sql`coalesce(${lead.claimedAt}, ${lead.createdAt})`);
 	const leadMoved = (to: string) =>
 		sql`exists (select 1 from activity a where a.lead_id = ${outerLeadId} and a.opportunity_id is null
-			and a.type = 'stage_change' and a.data->>'to' = ${to} and a.at >= ${start} and a.at < ${end})`;
-	const dealMoved = (to: readonly string[]) =>
+			and a.type = 'status_change' and a.data->>'to' = ${to} and a.at >= ${start} and a.at < ${end})`;
+	const opportunityMoved = (to: readonly string[]) =>
 		sql`exists (select 1 from activity a where a.opportunity_id = ${outerOpportunityId}
-			and a.type = 'stage_change' and a.data->>'to' in (${list(to)}) and a.at >= ${start} and a.at < ${end})`;
+			and a.type = 'status_change' and a.data->>'to' in (${list(to)}) and a.at >= ${start} and a.at < ${end})`;
 	const contacted = sql`exists (select 1 from activity c where c.lead_id = ${outerLeadId}
 		and c.type in (${list(contactActivityTypes)}))`;
 
-	const [[l], [o]] = await Promise.all([
+	const [[l], [o], open] = await Promise.all([
 		db
 			.select({
 				new: count(sql`${lead.status} = 'new'`),
@@ -90,18 +95,21 @@ export async function getOverview(db: Database, tenant: Tenant) {
 			),
 		db
 			.select({
-				visited: count(sql`${opportunity.stage} = 'visited'`),
-				negotiating: count(sql`${opportunity.stage} = 'negotiating'`),
-				deposited: count(sql`${opportunity.stage} = 'deposited'`),
-				contracted: count(sql`${opportunity.stage} = 'contracted'`),
+				visited: count(sql`${opportunity.status} = 'visited'`),
+				negotiating: count(sql`${opportunity.status} = 'negotiating'`),
+				deposited: count(sql`${opportunity.status} = 'deposited'`),
+				contracted: count(sql`${opportunity.status} = 'contracted'`),
+				waitingMortgageResult: count(
+					sql`${opportunity.status} = 'waiting_mortgage_result'`,
+				),
 				visits: count(inMonth(opportunity.firstVisitAt)),
-				deposits: count(dealMoved(["deposited"])),
-				won: count(dealMoved(["transferred"])),
+				deposits: count(opportunityMoved(["deposited"])),
+				won: count(opportunityMoved(["transferred"])),
 				lost: count(inMonth(opportunity.lostAt)),
 				visitsDeposited: count(
-					sql`${inMonth(opportunity.firstVisitAt)} and ${inArray(opportunity.stage, ["deposited", "contracted", "transferred"])}`,
+					sql`${inMonth(opportunity.firstVisitAt)} and ${inArray(opportunity.status, [...soldStatuses])}`,
 				),
-				closedWon: count(dealMoved(["contracted", "transferred"])),
+				closedWon: count(opportunityMoved(["contracted", "transferred"])),
 			})
 			.from(opportunity)
 			.where(
@@ -110,7 +118,44 @@ export async function getOverview(db: Database, tenant: Tenant) {
 					eq(opportunity.ownerMemberId, tenant.memberId),
 				),
 			),
+		// Hot / warm is computed on read, from the lead's profile and funding.
+		db
+			.select({
+				status: opportunity.status,
+				fundingType: opportunity.fundingType,
+				visitCount: opportunity.visitCount,
+				budgetMinSatang: lead.budgetMinSatang,
+				budgetMaxSatang: lead.budgetMaxSatang,
+				buyingTimeline: lead.buyingTimeline,
+				qualificationRules: project.qualificationRules,
+				minPriceSatang: sql<
+					number | null
+				>`(select min(u.list_price_satang)::float8 from unit u where u.project_id = ${opportunity.projectId} and u.status = 'available')`,
+				maxPriceSatang: sql<
+					number | null
+				>`(select max(u.list_price_satang)::float8 from unit u where u.project_id = ${opportunity.projectId} and u.status = 'available')`,
+			})
+			.from(opportunity)
+			.innerJoin(lead, eq(lead.id, opportunity.leadId))
+			.innerJoin(project, eq(project.id, opportunity.projectId))
+			.where(
+				and(
+					visibleOpportunityCondition(tenant),
+					eq(opportunity.ownerMemberId, tenant.memberId),
+					inArray(opportunity.status, [...openOpportunityStatuses]),
+				),
+			),
 	]);
+	const temperatures = open.map((r) =>
+		liveTemperature(
+			r,
+			r,
+			r.minPriceSatang !== null && r.maxPriceSatang !== null
+				? { min: r.minPriceSatang, max: r.maxPriceSatang }
+				: null,
+			qualificationRulesOf(r),
+		),
+	);
 
 	const n = (v: number | undefined) => v ?? 0;
 	return {
@@ -133,12 +178,17 @@ export async function getOverview(db: Database, tenant: Tenant) {
 				conversion: rate(n(l?.receivedConverted), n(l?.received)),
 			},
 		},
-		deals: {
-			byStage: {
+		opportunities: {
+			byStatus: {
 				visited: n(o?.visited),
 				negotiating: n(o?.negotiating),
 				deposited: n(o?.deposited),
 				contracted: n(o?.contracted),
+				waiting_mortgage_result: n(o?.waitingMortgageResult),
+			},
+			temperature: {
+				hot: temperatures.filter((t) => t === "hot").length,
+				warm: temperatures.filter((t) => t === "warm").length,
 			},
 			thisMonth: {
 				visits: n(o?.visits),

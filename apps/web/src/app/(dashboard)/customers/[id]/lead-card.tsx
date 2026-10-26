@@ -1,16 +1,20 @@
 "use client";
 
 import {
+	type AppointmentCancelReason,
+	appointmentCancelReasons,
 	type DisqualifyReason,
 	disqualifyReasons,
+	type FundingType,
+	fundingTypes,
 	type LeadStatus,
 	type LostReason,
 	leadStatuses,
 	lostReasons,
-	type OpportunityStage,
+	type OpportunityStatus,
 	openLeadStatuses,
-	openOpportunityStages,
-	opportunityStages,
+	openOpportunityStatuses,
+	opportunityStatuses,
 } from "@Real-Estate-CRM/db/constants";
 import { Badge } from "@Real-Estate-CRM/ui/components/badge";
 import { Button } from "@Real-Estate-CRM/ui/components/button";
@@ -28,10 +32,12 @@ import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { AppointmentActions } from "@/components/appointment-forms";
 import { ClaimButton, LeadActions } from "@/components/lead-actions";
 import {
 	AttributeList,
 	PipelineCard,
+	TemperatureBadge,
 	TypeBadge,
 } from "@/components/pipeline-card";
 import { useCan, useMe } from "@/hooks/use-me";
@@ -46,8 +52,9 @@ const isIn = <T extends string>(list: readonly T[], v: unknown): v is T =>
 	typeof v === "string" && (list as readonly string[]).includes(v);
 
 /**
- * One project for this customer: the deal (green) once a visit converted the
- * lead, and the lead (blue, vetting) with its qualification; one timeline.
+ * One project for this customer: the opportunity (green) once a visit
+ * converted the lead, the lead (blue, vetting) with its qualification, the
+ * showroom appointments, and one timeline.
  */
 export function LeadCard({
 	lead: l,
@@ -60,7 +67,11 @@ export function LeadCard({
 }) {
 	const t = useTranslations("customer");
 	const tls = useTranslations("leadStatuses");
-	const tos = useTranslations("opportunityStages");
+	const tos = useTranslations("opportunityStatuses");
+	const tfund = useTranslations("fundingTypes");
+	const tap = useTranslations("appointments");
+	const taps = useTranslations("appointmentStatuses");
+	const tacr = useTranslations("appointmentCancelReasons");
 	const tdr = useTranslations("disqualifyReasons");
 	const tlr = useTranslations("lostReasons");
 	const ta = useTranslations("activityTypes");
@@ -77,12 +88,15 @@ export function LeadCard({
 	const [note, setNote] = useState("");
 	const { data: me } = useMe();
 	const can = useCan();
-	const deal = l.opportunity;
+	const opp = l.opportunity;
 	const inPool = l.ownerMemberId === null;
 	const canAct = (ownerId: string | null) =>
 		(!!me && ownerId === me.memberId) || can({ lead: ["assign"] });
 	const leadOpen = openLeadStatuses.includes(l.status);
-	const dealOpen = !!deal && openOpportunityStages.includes(deal.stage);
+	const opportunityOpen = !!opp && openOpportunityStatuses.includes(opp.status);
+	// Status, funding and notes stay possible until the transfer (or lost).
+	const opportunityLive =
+		!!opp && opp.status !== "lost" && opp.status !== "transferred";
 	const deadlinePassed =
 		l.contactDeadlineAt !== null && new Date(l.contactDeadlineAt) <= new Date();
 
@@ -96,12 +110,12 @@ export function LeadCard({
 		}),
 	);
 
-	/** "→ Disqualified · Spam", "→ Negotiating" for status and stage changes. */
+	/** "→ Disqualified · Spam", "→ Negotiating" for lead and opportunity status changes. */
 	const change = (data: Record<string, unknown> | null) => {
 		const to = data?.to;
 		const label = isIn<LeadStatus>(leadStatuses, to)
 			? tls(to)
-			: isIn<OpportunityStage>(opportunityStages, to)
+			: isIn<OpportunityStatus>(opportunityStatuses, to)
 				? tos(to)
 				: null;
 		if (!label) return null;
@@ -115,6 +129,26 @@ export function LeadCard({
 	};
 	const dateTime = (d: Date | string) =>
 		format.dateTime(new Date(d), { dateStyle: "medium", timeStyle: "short" });
+	/** The extra on a timeline line: appointment time, cancel reason, funding. */
+	const detail = (type: string, data: Record<string, unknown> | null) => {
+		if (type === "status_change") return change(data);
+		const at = (v: unknown) => (typeof v === "string" ? dateTime(v) : "");
+		if (type === "appointment_booked") return ` · ${at(data?.startsAt)}`;
+		if (type === "appointment_rescheduled") {
+			return ` · ${at(data?.from)} → ${at(data?.to)}`;
+		}
+		if (
+			type === "appointment_cancelled" &&
+			isIn<AppointmentCancelReason>(appointmentCancelReasons, data?.reason)
+		) {
+			return ` · ${tacr(data.reason)}`;
+		}
+		const funding = data?.funding as { to?: unknown } | undefined;
+		if (type === "note" && isIn<FundingType>(fundingTypes, funding?.to)) {
+			return ` · ${t("funding")} → ${tfund(funding.to)}`;
+		}
+		return null;
+	};
 	const budget =
 		l.budgetMinSatang !== null && l.budgetMaxSatang !== null
 			? t("budgetRange", {
@@ -147,32 +181,39 @@ export function LeadCard({
 				)}
 			</CardHeader>
 			<CardContent className="flex flex-col gap-4">
-				{deal && (
+				{opp && (
 					<PipelineCard kind="opportunity">
-						<TypeBadge kind="opportunity" />
+						<div className="flex items-start justify-between gap-2">
+							<TypeBadge kind="opportunity" />
+							<TemperatureBadge temperature={opp.temperature} />
+						</div>
 						<AttributeList
 							items={[
 								{
-									label: t("dealStage"),
-									value: deal.lostReason
-										? `${tos(deal.stage)} · ${tlr(deal.lostReason)}`
-										: tos(deal.stage),
+									label: t("opportunityStatus"),
+									value: opp.lostReason
+										? `${tos(opp.status)} · ${tlr(opp.lostReason)}`
+										: tos(opp.status),
 								},
 								{
 									label: t("firstVisit"),
 									value:
-										deal.visitCount > 1
-											? `${dateTime(deal.firstVisitAt)} · ${t("visits", { count: deal.visitCount })}`
-											: dateTime(deal.firstVisitAt),
+										opp.visitCount > 1
+											? `${dateTime(opp.firstVisitAt)} · ${t("visits", { count: opp.visitCount })}`
+											: dateTime(opp.firstVisitAt),
 								},
-								...(dealOpen
+								{
+									label: t("funding"),
+									value: opp.fundingType ? tfund(opp.fundingType) : t("notSet"),
+								},
+								...(opportunityOpen
 									? [
 											{
 												label: t("followUp"),
-												value: deal.nextFollowUpAt
-													? dateTime(deal.nextFollowUpAt)
+												value: opp.nextFollowUpAt
+													? dateTime(opp.nextFollowUpAt)
 													: tc("none"),
-												tone: deal.nextFollowUpAt
+												tone: opp.nextFollowUpAt
 													? undefined
 													: ("danger" as const),
 											},
@@ -180,15 +221,16 @@ export function LeadCard({
 									: []),
 							]}
 						/>
-						{dealOpen && canAct(deal.ownerMemberId) && (
+						{opportunityLive && canAct(opp.ownerMemberId) && (
 							<LeadActions
 								target={{
 									kind: "opportunity",
-									id: deal.id,
+									id: opp.id,
 									customerName,
 									phoneE164,
-									nextFollowUpAt: deal.nextFollowUpAt,
-									stage: deal.stage,
+									nextFollowUpAt: opp.nextFollowUpAt,
+									status: opp.status,
+									fundingType: opp.fundingType,
 								}}
 							/>
 						)}
@@ -304,6 +346,61 @@ export function LeadCard({
 					)}
 				</PipelineCard>
 
+				{l.appointments.length > 0 && (
+					<section className="flex flex-col gap-2">
+						<h4 className="font-medium">{tap("title")}</h4>
+						<ul className="flex flex-col gap-3">
+							{l.appointments.map((a) => (
+								<li key={a.id} className="flex flex-col gap-2 text-sm">
+									<p className="flex flex-wrap items-center gap-2">
+										<TypeBadge
+											kind={a.kind === "first_tour" ? "lead" : "opportunity"}
+										/>
+										<span className="font-medium">
+											{tap(
+												a.kind === "first_tour" ? "firstTour" : "followUpVisit",
+											)}
+										</span>
+										<Badge
+											variant={a.status === "scheduled" ? "default" : "outline"}
+										>
+											{taps(a.status)}
+										</Badge>
+									</p>
+									<p className="text-muted-foreground tabular-nums">
+										{tap("line", {
+											time: dateTime(a.startsAt),
+											host: a.hostName,
+										})}
+										{a.cancelReason && ` · ${tacr(a.cancelReason)}`}
+									</p>
+									{a.status === "scheduled" && canAct(a.memberId) && (
+										<AppointmentActions
+											appointment={{
+												appointmentId: a.id,
+												leadId: l.id,
+												opportunityId: a.opportunityId,
+												startsAt: a.startsAt,
+												customerName,
+												projectId: l.projectId,
+												qualified: l.status === "qualified",
+												qualification: {
+													budgetMinSatang: l.budgetMinSatang,
+													budgetMaxSatang: l.budgetMaxSatang,
+													buyingTimeline: l.buyingTimeline,
+													unitTypeIds: l.unitTypeIds,
+													buyerIntent: l.buyerIntent,
+												},
+												priceRange,
+											}}
+										/>
+									)}
+								</li>
+							))}
+						</ul>
+					</section>
+				)}
+
 				<section className="flex flex-col gap-3">
 					<h4 className="font-medium">{t("timelineTitle")}</h4>
 					<form
@@ -312,8 +409,8 @@ export function LeadCard({
 							e.preventDefault();
 							if (!note.trim()) return;
 							addNote.mutate(
-								deal && dealOpen
-									? { opportunityId: deal.id, note: note.trim() }
+								opp && opportunityLive
+									? { opportunityId: opp.id, note: note.trim() }
 									: { leadId: l.id, note: note.trim() },
 							);
 						}}
@@ -342,7 +439,7 @@ export function LeadCard({
 									<TypeBadge kind={a.opportunityId ? "opportunity" : "lead"} />
 									<span>
 										{ta(a.type)}
-										{a.type === "stage_change" && change(a.data)}
+										{detail(a.type, a.data)}
 									</span>
 								</p>
 								{a.note && <p className="whitespace-pre-wrap">{a.note}</p>}

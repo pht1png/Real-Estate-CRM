@@ -18,15 +18,16 @@ import {
 
 import {
 	activityTypes,
+	appointmentCancelReasons,
+	appointmentStatuses,
 	buyerIntents,
 	buyingTimelines,
 	disqualifyReasons,
+	fundingTypes,
 	leadStatuses,
 	lostReasons,
-	opportunityStages,
-	paymentMethods,
+	opportunityStatuses,
 	type Rules,
-	temperatures,
 } from "../constants";
 import { member, organization, user } from "./auth";
 import { createdAt, updatedAt } from "./columns";
@@ -225,15 +226,9 @@ export const lead = pgTable(
 			.notNull()
 			.default(sql`'{}'::uuid[]`),
 		buyerIntent: text("buyer_intent", { enum: buyerIntents }),
-		paymentMethod: text("payment_method", { enum: paymentMethods }),
-		loanPrechecked: boolean("loan_prechecked").notNull().default(false),
 		nextFollowUpAt: timestamp("next_follow_up_at", { withTimezone: true }),
 		claimedAt: timestamp("claimed_at", { withTimezone: true }),
 		contactDeadlineAt: timestamp("contact_deadline_at", { withTimezone: true }),
-		nurtureNextCheckAt: timestamp("nurture_next_check_at", {
-			withTimezone: true,
-		}),
-		ignoredNurtureCount: integer("ignored_nurture_count").notNull().default(0),
 		qualifiedAt: timestamp("qualified_at", { withTimezone: true }),
 		convertedAt: timestamp("converted_at", { withTimezone: true }),
 		createdAt: createdAt(),
@@ -298,10 +293,6 @@ export const lead = pgTable(
 			sql`${table.buyerIntent} is null or ${table.buyerIntent} in (${inList(buyerIntents)})`,
 		),
 		check(
-			"lead_payment_check",
-			sql`${table.paymentMethod} is null or ${table.paymentMethod} in (${inList(paymentMethods)})`,
-		),
-		check(
 			"lead_budget_check",
 			sql`${table.budgetMinSatang} is null or ${table.budgetMaxSatang} is null or ${table.budgetMinSatang} <= ${table.budgetMaxSatang}`,
 		),
@@ -309,8 +300,8 @@ export const lead = pgTable(
 );
 
 /**
- * Opportunity (deal) pipeline: created only by a confirmed showroom visit on
- * a lead (brief §2). Deposits (M6) attach here.
+ * Opportunity pipeline: created only by a confirmed showroom visit on a lead
+ * (brief §2). Deposits (M6) attach here. Hot / warm is computed on read.
  */
 export const opportunity = pgTable(
 	"opportunity",
@@ -321,14 +312,15 @@ export const opportunity = pgTable(
 		customerId: uuid("customer_id").notNull(),
 		projectId: uuid("project_id").notNull(),
 		ownerMemberId: text("owner_member_id").notNull(),
-		stage: text("stage", { enum: opportunityStages })
+		status: text("status", { enum: opportunityStatuses })
 			.notNull()
 			.default("visited"),
 		lostReason: text("lost_reason", { enum: lostReasons }),
+		fundingType: text("funding_type", { enum: fundingTypes }),
+		// Visit summary: written only by recordVisit (services/visits.ts).
 		firstVisitAt: timestamp("first_visit_at", { withTimezone: true }).notNull(),
 		lastVisitAt: timestamp("last_visit_at", { withTimezone: true }).notNull(),
 		visitCount: integer("visit_count").notNull().default(1),
-		temperature: text("temperature", { enum: temperatures }),
 		nextFollowUpAt: timestamp("next_follow_up_at", { withTimezone: true }),
 		lostAt: timestamp("lost_at", { withTimezone: true }),
 		createdAt: createdAt(),
@@ -336,12 +328,12 @@ export const opportunity = pgTable(
 	},
 	(table) => [
 		unique("opportunity_org_id_unique").on(table.organizationId, table.id),
-		// One live deal per lead; a lost one can be followed by a new visit.
+		// One live opportunity per lead; a lost one can be followed by a new visit.
 		uniqueIndex("opportunity_one_live_per_lead_uidx")
 			.on(table.leadId)
-			.where(sql`${table.stage} <> 'lost'`),
-		index("opportunity_owner_stage_idx").on(table.ownerMemberId, table.stage),
-		index("opportunity_project_stage_idx").on(table.projectId, table.stage),
+			.where(sql`${table.status} <> 'lost'`),
+		index("opportunity_owner_status_idx").on(table.ownerMemberId, table.status),
+		index("opportunity_project_status_idx").on(table.projectId, table.status),
 		foreignKey({
 			name: "opportunity_lead_fkey",
 			columns: [table.organizationId, table.leadId],
@@ -363,23 +355,81 @@ export const opportunity = pgTable(
 			foreignColumns: [member.organizationId, member.id],
 		}),
 		check(
-			"opportunity_stage_check",
-			sql`${table.stage} in (${inList(opportunityStages)})`,
+			"opportunity_status_check",
+			sql`${table.status} in (${inList(opportunityStatuses)})`,
 		),
 		check(
 			"opportunity_lost_reason_check",
 			sql`${table.lostReason} is null or ${table.lostReason} in (${inList(lostReasons)})`,
 		),
 		check(
-			"opportunity_temperature_check",
-			sql`${table.temperature} is null or ${table.temperature} in (${inList(temperatures)})`,
+			"opportunity_funding_type_check",
+			sql`${table.fundingType} is null or ${table.fundingType} in (${inList(fundingTypes)})`,
 		),
 	],
 );
 
 /**
- * Append-only timeline of a lead and its deals (a trigger rejects
- * UPDATE/DELETE). `opportunityId` is set for deal-phase entries.
+ * Showroom appointment (brief §6): current state only; every change is also
+ * an activity. A first tour has no opportunity, a follow-up visit has the
+ * lead's live one. A salesperson's scheduled appointments can't overlap (an
+ * exclusion constraint added in the migration).
+ */
+export const appointment = pgTable(
+	"appointment",
+	{
+		id: uuid("id").primaryKey().defaultRandom(),
+		organizationId: text("organization_id").notNull(),
+		leadId: uuid("lead_id").notNull(),
+		opportunityId: uuid("opportunity_id"),
+		/** The salesperson hosting. */
+		memberId: text("member_id").notNull(),
+		startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+		endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+		status: text("status", { enum: appointmentStatuses })
+			.notNull()
+			.default("scheduled"),
+		cancelReason: text("cancel_reason", { enum: appointmentCancelReasons }),
+		createdByUserId: text("created_by_user_id").references(() => user.id),
+		createdAt: createdAt(),
+		updatedAt: updatedAt(),
+	},
+	(table) => [
+		unique("appointment_org_id_unique").on(table.organizationId, table.id),
+		index("appointment_lead_idx").on(table.leadId),
+		index("appointment_scheduled_idx")
+			.on(table.memberId, table.startsAt)
+			.where(sql`${table.status} = 'scheduled'`),
+		foreignKey({
+			name: "appointment_lead_fkey",
+			columns: [table.organizationId, table.leadId],
+			foreignColumns: [lead.organizationId, lead.id],
+		}),
+		foreignKey({
+			name: "appointment_opportunity_fkey",
+			columns: [table.organizationId, table.opportunityId],
+			foreignColumns: [opportunity.organizationId, opportunity.id],
+		}),
+		foreignKey({
+			name: "appointment_member_fkey",
+			columns: [table.organizationId, table.memberId],
+			foreignColumns: [member.organizationId, member.id],
+		}),
+		check(
+			"appointment_status_check",
+			sql`${table.status} in (${inList(appointmentStatuses)})`,
+		),
+		check(
+			"appointment_cancel_reason_check",
+			sql`(${table.status} = 'cancelled') = (${table.cancelReason} is not null) and (${table.cancelReason} is null or ${table.cancelReason} in (${inList(appointmentCancelReasons)}))`,
+		),
+		check("appointment_time_check", sql`${table.startsAt} < ${table.endsAt}`),
+	],
+);
+
+/**
+ * Append-only timeline of a lead and its opportunities (a trigger rejects
+ * UPDATE/DELETE). `opportunityId` is set for opportunity-phase entries.
  */
 export const activity = pgTable(
 	"activity",
@@ -423,6 +473,7 @@ export const crmRelations = defineRelationsPart(
 		customerPhone,
 		lead,
 		opportunity,
+		appointment,
 		activity,
 		leadSource,
 		leadChannel,
@@ -462,6 +513,12 @@ export const crmRelations = defineRelationsPart(
 		opportunity: {
 			lead: r.one.lead({
 				from: r.opportunity.leadId,
+				to: r.lead.id,
+			}),
+		},
+		appointment: {
+			lead: r.one.lead({
+				from: r.appointment.leadId,
 				to: r.lead.id,
 			}),
 		},

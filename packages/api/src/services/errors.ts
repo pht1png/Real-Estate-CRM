@@ -15,6 +15,12 @@ export function isUniqueViolation(error: unknown) {
 	return (cause as { code?: string })?.code === "23505";
 }
 
+/** Postgres exclusion_violation (e.g. overlapping appointments). */
+export function isExclusionViolation(error: unknown) {
+	const cause = (error as { cause?: { code?: string } })?.cause ?? error;
+	return (cause as { code?: string })?.code === "23P01";
+}
+
 export function badRequest(message: string): never {
 	throw new TRPCError({ code: "BAD_REQUEST", message });
 }

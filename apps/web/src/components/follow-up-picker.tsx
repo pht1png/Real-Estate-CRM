@@ -59,13 +59,13 @@ export function useFollowUp(
 			{ enabled: target.kind === "lead" },
 		),
 	);
-	const dealPicks = useQuery(
+	const opportunityPicks = useQuery(
 		trpc.opportunity.followUpPicks.queryOptions(
 			{ opportunityId: target.id },
 			{ enabled: target.kind === "opportunity" },
 		),
 	);
-	const picks = target.kind === "lead" ? leadPicks.data : dealPicks.data;
+	const picks = target.kind === "lead" ? leadPicks.data : opportunityPicks.data;
 	const [chosen, setChosen] = useState<string | null>(null);
 	const pickValue = (key: PickKey) => {
 		const at = picks?.[key];

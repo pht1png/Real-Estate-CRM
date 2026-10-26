@@ -22,11 +22,11 @@
 	--accent: oklch(0.97 0 0);
 	--accent-foreground: oklch(0.205 0 0);
 	--destructive: oklch(0.58 0.22 27);
-	/* Pipelines: leads (vetting) blue, deals (opportunities) green. */
+	/* Pipelines: leads (vetting) blue, opportunities green. */
 	--lead: oklch(0.55 0.17 250);
 	--lead-muted: oklch(0.97 0.02 250);
-	--deal: oklch(0.55 0.14 155);
-	--deal-muted: oklch(0.97 0.03 155);
+	--opportunity: oklch(0.55 0.14 155);
+	--opportunity-muted: oklch(0.97 0.03 155);
 	--border: oklch(0.922 0 0);
 	--input: oklch(0.922 0 0);
 	--ring: oklch(0.708 0 0);
@@ -64,8 +64,8 @@
 	--destructive: oklch(0.704 0.191 22.216);
 	--lead: oklch(0.72 0.14 250);
 	--lead-muted: oklch(0.26 0.04 250);
-	--deal: oklch(0.72 0.13 155);
-	--deal-muted: oklch(0.26 0.04 155);
+	--opportunity: oklch(0.72 0.13 155);
+	--opportunity-muted: oklch(0.26 0.04 155);
 	--border: oklch(1 0 0 / 10%);
 	--input: oklch(1 0 0 / 15%);
 	--ring: oklch(0.556 0 0);
@@ -105,8 +105,8 @@
 	--color-destructive: var(--destructive);
 	--color-lead: var(--lead);
 	--color-lead-muted: var(--lead-muted);
-	--color-deal: var(--deal);
-	--color-deal-muted: var(--deal-muted);
+	--color-opportunity: var(--opportunity);
+	--color-opportunity-muted: var(--opportunity-muted);
 	--color-accent-foreground: var(--accent-foreground);
 	--color-accent: var(--accent);
 	--color-muted-foreground: var(--muted-foreground);

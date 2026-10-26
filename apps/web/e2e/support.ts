@@ -118,6 +118,8 @@ export async function inviteSalesperson(
 					viewport: { width: 390, height: 844 },
 					isMobile: true,
 					hasTouch: true,
+					// The project's time zone: "today" on To do matches the showroom's day.
+					timezoneId: "Asia/Bangkok",
 				}
 			: {},
 	);
@@ -258,4 +260,56 @@ export async function fillWalkInDetails(page: Page) {
 export function dateTimeLocal(d: Date) {
 	const pad = (n: number) => String(n).padStart(2, "0");
 	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Claims a lead from the Pool page (the New tab). */
+export async function claimFromPool(page: Page, name: string) {
+	await page.goto("/pool");
+	const pool = page.getByRole("list", { name: "พูลผู้สนใจ" });
+	await pool
+		.getByRole("listitem")
+		.filter({ hasText: name })
+		.getByRole("button", { name: "รับผู้สนใจ" })
+		.click();
+	await expect(pool.getByText(name)).toBeHidden();
+}
+
+/** Call → Answered → save with the next working day as follow-up (→ Connected). */
+export async function logAnswered(page: Page, scope: Locator) {
+	await tapCall(scope);
+	await page.getByRole("button", { name: "รับสาย", exact: true }).click();
+	const dialog = page.getByRole("dialog", { name: "ลูกค้ารับสาย" });
+	await dialog.getByRole("button", { name: /วันทำการถัดไป/ }).click();
+	await dialog.getByRole("button", { name: "บันทึก", exact: true }).click();
+	await expect(dialog).toBeHidden();
+}
+
+/** Fills the open Mark qualified dialog (no unit types in the project) and saves it. */
+export async function qualifyInDialog(page: Page) {
+	const qualify = page.getByRole("dialog", { name: "ผ่านการคัดกรอง" });
+	await qualify.getByLabel("ตั้งแต่").fill("3000000");
+	await qualify.getByLabel("ถึง", { exact: true }).fill("5000000");
+	await qualify.getByRole("button", { name: "1–3 เดือน" }).click();
+	await qualify.getByRole("button", { name: "อยู่เอง" }).click();
+	await qualify
+		.getByRole("button", { name: "ผ่านการคัดกรอง", exact: true })
+		.click();
+	await expect(qualify).toBeHidden();
+}
+
+/** From an open ⋯ menu target: Book appointment at a chosen time. */
+export async function bookAppointment(page: Page, more: Locator, at: Date) {
+	await more.click();
+	await page.getByRole("menuitem", { name: "นัดเข้าชม" }).click();
+	const dialog = page.getByRole("dialog", { name: "นัดลูกค้าเข้าชมโครงการ" });
+	await dialog.getByLabel("หรือเลือกเวลาเอง").fill(dateTimeLocal(at));
+	await dialog.getByRole("button", { name: "นัด", exact: true }).click();
+	return dialog;
+}
+
+/** The same calendar day in the project's time zone (Asia/Bangkok). */
+export function sameBangkokDay(a: Date, b: Date) {
+	const day = (d: Date) =>
+		d.toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
+	return day(a) === day(b);
 }

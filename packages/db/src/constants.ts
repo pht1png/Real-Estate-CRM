@@ -76,38 +76,44 @@ export const closedLeadStatuses: readonly LeadStatus[] = [
 	"nurturing",
 ];
 
-/** Opportunity (deal) pipeline, from the first confirmed visit. */
-export const opportunityStages = [
+/** Opportunity pipeline, from the first confirmed visit. */
+export const opportunityStatuses = [
 	"visited",
 	"negotiating",
 	"deposited",
 	"contracted",
+	"waiting_mortgage_result",
 	"transferred",
 	"lost",
 ] as const;
-export type OpportunityStage = (typeof opportunityStages)[number];
+export type OpportunityStatus = (typeof opportunityStatuses)[number];
 
-/** Deals still being worked before a deposit: they need a next follow-up. */
-export const openOpportunityStages: readonly OpportunityStage[] = [
+/** Opportunities still being worked before a deposit: they need a next follow-up. */
+export const openOpportunityStatuses: readonly OpportunityStatus[] = [
 	"visited",
 	"negotiating",
 ];
 
 /** After a deposit: re-enquiry only logs an activity. */
-export const soldStages: readonly OpportunityStage[] = [
+export const soldStatuses: readonly OpportunityStatus[] = [
 	"deposited",
 	"contracted",
+	"waiting_mortgage_result",
 	"transferred",
 ];
 
 /** Opportunities that block a new one for the same lead (all but lost). */
-export const liveOpportunityStages: readonly OpportunityStage[] = [
+export const liveOpportunityStatuses: readonly OpportunityStatus[] = [
 	"visited",
 	"negotiating",
 	"deposited",
 	"contracted",
+	"waiting_mortgage_result",
 	"transferred",
 ];
+
+/** Unowned nurturing leads form the nurturing pool (claimable, no deadline). */
+export const nurturePoolStatuses: readonly LeadStatus[] = ["nurturing"];
 
 export const activityTypes = [
 	"enquiry",
@@ -117,11 +123,15 @@ export const activityTypes = [
 	"meeting",
 	"visit",
 	"note",
-	"stage_change",
+	"status_change",
 	"re_engagement",
 	"assignment",
 	"qualified",
 	"conversion",
+	"appointment_booked",
+	"appointment_rescheduled",
+	"appointment_cancelled",
+	"appointment_no_show",
 ] as const;
 export type ActivityType = (typeof activityTypes)[number];
 
@@ -153,9 +163,11 @@ export const timelineMaxMonths: Record<BuyingTimeline, number | null> = {
 	unknown: null,
 };
 
-export const paymentMethods = ["cash", "mortgage"] as const;
-export type PaymentMethod = (typeof paymentMethods)[number];
+/** How the buyer pays (brief §5). Loan details wait for the mortgage milestone (M6b). */
+export const fundingTypes = ["cash", "mortgage", "cash_mortgage"] as const;
+export type FundingType = (typeof fundingTypes)[number];
 
+/** Computed on read (temp-v1), never stored. */
 export const temperatures = ["warm", "hot"] as const;
 export type Temperature = (typeof temperatures)[number];
 
@@ -172,11 +184,14 @@ export const disqualifyReasons = [
 	"bad_budget_fit",
 	"bad_location_fit",
 	"unreachable",
+	"not_interested",
+	"bought_elsewhere",
+	"unresponsive",
 	"other",
 ] as const;
 export type DisqualifyReason = (typeof disqualifyReasons)[number];
 
-/** Why a deal is lost after a visit (brief §6); "other" needs a note. */
+/** Why an opportunity is lost after a visit (brief §6); "other" needs a note. */
 export const lostReasons = [
 	"bought_competitor",
 	"loan_rejected",
@@ -200,8 +215,10 @@ export type Rules = {
 	/** This many no-answers within the window (since the last contact) → suggest Unreachable. */
 	unreachableAttempts: number;
 	unreachableWindowDays: number;
-	/** Nurture check-in after this many days. */
-	nurtureCheckDays: number;
+	/** Length of a showroom appointment; a salesperson's appointments can't overlap. */
+	appointmentMinutes: number;
+	/** Hot or warm opportunities with no activity for this many days go to Stale. */
+	quietOpportunityDays: number;
 };
 
 export const defaultRules: Rules = {
@@ -211,8 +228,27 @@ export const defaultRules: Rules = {
 	deadlineRollHours: 2,
 	unreachableAttempts: 3,
 	unreachableWindowDays: 7,
-	nurtureCheckDays: 30,
+	appointmentMinutes: 60,
+	quietOpportunityDays: 3,
 };
+
+export const appointmentStatuses = [
+	"scheduled",
+	"arrived",
+	"no_show",
+	"cancelled",
+] as const;
+export type AppointmentStatus = (typeof appointmentStatuses)[number];
+
+/** Why an appointment was cancelled; "other" needs a note. A reschedule is not a cancel. */
+export const appointmentCancelReasons = [
+	"customer_cancelled",
+	"customer_unreachable",
+	"salesperson_unavailable",
+	"showroom_closed",
+	"other",
+] as const;
+export type AppointmentCancelReason = (typeof appointmentCancelReasons)[number];
 
 /**
  * Per-project qualification check (brief §6): the system assesses fit, the

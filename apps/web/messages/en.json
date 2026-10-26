@@ -347,11 +347,15 @@
 		"meeting": "Meeting",
 		"visit": "Visit",
 		"note": "Note",
-		"stage_change": "Status change",
+		"status_change": "Status change",
 		"re_engagement": "Back to pool (re-enquiry)",
 		"assignment": "Assigned",
 		"qualified": "Qualified",
-		"conversion": "Showroom visit confirmed"
+		"conversion": "Showroom visit confirmed",
+		"appointment_booked": "Appointment booked",
+		"appointment_rescheduled": "Appointment moved",
+		"appointment_cancelled": "Appointment cancelled",
+		"appointment_no_show": "Didn't come"
 	},
 	"timelines": {
 		"under_1_month": "Within 1 month",
@@ -393,7 +397,7 @@
 			"new_customer": "New customer saved",
 			"re_enquiry_kept": "Re-enquiry: stays with the current owner",
 			"re_enquiry_pooled": "Re-enquiry: back in the project pool",
-			"re_enquiry_logged": "Re-enquiry logged on the existing deal",
+			"re_enquiry_logged": "Re-enquiry logged on the existing opportunity",
 			"new_lead": "Added to the existing customer"
 		},
 		"missing": "Please fill in: {fields}",
@@ -422,7 +426,6 @@
 		"description": "Leads you can see. Search by name or phone.",
 		"search": "Search name or phone",
 		"project": "Project",
-		"stage": "Stage",
 		"ownership": "Owner",
 		"ownershipAll": "Anyone",
 		"ownershipMine": "Mine",
@@ -436,7 +439,7 @@
 		"lastVisit": "Last visit",
 		"pipelines": {
 			"leads": "Leads",
-			"deals": "Deals"
+			"opportunities": "Opportunities"
 		}
 	},
 	"customer": {
@@ -460,7 +463,7 @@
 		"referrerNotFound": "No customer with this phone",
 		"interests": "Projects",
 		"otherProjects": "Other projects",
-		"summaryLine": "{project} · {stage} · {owner}",
+		"summaryLine": "{project} · {status} · {owner}",
 		"pool": "Pool",
 		"owner": "Owner",
 		"source": "Source",
@@ -487,12 +490,12 @@
 		"leadStatus": "Status",
 		"qualifiedOn": "qualified {date}",
 		"intent": "Buying for",
-		"deal": "Deal",
-		"dealStage": "Stage",
+		"opportunity": "Opportunity",
+		"opportunityStatus": "Status",
 		"firstVisit": "First visit",
 		"visits": "{count} visits",
-		"dealTag": "Deal",
-		"fit": "Fit"
+		"fit": "Fit",
+		"funding": "Funding"
 	},
 	"sources": {
 		"title": "Sources",
@@ -533,7 +536,8 @@
 		"deadlineRollHours": "Contact deadline: roll to the next working day when fewer office hours than this remain",
 		"unreachableAttempts": "Unreachable: no-answers before suggesting Lost",
 		"unreachableWindowDays": "Unreachable: within (days)",
-		"nurtureCheckDays": "Nurture: check in after (days)"
+		"appointmentMinutes": "Appointment length (minutes)",
+		"quietOpportunityDays": "Hot / warm opportunities: stale after this many days with no activity"
 	},
 	"leadActions": {
 		"claim": "Claim",
@@ -551,8 +555,8 @@
 		},
 		"exitHints": {
 			"disqualify": "{name} leaves the lead queue. A new enquiry reopens it.",
-			"nurture": "{name} leaves your list; a check-in comes back in 30 days.",
-			"lost": "The deal with {name} ends. A new enquiry reopens the lead."
+			"nurture": "{name} goes to the nurturing pool, where anyone can claim them again. A new enquiry reopens the lead.",
+			"lost": "The opportunity with {name} ends. A new enquiry reopens the lead."
 		},
 		"result": {
 			"title": "How did the call with {name} go?",
@@ -588,10 +592,10 @@
 			"noteSaved": "Note added",
 			"closed": {
 				"disqualify": "Lead disqualified",
-				"nurture": "Moved to nurture",
-				"lost": "Deal marked lost"
+				"nurture": "Moved to the nurturing pool",
+				"lost": "Opportunity marked lost"
 			},
-			"negotiating": "Deal moved to negotiating"
+			"negotiating": "Opportunity moved to negotiating"
 		},
 		"unreachable": {
 			"title": "No contact after {attempts} tries",
@@ -626,16 +630,33 @@
 		},
 		"convert": {
 			"title": "Confirm visit",
-			"description": "Did {name} come to the showroom? This starts the deal.",
+			"description": "Did {name} come to the showroom? This starts the opportunity.",
 			"visitedAt": "Visited at",
 			"future": "A visit can't be in the future. Booked visits convert when they happen.",
 			"confirm": "Customer visited",
-			"saved": "Visit confirmed. The lead is now a deal."
+			"saved": "Visit confirmed. The lead is now an opportunity."
 		},
 		"fitSuggest": {
 			"fits": "Fits — mark qualified",
 			"too_early": "Too early — move to nurture",
 			"budget_no_fit": "Budget doesn't fit — disqualify"
+		},
+		"recordVisit": {
+			"menu": "Record visit",
+			"title": "Record a visit",
+			"description": "{name} came to the showroom without an appointment.",
+			"saved": "Visit recorded"
+		},
+		"funding": {
+			"menu": "Funding",
+			"title": "How will {name} pay?",
+			"hint": "Loan details come with the mortgage calculator later.",
+			"saved": "Funding saved"
+		},
+		"status": {
+			"waiting_mortgage_result": "Waiting for mortgage result",
+			"transferred": "Mark transferred",
+			"saved": "Status: {status}"
 		}
 	},
 	"overview": {
@@ -660,9 +681,9 @@
 			"disqualified": "{count} disqualified",
 			"contactRate": "Contact {rate}",
 			"qualifyRate": "Qualify {rate}",
-			"conversionRate": "Lead → deal {rate}"
+			"conversionRate": "Lead → opportunity {rate}"
 		},
-		"deals": {
+		"opportunities": {
 			"title": "Opportunities",
 			"visits": "{count} visits",
 			"deposits": "{count} deposits",
@@ -672,20 +693,30 @@
 			"winRate": "Win rate {rate}",
 			"closedWon": {
 				"title": "Closed-won this month",
-				"count": "{count} deals",
+				"count": "{count} opportunities",
 				"volume": "Volume {value}",
 				"commission": "Commission (est.) {value}",
 				"fromM6": "Volume and commission come from deposits (M6)."
-			}
+			},
+			"hot": "{count} hot",
+			"warm": "{count} warm"
 		}
 	},
 	"pool": {
 		"title": "Pool",
-		"description": "Unclaimed leads in your projects, priority first. Claim one to make it yours.",
+		"description": "Unclaimed leads in your projects. New: priority first, claim before others. Nurturing: leads moved to nurture, for anyone to pick up again.",
 		"project": "Project",
 		"emptyTitle": "The pool is empty",
 		"empty": "New leads from the pool appear here.",
-		"waiting": "Received {relative}"
+		"waiting": "Received {relative}",
+		"tabs": {
+			"new": "New",
+			"nurturing": "Nurturing"
+		},
+		"nurtured": "Nurtured {relative} · was {owner}",
+		"nurturedNoOwner": "Nurtured {relative}",
+		"nurturingEmptyTitle": "No nurturing leads",
+		"nurturingEmpty": "Leads moved to nurture wait here for anyone to pick up."
 	},
 	"leadStatuses": {
 		"new": "New",
@@ -693,14 +724,15 @@
 		"connected": "Connected",
 		"qualified": "Qualified",
 		"nurturing": "Nurturing",
-		"converted": "Converted to deal",
+		"converted": "Converted to opportunity",
 		"disqualified": "Disqualified"
 	},
-	"opportunityStages": {
+	"opportunityStatuses": {
 		"visited": "Visited",
 		"negotiating": "Negotiating",
 		"deposited": "Deposited",
 		"contracted": "Contracted",
+		"waiting_mortgage_result": "Waiting for mortgage result",
 		"transferred": "Transferred",
 		"lost": "Lost"
 	},
@@ -713,6 +745,9 @@
 		"bad_budget_fit": "Budget doesn't fit",
 		"bad_location_fit": "Location doesn't fit",
 		"unreachable": "Unreachable",
+		"not_interested": "No longer interested",
+		"bought_elsewhere": "Bought elsewhere",
+		"unresponsive": "Unresponsive",
 		"other": "Other"
 	},
 	"lostReasons": {
@@ -729,7 +764,7 @@
 	},
 	"pipeline": {
 		"lead": "Lead",
-		"opportunity": "Deal"
+		"opportunity": "Opportunity"
 	},
 	"fit": {
 		"fits": "Fits",
@@ -739,13 +774,13 @@
 	},
 	"todo": {
 		"title": "To do",
-		"description": "Today's visits, what's due today and what slipped — leads in blue, deals in green.",
+		"description": "Today's visits, what's due today and what slipped — leads in blue, opportunities in green.",
 		"start": "Start",
 		"arrivals": {
 			"title": "Showroom arrivals today ({count})",
-			"breakdown": "Qualified {qualified} · Unvetted (connected) {unvetted}",
+			"breakdown": "Qualified {qualified} · Unvetted (connected) {unvetted} · Follow-up visits {followUps}",
 			"hint": "Unvetted guests: qualify them face to face during the tour before converting.",
-			"m5": "Booked visits arrive with appointments (M5). Walk-ins: use Confirm visit."
+			"empty": "No showroom visits booked today."
 		},
 		"dueToday": {
 			"title": "Due today ({count})",
@@ -755,22 +790,85 @@
 			"title": "Stale / overdue ({count})",
 			"empty": "Nothing slipped."
 		},
+		"unanswered": {
+			"title": "Did they come? ({count})",
+			"booked": "Booked for {time}"
+		},
 		"due": {
 			"firstContact": "contact by {time} ({relative})",
 			"today": "follow-up {time} ({relative})",
 			"overdue": "overdue · {relative}",
 			"noFollowUp": "no follow-up set",
-			"unreachable": "no contact after several tries"
+			"unreachable": "no contact after several tries",
+			"quiet": "gone quiet — no activity lately"
 		},
 		"attrs": {
 			"status": "Status",
-			"stage": "Stage",
 			"project": "Project",
 			"phone": "Phone",
 			"due": "Due",
 			"tries": "Tries",
-			"fit": "Fit"
+			"fit": "Fit",
+			"temperature": "Hot / warm",
+			"appointment": "Appointment"
 		},
 		"triesValue": "{attempts} of {max}"
+	},
+	"fundingTypes": {
+		"cash": "Cash",
+		"mortgage": "Mortgage",
+		"cash_mortgage": "Cash + mortgage"
+	},
+	"temperatures": {
+		"hot": "Hot",
+		"warm": "Warm"
+	},
+	"appointmentStatuses": {
+		"scheduled": "Booked",
+		"arrived": "Arrived",
+		"no_show": "Didn't come",
+		"cancelled": "Cancelled"
+	},
+	"appointmentCancelReasons": {
+		"customer_cancelled": "Customer cancelled",
+		"customer_unreachable": "Can't reach the customer",
+		"salesperson_unavailable": "Salesperson unavailable",
+		"showroom_closed": "Showroom closed",
+		"other": "Other"
+	},
+	"appointments": {
+		"book": "Book appointment",
+		"bookTitle": "Book a showroom visit",
+		"bookDescription": "{name} · {minutes} minutes",
+		"date": "Date",
+		"free": "Free times",
+		"noFree": "No free times on this day.",
+		"booked": "Already booked",
+		"bookedItem": "{time} · {name}",
+		"time": "Or choose a time",
+		"future": "Choose a time in the future.",
+		"save": "Book",
+		"saved": "Appointment booked: {time}",
+		"clash": "The salesperson already has an appointment then. Choose another time.",
+		"reschedule": "Reschedule",
+		"rescheduleTitle": "Move the appointment",
+		"rescheduleSave": "Move",
+		"rescheduled": "Appointment moved to {time}",
+		"cancel": "Cancel appointment",
+		"cancelDescription": "Why is the visit with {name} cancelled?",
+		"cancelled": "Appointment cancelled",
+		"arrived": "Arrived",
+		"arrivedTitle": "{name} arrived",
+		"arrivedDescription": "Confirm the visit. A first tour starts the opportunity.",
+		"arrivedSaved": "Visit recorded",
+		"noShow": "Didn't come",
+		"noShowTitle": "{name} didn't come",
+		"noShowDescription": "Set when to follow up.",
+		"noShowSaved": "Logged. Next follow-up: {time}",
+		"firstTour": "First tour",
+		"followUpVisit": "Follow-up visit",
+		"title": "Appointments",
+		"none": "No appointments yet",
+		"line": "{time} · {host}"
 	}
 }

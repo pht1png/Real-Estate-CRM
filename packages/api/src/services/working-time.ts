@@ -167,3 +167,35 @@ export function monthBounds(timeZone: string, now = new Date()) {
 		end: zonedTime(next, "00:00", timeZone),
 	};
 }
+
+const HALF_HOUR = 30 * 60_000;
+
+/**
+ * Appointment starts on a local date, every half hour inside office hours,
+ * that fit `minutes` before closing, are after `now` and don't overlap a
+ * booked interval. Empty when the office is closed that day.
+ */
+export function freeSlots(
+	cal: WorkingCalendar,
+	date: string,
+	booked: readonly { startsAt: Date; endsAt: Date }[],
+	minutes: number,
+	now: Date,
+) {
+	const day = officeDay(cal, date);
+	if (!day) return [];
+	const length = minutes * 60_000;
+	const slots: Date[] = [];
+	for (
+		let t = day.open.getTime();
+		t + length <= day.close.getTime();
+		t += HALF_HOUR
+	) {
+		const end = t + length;
+		const clash = booked.some(
+			(b) => t < b.endsAt.getTime() && b.startsAt.getTime() < end,
+		);
+		if (t > now.getTime() && !clash) slots.push(new Date(t));
+	}
+	return slots;
+}

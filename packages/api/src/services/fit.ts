@@ -39,20 +39,29 @@ export function assessFit(
 	inputs: FitInputs,
 	rules: QualificationRules = defaultQualificationRules,
 ): FitResult {
-	const { budgetMinSatang: min, budgetMaxSatang: max, priceRange } = inputs;
-	if (!priceRange || (min === null && max === null) || !inputs.buyingTimeline) {
-		return "unknown";
-	}
-	const slack = rules.budgetTolerancePct / 100;
-	const lowest = priceRange.min * (1 - slack);
-	const highest = priceRange.max * (1 + slack);
-	const budgetFits =
-		(max ?? Number.POSITIVE_INFINITY) >= lowest && (min ?? 0) <= highest;
-	if (!budgetFits) return "budget_no_fit";
+	const budget = budgetFits(inputs, rules);
+	if (budget === null || !inputs.buyingTimeline) return "unknown";
+	if (!budget) return "budget_no_fit";
 	const months = timelineMaxMonths[inputs.buyingTimeline];
 	return months !== null && months <= rules.qualifyWithinMonths
 		? "fits"
 		: "too_early";
+}
+
+/**
+ * Whether the budget overlaps the price range widened by the tolerance; null
+ * without a budget or priced available units.
+ */
+export function budgetFits(
+	inputs: Pick<FitInputs, "budgetMinSatang" | "budgetMaxSatang" | "priceRange">,
+	rules: Pick<QualificationRules, "budgetTolerancePct">,
+): boolean | null {
+	const { budgetMinSatang: min, budgetMaxSatang: max, priceRange } = inputs;
+	if (!priceRange || (min === null && max === null)) return null;
+	const slack = rules.budgetTolerancePct / 100;
+	const lowest = priceRange.min * (1 - slack);
+	const highest = priceRange.max * (1 + slack);
+	return (max ?? Number.POSITIVE_INFINITY) >= lowest && (min ?? 0) <= highest;
 }
 
 /** The project's effective rules (overrides on top of the defaults). */

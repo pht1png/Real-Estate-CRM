@@ -18,11 +18,17 @@ import { type ReactNode, useState } from "react";
 import { useTRPC } from "@/utils/trpc";
 
 import { CallMode } from "./call-mode";
-import { type TodoLead, TodoRow } from "./todo-row";
+import {
+	AppointmentRow,
+	type TodoAppointment,
+	type TodoLead,
+	TodoRow,
+} from "./todo-row";
 
 /**
- * To-do page (brief §7): showroom arrivals today, my leads and deals due
- * today, and what slipped. Start mode walks Due today, then Stale.
+ * To-do page (brief §7): showroom arrivals today, my leads and opportunities
+ * due today, and what slipped (appointments nobody closed first). Start mode
+ * walks Due today, then Stale.
  */
 export function TodoList() {
 	const t = useTranslations("todo");
@@ -35,7 +41,13 @@ export function TodoList() {
 	const [calling, setCalling] = useState(false);
 
 	if (!todo.data) return <Spinner />;
-	const { arrivals, dueToday, stale, unreachableAttempts } = todo.data;
+	const {
+		arrivals,
+		dueToday,
+		stale,
+		unansweredAppointments,
+		unreachableAttempts,
+	} = todo.data;
 	const queue = [...dueToday, ...stale];
 
 	return (
@@ -49,9 +61,7 @@ export function TodoList() {
 
 			<section aria-labelledby="todo-arrivals" className="flex flex-col gap-2">
 				<h2 id="todo-arrivals" className="text-lg font-semibold">
-					{t("arrivals.title", {
-						count: arrivals.qualified + arrivals.unvetted,
-					})}
+					{t("arrivals.title", { count: arrivals.items.length })}
 				</h2>
 				<Card size="sm">
 					<CardContent className="flex flex-col gap-1 text-sm">
@@ -61,14 +71,32 @@ export function TodoList() {
 								{t("arrivals.breakdown", {
 									qualified: arrivals.qualified,
 									unvetted: arrivals.unvetted,
+									followUps: arrivals.followUps,
 								})}
 							</span>
 						</p>
-						<p className="text-muted-foreground">{t("arrivals.hint")}</p>
-						<p className="text-muted-foreground">{t("arrivals.m5")}</p>
+						{arrivals.unvetted > 0 && (
+							<p className="text-muted-foreground">{t("arrivals.hint")}</p>
+						)}
+						{arrivals.items.length === 0 && (
+							<p className="text-muted-foreground">{t("arrivals.empty")}</p>
+						)}
 					</CardContent>
 				</Card>
+				<AppointmentList items={arrivals.items} />
 			</section>
+
+			{unansweredAppointments.length > 0 && (
+				<section
+					aria-labelledby="todo-unanswered"
+					className="flex flex-col gap-2"
+				>
+					<h2 id="todo-unanswered" className="text-lg font-semibold">
+						{t("unanswered.title", { count: unansweredAppointments.length })}
+					</h2>
+					<AppointmentList items={unansweredAppointments} late />
+				</section>
+			)}
 
 			<Section
 				id="todo-due"
@@ -105,6 +133,25 @@ export function TodoList() {
 				/>
 			)}
 		</>
+	);
+}
+
+function AppointmentList({
+	items,
+	late,
+}: {
+	items: TodoAppointment[];
+	late?: boolean;
+}) {
+	if (items.length === 0) return null;
+	return (
+		<ul className="flex flex-col gap-3">
+			{items.map((a) => (
+				<li key={a.appointmentId}>
+					<AppointmentRow appointment={a} late={late} />
+				</li>
+			))}
+		</ul>
 	);
 }
 

@@ -7,6 +7,7 @@ import {
 	lead,
 	leadSource,
 	member,
+	nurturePoolStatuses,
 	poolLeadStatuses,
 	project,
 	projectClosedDate,
@@ -26,7 +27,7 @@ import {
 	sql,
 } from "drizzle-orm";
 import { z } from "zod";
-
+import { logStatusChange } from "./activity";
 import { writeAudit } from "./audit";
 import { badRequest, conflict, notFound } from "./errors";
 import { visibleLeadCondition } from "./lead-access";
@@ -39,7 +40,14 @@ import {
 } from "./working-time";
 
 export const claimInput = z.strictObject({ leadId: z.uuid() });
-export const listPoolInput = z.strictObject({ projectId: z.uuid().optional() });
+/** New: waiting to be claimed (deadline, badge). Nurturing: released by Nurture. */
+export const poolTabs = ["new", "nurturing"] as const;
+export const listPoolInput = z.strictObject({
+	projectId: z.uuid().optional(),
+	tab: z.enum(poolTabs).default("new"),
+});
+
+const claimableStatuses = [...poolLeadStatuses, ...nurturePoolStatuses];
 
 type Executor = Pick<Database, "select">;
 
@@ -84,7 +92,8 @@ export async function deadlineFor(
 
 /**
  * Claim a lead from the pool (brief §6): first salesperson wins; at most
- * `claimCap` claimed leads still waiting for first contact per person.
+ * `claimCap` claimed leads still waiting for first contact per person. A
+ * nurturing lead reopens as Attempting: we're trying to reach them again.
  */
 export async function claimLead(
 	db: Database,
@@ -112,7 +121,7 @@ export async function claimLead(
 				.where(eq(member.id, row.ownerMemberId));
 			conflict(`Already claimed by ${owner?.name ?? "someone else"}`);
 		}
-		if (!poolLeadStatuses.includes(row.status)) {
+		if (!claimableStatuses.includes(row.status)) {
 			badRequest("Only leads in the pool can be claimed");
 		}
 
@@ -150,14 +159,27 @@ export async function claimLead(
 			rules.deadlineRollHours,
 			now,
 		);
+		const reopen = nurturePoolStatuses.includes(row.status);
 		await tx
 			.update(lead)
 			.set({
 				ownerMemberId: tenant.memberId,
 				claimedAt: now,
 				contactDeadlineAt,
+				...(reopen && { status: "attempting" as const }),
 			})
 			.where(eq(lead.id, row.id));
+		if (reopen) {
+			await logStatusChange(
+				tx,
+				tenant,
+				row.id,
+				row.status,
+				"attempting",
+				"claim",
+				now,
+			);
+		}
 		await tx.insert(activity).values({
 			organizationId: tenant.organizationId,
 			leadId: row.id,
@@ -241,22 +263,37 @@ export async function returnExpiredClaims(
 	});
 }
 
-/** Unclaimed leads in the tenant's projects (brief §6 pool). */
-function inPool(tenant: Tenant) {
+/** Unclaimed leads in the tenant's projects (brief §6 pool), by tab. */
+function inPool(tenant: Tenant, tab: (typeof poolTabs)[number] = "new") {
 	return and(
 		visibleLeadCondition(tenant),
 		isNull(lead.ownerMemberId),
-		inArray(lead.status, [...poolLeadStatuses]),
+		inArray(lead.status, [
+			...(tab === "new" ? poolLeadStatuses : nurturePoolStatuses),
+		]),
 	);
 }
 
-/** Pool page: priority first, then the longest waiting. */
+/** The latest nurture of the outer lead: when, the note, and the owner it was released from. */
+const lastNurture = sql`(select a.at, a.note, u.name from activity a
+	left join activity r on r.lead_id = a.lead_id and r.at = a.at
+		and r.type = 'assignment' and r.data->>'reason' = 'nurtured'
+	left join member m on m.id = r.data->>'from'
+	left join "user" u on u.id = m.user_id
+	where a.lead_id = ${sql.raw(`"lead"."id"`)} and a.type = 'status_change' and a.data->>'to' = 'nurturing'
+	order by a.at desc limit 1)`;
+
+/**
+ * Pool page. New: priority first, then the longest waiting. Nurturing: the
+ * longest untouched first, with when and by whom it was nurtured.
+ */
 export async function listPool(
 	db: Database,
 	tenant: Tenant,
 	input: z.infer<typeof listPoolInput>,
 ) {
 	await returnExpiredClaims(db, { organizationId: tenant.organizationId });
+	const nurturing = input.tab === "nurturing";
 	return db
 		.select({
 			leadId: lead.id,
@@ -268,6 +305,13 @@ export async function listPool(
 			sourceName: leadSource.name,
 			campaignCode: campaign.code,
 			createdAt: lead.createdAt,
+			nurturedAt: sql<Date | null>`(select x.at from ${lastNurture} x)`.mapWith(
+				(v) => (v === null ? null : new Date(v)),
+			),
+			previousOwnerName: sql<
+				string | null
+			>`(select x.name from ${lastNurture} x)`,
+			nurtureNote: sql<string | null>`(select x.note from ${lastNurture} x)`,
 		})
 		.from(lead)
 		.innerJoin(customer, eq(customer.id, lead.customerId))
@@ -276,15 +320,19 @@ export async function listPool(
 		.leftJoin(campaign, eq(campaign.id, lead.campaignId))
 		.where(
 			and(
-				inPool(tenant),
+				inPool(tenant, input.tab),
 				input.projectId ? eq(lead.projectId, input.projectId) : undefined,
 			),
 		)
-		.orderBy(desc(lead.priority), asc(lead.createdAt))
+		.orderBy(
+			...(nurturing
+				? [asc(lead.updatedAt)]
+				: [desc(lead.priority), asc(lead.createdAt)]),
+		)
 		.limit(200);
 }
 
-/** Sidebar badge: how many leads wait to be claimed. */
+/** Sidebar badge: how many new leads wait to be claimed (not the nurturing tab). */
 export async function poolCount(db: Database, tenant: Tenant) {
 	await returnExpiredClaims(db, { organizationId: tenant.organizationId });
 	const [row] = await db

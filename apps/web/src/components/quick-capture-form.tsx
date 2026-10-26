@@ -354,7 +354,8 @@ export function QuickCaptureForm({ onDone }: { onDone: () => void }) {
 									<ul>
 										{existing.leads.map((i) => (
 											<li key={i.projectId}>
-												{i.projectName} · {pipelineLabel(i.status, i.stage)} ·{" "}
+												{i.projectName} ·{" "}
+												{pipelineLabel(i.status, i.opportunityStatus)} ·{" "}
 												{i.ownerName ?? "—"}
 											</li>
 										))}

@@ -10,7 +10,7 @@ import {
 	customerPhone,
 	type FitResult,
 	lead,
-	liveOpportunityStages,
+	liveOpportunityStatuses,
 	member,
 	opportunity,
 	projectMember,
@@ -405,7 +405,7 @@ export async function captureEnquiry(
 			return { customerId, leadId: created.id, outcome, fit, qualified };
 		}
 
-		// Re-enquiry on the existing lead (brief §6). A live deal only logs it.
+		// Re-enquiry on the existing lead (brief §6). A live opportunity only logs it.
 		const [live] =
 			existing.status === "converted"
 				? await tx
@@ -414,7 +414,7 @@ export async function captureEnquiry(
 						.where(
 							and(
 								eq(opportunity.leadId, existing.id),
-								inArray(opportunity.stage, [...liveOpportunityStages]),
+								inArray(opportunity.status, [...liveOpportunityStatuses]),
 							),
 						)
 				: [];
@@ -461,17 +461,16 @@ export async function captureEnquiry(
 				existing.ownerMemberId,
 				since,
 			));
-		// Disqualified, nurturing, or converted with every deal lost: start over.
+		// Disqualified, nurturing, or converted with every opportunity lost: start over.
 		if (
 			closedLeadStatuses.includes(existing.status) ||
 			existing.status === "converted"
 		) {
 			changes.status = "new";
 			changes.disqualifyReason = null;
-			changes.nurtureNextCheckAt = null;
 			await log({
 				leadId: existing.id,
-				type: "stage_change",
+				type: "status_change",
 				data: { from: existing.status, to: "new", reason: "re_enquiry" },
 			});
 		}

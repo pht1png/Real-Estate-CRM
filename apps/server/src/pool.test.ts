@@ -10,7 +10,7 @@ import {
 } from "@Real-Estate-CRM/db/schema/index";
 import { describe, expect, test } from "bun:test";
 import { TRPCError } from "@trpc/server";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 import { runScheduledJobs } from "./scheduler";
 import { db } from "./services";
@@ -445,7 +445,7 @@ describe("lead status moves with call results", () => {
 		const moves = await db
 			.select({ data: activity.data })
 			.from(activity)
-			.where(and(eq(activity.leadId, id), eq(activity.type, "stage_change")));
+			.where(and(eq(activity.leadId, id), eq(activity.type, "status_change")));
 		expect(moves.map((m) => m.data)).toEqual([
 			{ from: "new", to: "attempting", reason: "call_result" },
 			{ from: "attempting", to: "connected", reason: "call_result" },
@@ -531,7 +531,7 @@ describe("Mark qualified", () => {
 });
 
 describe("conversion: confirmed visit → opportunity", () => {
-	test("creates one deal at Visited; the lead becomes converted", async () => {
+	test("creates one opportunity at Visited; the lead becomes converted", async () => {
 		const s = await setup();
 		const id = await qualified(s);
 		const visitedAt = new Date(Date.now() - 600_000);
@@ -545,12 +545,12 @@ describe("conversion: confirmed visit → opportunity", () => {
 			contactDeadlineAt: null,
 			nextFollowUpAt: null,
 		});
-		const [deal] = await db
+		const [created] = await db
 			.select()
 			.from(opportunity)
 			.where(eq(opportunity.id, opportunityId));
-		expect(deal).toMatchObject({
-			stage: "visited",
+		expect(created).toMatchObject({
+			status: "visited",
 			leadId: id,
 			ownerMemberId: s.salesA.member.id,
 			firstVisitAt: visitedAt,
@@ -561,8 +561,15 @@ describe("conversion: confirmed visit → opportunity", () => {
 			.from(activity)
 			.where(and(eq(activity.leadId, id), eq(activity.type, "conversion")));
 		expect(conversion?.opportunityId).toBe(opportunityId);
+		// One way to record visits: the first one is a visit activity too.
+		const visits = await db
+			.select()
+			.from(activity)
+			.where(and(eq(activity.leadId, id), eq(activity.type, "visit")));
+		expect(visits).toHaveLength(1);
+		expect(visits[0]).toMatchObject({ opportunityId, at: visitedAt });
 		const overview = await s.salesA.caller.overview.get();
-		expect(overview.deals.byStage.visited).toBe(1);
+		expect(overview.opportunities.byStatus.visited).toBe(1);
 	});
 
 	test("a booked (future) visit can't convert; pool leads must be claimed first", async () => {
@@ -588,7 +595,7 @@ describe("conversion: confirmed visit → opportunity", () => {
 		).toBe("BAD_REQUEST");
 	});
 
-	test("parallel confirmations create exactly one deal", async () => {
+	test("parallel confirmations create exactly one opportunity", async () => {
 		const s = await setup();
 		const id = await qualified(s);
 		const results = await Promise.all(
@@ -599,11 +606,11 @@ describe("conversion: confirmed visit → opportunity", () => {
 			),
 		);
 		expect(results.filter((r) => r === "OK")).toHaveLength(1);
-		const deals = await db
+		const created = await db
 			.select()
 			.from(opportunity)
 			.where(eq(opportunity.leadId, id));
-		expect(deals).toHaveLength(1);
+		expect(created).toHaveLength(1);
 	});
 
 	test("company B can't convert company A's lead", async () => {
@@ -642,7 +649,7 @@ describe("exits per pipeline", () => {
 		const [change] = await db
 			.select()
 			.from(activity)
-			.where(and(eq(activity.leadId, id), eq(activity.type, "stage_change")));
+			.where(and(eq(activity.leadId, id), eq(activity.type, "status_change")));
 		expect(change).toMatchObject({
 			note: "Moved abroad",
 			data: { from: "new", to: "disqualified", reason: "other" },
@@ -662,7 +669,7 @@ describe("exits per pipeline", () => {
 		).toBe("BAD_REQUEST");
 	});
 
-	test("Nurture sets the check-in; disqualified and nurtured leads leave the Overview", async () => {
+	test("Nurture releases the lead to the nurturing pool; disqualified and nurtured leads leave the Overview", async () => {
 		const s = await setup();
 		const wrong = await claimed(s);
 		const later30 = await claimed(s);
@@ -670,20 +677,32 @@ describe("exits per pipeline", () => {
 			leadId: wrong,
 			reason: "invalid_data",
 		});
-		await s.salesA.caller.lead.nurture({ leadId: later30 });
-		const nurtured = await row(later30);
-		expect(nurtured.status).toBe("nurturing");
-		const days =
-			((nurtured.nurtureNextCheckAt?.getTime() ?? 0) - Date.now()) / 86_400_000;
-		expect(days).toBeGreaterThan(29.9);
-		expect(days).toBeLessThan(30.1);
+		await s.salesA.caller.lead.nurture({ leadId: later30, note: "Next year" });
+		expect(await row(later30)).toMatchObject({
+			status: "nurturing",
+			ownerMemberId: null,
+			claimedAt: null,
+			contactDeadlineAt: null,
+			nextFollowUpAt: null,
+		});
+		const [released] = await db
+			.select()
+			.from(activity)
+			.where(and(eq(activity.leadId, later30), eq(activity.type, "assignment")))
+			.orderBy(desc(activity.at))
+			.limit(1);
+		expect(released?.data).toEqual({
+			from: s.salesA.member.id,
+			to: null,
+			reason: "nurtured",
+		});
 		const todo = await s.salesA.caller.todo.list();
 		expect([...todo.dueToday, ...todo.stale]).toEqual([]);
 		const overview = await s.salesA.caller.overview.get();
 		expect(Object.values(overview.leads.byStatus)).toEqual([0, 0, 0, 0]);
 	});
 
-	test("Lost is for deals only, with a reason; Negotiating moves the deal on", async () => {
+	test("Lost is for opportunities only, with a reason; Negotiating moves the opportunity on", async () => {
 		const s = await setup();
 		const id = await qualified(s);
 		const { opportunityId } = await s.salesA.caller.lead.convert({
@@ -697,9 +716,9 @@ describe("exits per pipeline", () => {
 			),
 		).toBe("BAD_REQUEST");
 
-		await s.salesA.caller.opportunity.setStage({
+		await s.salesA.caller.opportunity.setStatus({
 			opportunityId,
-			stage: "negotiating",
+			status: "negotiating",
 		});
 		expect(
 			await codeOf(
@@ -713,12 +732,12 @@ describe("exits per pipeline", () => {
 			opportunityId,
 			reason: "loan_rejected",
 		});
-		const [deal] = await db
+		const [lost] = await db
 			.select()
 			.from(opportunity)
 			.where(eq(opportunity.id, opportunityId));
-		expect(deal).toMatchObject({ stage: "lost", lostReason: "loan_rejected" });
-		expect(deal?.lostAt).not.toBeNull();
+		expect(lost).toMatchObject({ status: "lost", lostReason: "loan_rejected" });
+		expect(lost?.lostAt).not.toBeNull();
 	});
 
 	test("only the owner or a covering manager can close; company B can't", async () => {
@@ -804,13 +823,13 @@ describe("pool page", () => {
 });
 
 describe("To do", () => {
-	test("due today vs stale; leads and deals together, earliest first", async () => {
+	test("due today vs stale; leads and opportunities together, earliest first", async () => {
 		const s = await setup();
 		const fresh = await claimed(s);
 		const overdue = await claimed(s);
 		const missing = await claimed(s);
 		const notYet = await claimed(s);
-		const dealLead = await qualified(s);
+		const opportunityLead = await qualified(s);
 		const answered = (leadId: string, at: Date) =>
 			s.salesA.caller.lead.logOutcome({
 				leadId,
@@ -829,7 +848,7 @@ describe("To do", () => {
 			.set({ nextFollowUpAt: null })
 			.where(eq(lead.id, missing));
 		const { opportunityId } = await s.salesA.caller.lead.convert({
-			leadId: dealLead,
+			leadId: opportunityLead,
 			nextFollowUpAt: later(),
 		});
 		await db
@@ -846,10 +865,15 @@ describe("To do", () => {
 			["opportunity", opportunityId, "overdue"],
 			["lead", overdue, "overdue"],
 		]);
-		expect(todo.arrivals).toEqual({ qualified: 0, unvetted: 0, items: [] });
+		expect(todo.arrivals).toEqual({
+			qualified: 0,
+			unvetted: 0,
+			followUps: 0,
+			items: [],
+		});
 		expect(todo.dueToday[0]).toMatchObject({
 			status: "new",
-			stage: null,
+			temperature: null,
 			phoneE164: expect.stringMatching(/^\+66/),
 		});
 		expect((await s.salesA.caller.todo.count()).count).toBe(4);
@@ -876,7 +900,7 @@ describe("To do", () => {
 		});
 	});
 
-	test("lead rows carry the fit check; deals don't", async () => {
+	test("lead rows carry the fit check; opportunities don't", async () => {
 		const s = await setup();
 		const id = await claimed(s);
 		await db
@@ -909,7 +933,7 @@ describe("To do", () => {
 });
 
 describe("Overview", () => {
-	test("lead statuses, deal stages, this month and rates", async () => {
+	test("lead and opportunity statuses, this month and rates", async () => {
 		const s = await setup();
 		await claimed(s); // new
 		const attempting = await claimed(s);
@@ -922,7 +946,7 @@ describe("Overview", () => {
 		await s.salesA.caller.lead.disqualify({ leadId: dropped, reason: "spam" });
 		const won = await qualified(s);
 		const lostLead = await qualified(s);
-		const deal = await s.salesA.caller.lead.convert({
+		const kept = await s.salesA.caller.lead.convert({
 			leadId: won,
 			nextFollowUpAt: later(),
 		});
@@ -930,9 +954,9 @@ describe("Overview", () => {
 			leadId: lostLead,
 			nextFollowUpAt: later(),
 		});
-		await s.salesA.caller.opportunity.setStage({
-			opportunityId: deal.opportunityId,
-			stage: "negotiating",
+		await s.salesA.caller.opportunity.setStatus({
+			opportunityId: kept.opportunityId,
+			status: "negotiating",
 		});
 		await s.salesA.caller.opportunity.markLost({
 			opportunityId: lost.opportunityId,
@@ -951,26 +975,27 @@ describe("Overview", () => {
 			converted: 2,
 			disqualified: 1,
 		});
-		// 2 of 5 were reached by a call (qualify helper doesn't call), 2 qualified, 2 converted.
+		// 2 of 5 were met at the showroom (qualify helper doesn't call), 2 qualified, 2 converted.
 		expect(o.leads.rates).toEqual({
-			contact: 0,
+			contact: 2 / 5,
 			qualify: 2 / 5,
 			conversion: 2 / 5,
 		});
-		expect(o.deals.byStage).toEqual({
+		expect(o.opportunities.byStatus).toEqual({
 			visited: 0,
 			negotiating: 1,
 			deposited: 0,
 			contracted: 0,
+			waiting_mortgage_result: 0,
 		});
-		expect(o.deals.thisMonth).toEqual({
+		expect(o.opportunities.thisMonth).toEqual({
 			visits: 2,
 			deposits: 0,
 			won: 0,
 			lost: 1,
 		});
-		expect(o.deals.rates).toEqual({ visitToDeposit: 0, win: 0 });
-		expect(o.deals.closedWon).toEqual({
+		expect(o.opportunities.rates).toEqual({ visitToDeposit: 0, win: 0 });
+		expect(o.opportunities.closedWon).toEqual({
 			count: 0,
 			volumeSatang: null,
 			commissionSatang: null,
@@ -988,6 +1013,7 @@ describe("Overview", () => {
 			qualify: null,
 			conversion: null,
 		});
-		expect(o.deals.rates).toEqual({ visitToDeposit: null, win: null });
+		expect(o.opportunities.rates).toEqual({ visitToDeposit: null, win: null });
+		expect(o.opportunities.temperature).toEqual({ hot: 0, warm: 0 });
 	});
 });

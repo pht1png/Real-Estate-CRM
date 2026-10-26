@@ -2,7 +2,7 @@
 
 import type {
 	LeadStatus,
-	OpportunityStage,
+	OpportunityStatus,
 } from "@Real-Estate-CRM/db/constants";
 import { Card, CardContent } from "@Real-Estate-CRM/ui/components/card";
 import {
@@ -31,8 +31,8 @@ const WORKING_ROLES = ["salesperson", "sales_manager"];
 
 const leadsLink = (status: LeadStatus) =>
 	`/customers?ownership=mine&status=${status}` as Route;
-const dealsLink = (stage: OpportunityStage) =>
-	`/customers?pipeline=deals&ownership=mine&stage=${stage}` as Route;
+const opportunitiesLink = (status: OpportunityStatus) =>
+	`/customers?pipeline=opportunities&ownership=mine&opportunityStatus=${status}` as Route;
 
 export function Overview({ name }: { name: string }) {
 	const t = useTranslations("overview");
@@ -72,7 +72,8 @@ export function Overview({ name }: { name: string }) {
 function OverviewBody() {
 	const t = useTranslations("overview");
 	const tls = useTranslations("leadStatuses");
-	const tos = useTranslations("opportunityStages");
+	const tos = useTranslations("opportunityStatuses");
+	const tt = useTranslations("temperatures");
 	const format = useFormatter();
 	const formatBaht = useFormatBaht();
 	const trpc = useTRPC();
@@ -80,7 +81,7 @@ function OverviewBody() {
 		trpc.overview.get.queryOptions(undefined, { refetchInterval: 60_000 }),
 	);
 	if (!overview.data) return <Spinner />;
-	const { leads, deals } = overview.data;
+	const { leads, opportunities } = overview.data;
 	const pct = (v: number | null) =>
 		v === null ? "—" : format.number(v, { style: "percent" });
 	const money = (v: number | null) => (v === null ? "—" : formatBaht(v));
@@ -119,57 +120,76 @@ function OverviewBody() {
 
 			<PipelineSection
 				kind="opportunity"
-				id="overview-deals"
-				title={t("deals.title")}
+				id="overview-opportunities"
+				title={t("opportunities.title")}
 				cards={(
-					["visited", "negotiating", "deposited", "contracted"] as const
+					[
+						"visited",
+						"negotiating",
+						"deposited",
+						"contracted",
+						"waiting_mortgage_result",
+					] as const
 				).map((s) => ({
 					label: tos(s),
-					value: deals.byStage[s],
-					href: dealsLink(s),
+					value: opportunities.byStatus[s],
+					href: opportunitiesLink(s),
 				}))}
 			>
 				<StatLine
+					label={`${tt("hot")} / ${tt("warm")}`}
+					items={[
+						t("opportunities.hot", { count: opportunities.temperature.hot }),
+						t("opportunities.warm", { count: opportunities.temperature.warm }),
+					]}
+				/>
+				<StatLine
 					label={t("thisMonth")}
 					items={[
-						t("deals.visits", { count: deals.thisMonth.visits }),
-						t("deals.deposits", { count: deals.thisMonth.deposits }),
-						t("deals.won", { count: deals.thisMonth.won }),
-						t("deals.lost", { count: deals.thisMonth.lost }),
+						t("opportunities.visits", {
+							count: opportunities.thisMonth.visits,
+						}),
+						t("opportunities.deposits", {
+							count: opportunities.thisMonth.deposits,
+						}),
+						t("opportunities.won", { count: opportunities.thisMonth.won }),
+						t("opportunities.lost", { count: opportunities.thisMonth.lost }),
 					]}
 				/>
 				<StatLine
 					label={t("rates")}
 					items={[
-						t("deals.visitToDeposit", {
-							rate: pct(deals.rates.visitToDeposit),
+						t("opportunities.visitToDeposit", {
+							rate: pct(opportunities.rates.visitToDeposit),
 						}),
-						t("deals.winRate", { rate: pct(deals.rates.win) }),
+						t("opportunities.winRate", { rate: pct(opportunities.rates.win) }),
 					]}
 				/>
 				<Card size="sm">
 					<CardContent className="flex flex-col gap-1">
 						<span className="text-muted-foreground text-xs font-medium">
-							{t("deals.closedWon.title")}
+							{t("opportunities.closedWon.title")}
 						</span>
 						<div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
 							<span className="text-2xl font-semibold tabular-nums">
-								{t("deals.closedWon.count", { count: deals.closedWon.count })}
-							</span>
-							<span className="tabular-nums">
-								{t("deals.closedWon.volume", {
-									value: money(deals.closedWon.volumeSatang),
+								{t("opportunities.closedWon.count", {
+									count: opportunities.closedWon.count,
 								})}
 							</span>
 							<span className="tabular-nums">
-								{t("deals.closedWon.commission", {
-									value: money(deals.closedWon.commissionSatang),
+								{t("opportunities.closedWon.volume", {
+									value: money(opportunities.closedWon.volumeSatang),
+								})}
+							</span>
+							<span className="tabular-nums">
+								{t("opportunities.closedWon.commission", {
+									value: money(opportunities.closedWon.commissionSatang),
 								})}
 							</span>
 						</div>
-						{deals.closedWon.volumeSatang === null && (
+						{opportunities.closedWon.volumeSatang === null && (
 							<span className="text-muted-foreground text-xs">
-								{t("deals.closedWon.fromM6")}
+								{t("opportunities.closedWon.fromM6")}
 							</span>
 						)}
 					</CardContent>
@@ -181,11 +201,11 @@ function OverviewBody() {
 
 const sectionTone = {
 	lead: "border-t-4 border-t-lead",
-	opportunity: "border-t-4 border-t-deal",
+	opportunity: "border-t-4 border-t-opportunity",
 } as const;
 const cardTone = {
 	lead: "bg-lead-muted/60 hover:bg-lead-muted",
-	opportunity: "bg-deal-muted/60 hover:bg-deal-muted",
+	opportunity: "bg-opportunity-muted/60 hover:bg-opportunity-muted",
 } as const;
 
 function PipelineSection({
@@ -212,7 +232,12 @@ function PipelineSection({
 					{title}
 				</h2>
 			</div>
-			<div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+			<div
+				className={cn(
+					"grid grid-cols-2 gap-3",
+					cards.length > 4 ? "sm:grid-cols-3 lg:grid-cols-5" : "sm:grid-cols-4",
+				)}
+			>
 				{cards.map((c) => (
 					<Link
 						key={c.label}

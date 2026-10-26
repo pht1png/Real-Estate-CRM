@@ -33,7 +33,7 @@ test("walk-in on a phone: duplicate check, owned at once; manager pools a lead; 
 	await assignTeam(owner, "Hillside", ["Malee Sales", "Somsak Sales"]);
 	await assignTeam(owner, "Riverside", ["Malee Sales", "Somsak Sales"]);
 
-	// Malee logs the customer for Hillside first.
+	// Malee logs the contact for Hillside first.
 	const m = malee.page;
 	await m.reload();
 	await openCapture(m);
@@ -44,12 +44,12 @@ test("walk-in on a phone: duplicate check, owned at once; manager pools a lead; 
 	).toContainText("เบอร์โทร");
 	await choose(m, "โครงการ", "Hillside");
 	await m.getByLabel("เบอร์โทร").fill("081-234-5678");
-	await m.getByLabel("ชื่อลูกค้า").fill("Khun Somchai");
+	await m.getByLabel("ชื่อ-นามสกุล").fill("Khun Somchai");
 	await choose(m, "แหล่งที่มา", "Walk-in");
 	await fillWalkInDetails(m);
 	await m.getByRole("checkbox", { name: /ยินยอมรับข้อมูลการตลาด/ }).click();
 	await m.getByRole("button", { name: "บันทึกลูกค้า", exact: true }).click();
-	await expect(m.getByText("บันทึกลูกค้าใหม่แล้ว")).toBeVisible();
+	await expect(m.getByText("บันทึกรายชื่อใหม่แล้ว")).toBeVisible();
 	await expect(m.getByRole("heading", { name: "Khun Somchai" })).toBeVisible();
 
 	// Somsak, on a phone, logs a walk-in for Riverside: the duplicate check finds Khun Somchai.
@@ -58,13 +58,13 @@ test("walk-in on a phone: duplicate check, owned at once; manager pools a lead; 
 	await openCapture(s);
 	await choose(s, "โครงการ", "Riverside");
 	await s.getByLabel("เบอร์โทร").fill("0812345678");
-	await expect(s.getByText("ลูกค้าเดิม: Khun Somchai")).toBeVisible();
+	await expect(s.getByText("รายชื่อเดิม: Khun Somchai")).toBeVisible();
 	await expect(s.getByText("Hillside · ใหม่ · Malee Sales")).toBeVisible();
-	await expect(s.getByLabel("ชื่อลูกค้า")).toHaveValue("Khun Somchai");
+	await expect(s.getByLabel("ชื่อ-นามสกุล")).toHaveValue("Khun Somchai");
 	await choose(s, "แหล่งที่มา", "Walk-in");
 	await fillWalkInDetails(s);
 	await s.getByRole("button", { name: "บันทึกลูกค้า", exact: true }).click();
-	await expect(s.getByText("เพิ่มความสนใจให้ลูกค้าเดิมแล้ว")).toBeVisible();
+	await expect(s.getByText("เพิ่มความสนใจให้รายชื่อเดิมแล้ว")).toBeVisible();
 
 	// His own interest in full; Malee's only as a summary line.
 	await expect(s.getByRole("heading", { name: "Riverside" })).toBeVisible();
@@ -77,18 +77,32 @@ test("walk-in on a phone: duplicate check, owned at once; manager pools a lead; 
 	await openCapture(owner);
 	await choose(owner, "โครงการ", "Riverside");
 	await owner.getByLabel("เบอร์โทร").fill("089-999-9999");
-	await owner.getByLabel("ชื่อลูกค้า").fill("Khun Nida");
+	await owner.getByLabel("ชื่อ-นามสกุล").fill("Khun Nida");
 	await choose(owner, "แหล่งที่มา", "Facebook");
 	await expect(owner.getByLabel("ผู้ดูแล", { exact: true })).toContainText(
 		"พูลของโครงการ",
 	);
 	await owner.getByRole("button", { name: "บันทึกลูกค้า", exact: true }).click();
-	await expect(owner.getByText("บันทึกลูกค้าใหม่แล้ว")).toBeVisible();
+	await expect(owner.getByText("บันทึกรายชื่อใหม่แล้ว")).toBeVisible();
 
-	// Malee sees the pool lead in her customer list.
-	await m.goto("/customers");
+	// Malee sees the pool lead in her contact list.
+	await m.goto("/contacts");
 	await choose(m, "ผู้ดูแล", "พูล");
 	await expect(m.getByRole("link", { name: "Khun Nida" })).toBeVisible();
+
+	// A referral: Khun Somchai referred his friend; the lead shows who.
+	await m.goto("/dashboard");
+	await openCapture(m);
+	await choose(m, "โครงการ", "Hillside");
+	await m.getByLabel("เบอร์โทร", { exact: true }).fill("082-777-1212");
+	await m.getByLabel("ชื่อ-นามสกุล").fill("Khun Wichai");
+	await choose(m, "แหล่งที่มา", "Friends & family");
+	await m.getByLabel("แนะนำโดย (เบอร์โทร ไม่บังคับ)").fill("081-234-5678");
+	await m.getByRole("button", { name: "บันทึกลูกค้า", exact: true }).click();
+	await expect(m.getByRole("heading", { name: "Khun Wichai" })).toBeVisible();
+	await expect(
+		m.getByRole("definition").getByRole("link", { name: "Khun Somchai" }),
+	).toBeVisible();
 
 	await malee.context.close();
 	await somsak.context.close();

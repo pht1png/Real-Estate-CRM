@@ -5,10 +5,11 @@ import {
 	buyerIntents,
 	buyingTimelines,
 	closedLeadStatuses,
+	contact,
 	contactActivityTypes,
-	customer,
-	customerPhone,
+	contactPhone,
 	type FitResult,
+	incomeRanges,
 	lead,
 	liveOpportunityStatuses,
 	member,
@@ -27,6 +28,7 @@ import { ensureDefaultSources, requireActiveSource } from "./lead-source";
 import { deadlineFor } from "./pool";
 import { availablePriceRange } from "./project";
 import { autoQualifyIfFits, checkUnitTypes } from "./qualify";
+import { findReferrer } from "./referrer";
 import { getRules } from "./rules";
 import { requireProject } from "./scope";
 import { scoreInterest } from "./scoring";
@@ -49,6 +51,9 @@ export const captureEnquiryInput = z
 		buyingTimeline: z.enum(buyingTimelines).optional(),
 		unitTypeIds: z.array(z.uuid()).max(50).optional(),
 		buyerIntent: z.enum(buyerIntents).optional(),
+		incomeRange: z.enum(incomeRanges).optional(),
+		/** Referral sources: the phone of the contact who referred them. */
+		referrerPhone: z.string().trim().min(3).max(40).optional(),
 		/** When the enquiry really came in (forgot to log a walk-in): ≤ now, ≤ 30 days back. */
 		receivedAt: z.iso.datetime({ offset: true }).optional(),
 		note: z.string().trim().max(1000).optional(),
@@ -62,7 +67,7 @@ export const captureEnquiryInput = z
 	);
 
 export type CaptureOutcome =
-	| "new_customer"
+	| "new_contact"
 	| "new_lead"
 	| "re_enquiry_kept"
 	| "re_enquiry_pooled"
@@ -125,7 +130,7 @@ async function ownerContactedSince(
 }
 
 /**
- * Quick capture (brief §6): one enquiry → customer (deduped by phone) and an
+ * Quick capture (brief §6): one enquiry → contact (deduped by phone) and an
  * lead in the project. Salesperson-logged enquiries are theirs at once;
  * managers pick an owner or the pool. An existing lead in the same project
  * gets an `enquiry` activity and the re-enquiry rule decides the owner.
@@ -135,7 +140,7 @@ export async function captureEnquiry(
 	tenant: Tenant,
 	input: z.infer<typeof captureEnquiryInput>,
 ): Promise<{
-	customerId: string;
+	contactId: string;
 	leadId: string;
 	outcome: CaptureOutcome;
 	fit: FitResult;
@@ -218,7 +223,7 @@ export async function captureEnquiry(
 			badRequest("Only salespeople and managers can own leads");
 		}
 
-		// Serialise captures of the same phone so one customer is created, not two.
+		// Serialise captures of the same phone so one contact is created, not two.
 		await tx.execute(
 			sql`select pg_advisory_xact_lock(hashtextextended(${`${tenant.organizationId}:${phone}`}, 0))`,
 		);
@@ -230,21 +235,21 @@ export async function captureEnquiry(
 			.where(and(eq(unit.projectId, proj.id), eq(unit.status, "available")));
 		const now = new Date();
 
-		// Customer: existing by phone, or new with the consent record.
+		// Contact: existing by phone, or new with the consent record.
 		const [existingPhone] = await tx
-			.select({ customerId: customerPhone.customerId })
-			.from(customerPhone)
+			.select({ contactId: contactPhone.contactId })
+			.from(contactPhone)
 			.where(
 				and(
-					eq(customerPhone.organizationId, tenant.organizationId),
-					eq(customerPhone.phoneE164, phone),
+					eq(contactPhone.organizationId, tenant.organizationId),
+					eq(contactPhone.phoneE164, phone),
 				),
 			);
-		let customerId = existingPhone?.customerId;
+		let contactId = existingPhone?.contactId;
 		let outcome: CaptureOutcome = "new_lead";
-		if (!customerId) {
+		if (!contactId) {
 			const [created] = await tx
-				.insert(customer)
+				.insert(contact)
 				.values({
 					organizationId: tenant.organizationId,
 					name: input.name,
@@ -253,47 +258,48 @@ export async function captureEnquiry(
 					consentRecordedAt: now,
 					createdByUserId: tenant.userId,
 				})
-				.returning({ id: customer.id });
+				.returning({ id: contact.id });
 			if (!created) throw new Error("insert returned no row");
-			customerId = created.id;
-			await tx.insert(customerPhone).values({
+			contactId = created.id;
+			await tx.insert(contactPhone).values({
 				organizationId: tenant.organizationId,
-				customerId,
+				contactId,
 				phoneE164: phone,
 				isPrimary: true,
 			});
-			outcome = "new_customer";
+			outcome = "new_contact";
 		} else if (input.marketingConsent) {
 			// A capture can give consent but never silently withdraws it.
 			const updated = await tx
-				.update(customer)
+				.update(contact)
 				.set({
 					marketingConsent: true,
 					consentRecordedByUserId: tenant.userId,
 					consentRecordedAt: now,
 				})
 				.where(
-					and(
-						eq(customer.id, customerId),
-						eq(customer.marketingConsent, false),
-					),
+					and(eq(contact.id, contactId), eq(contact.marketingConsent, false)),
 				)
-				.returning({ id: customer.id });
+				.returning({ id: contact.id });
 			if (updated.length > 0) {
 				await writeAudit(tx, tenant, {
-					action: "customer.consent_change",
-					entityType: "customer",
-					entityId: customerId,
+					action: "contact.consent_change",
+					entityType: "contact",
+					entityId: contactId,
 					before: { marketingConsent: false },
 					after: { marketingConsent: true },
 				});
 			}
 		}
 
+		const referrer = input.referrerPhone
+			? await findReferrer(tx, tenant, input.referrerPhone, contactId)
+			: null;
+
 		const [existing] = await tx
 			.select()
 			.from(lead)
-			.where(and(eq(lead.customerId, customerId), eq(lead.projectId, proj.id)))
+			.where(and(eq(lead.contactId, contactId), eq(lead.projectId, proj.id)))
 			.for("update");
 
 		const budgetMinSatang =
@@ -342,7 +348,7 @@ export async function captureEnquiry(
 				.insert(lead)
 				.values({
 					organizationId: tenant.organizationId,
-					customerId,
+					contactId,
 					projectId: proj.id,
 					ownerMemberId,
 					sourceId: input.sourceId,
@@ -352,6 +358,8 @@ export async function captureEnquiry(
 					buyingTimeline,
 					unitTypeIds: unitTypeIds ?? [],
 					buyerIntent: input.buyerIntent ?? null,
+					incomeRange: input.incomeRange ?? null,
+					referredByContactId: referrer?.id ?? null,
 					priority: score.priority,
 					prioritySignals: score.signals,
 					scoringVersion: score.version,
@@ -402,7 +410,7 @@ export async function captureEnquiry(
 					buyerIntent: input.buyerIntent ?? null,
 				},
 			);
-			return { customerId, leadId: created.id, outcome, fit, qualified };
+			return { contactId, leadId: created.id, outcome, fit, qualified };
 		}
 
 		// Re-enquiry on the existing lead (brief §6). A live opportunity only logs it.
@@ -434,6 +442,8 @@ export async function captureEnquiry(
 			buyingTimeline,
 			...(unitTypeIds && { unitTypeIds }),
 			...(input.buyerIntent && { buyerIntent: input.buyerIntent }),
+			...(input.incomeRange && { incomeRange: input.incomeRange }),
+			...(referrer && { referredByContactId: referrer.id }),
 			priority: score.priority,
 			prioritySignals: score.signals,
 			scoringVersion: score.version,
@@ -442,7 +452,7 @@ export async function captureEnquiry(
 		if (live) {
 			await tx.update(lead).set(changes).where(eq(lead.id, existing.id));
 			return {
-				customerId,
+				contactId,
 				leadId: existing.id,
 				outcome: "re_enquiry_logged",
 				fit: "unknown",
@@ -510,7 +520,7 @@ export async function captureEnquiry(
 			},
 		);
 		return {
-			customerId,
+			contactId,
 			leadId: existing.id,
 			outcome: keep ? "re_enquiry_kept" : "re_enquiry_pooled",
 			fit,

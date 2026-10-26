@@ -73,8 +73,8 @@ export function SourcesSettings() {
 	const renameChannel = useMutation(
 		trpc.leadSource.renameChannel.mutationOptions(options),
 	);
-	const setInPerson = useMutation(
-		trpc.leadSource.setChannelInPerson.mutationOptions(options),
+	const setFlags = useMutation(
+		trpc.leadSource.setChannelFlags.mutationOptions(options),
 	);
 	const createSource = useMutation(
 		trpc.leadSource.createSource.mutationOptions(options),
@@ -102,24 +102,25 @@ export function SourcesSettings() {
 								}
 							/>
 						</CardTitle>
-						<CardDescription className="flex items-start gap-2 pt-2">
-							<Checkbox
-								id={`in-person-${channel.id}`}
-								checked={channel.inPerson}
-								disabled={setInPerson.isPending}
-								onCheckedChange={(c) =>
-									setInPerson.mutate({
-										channelId: channel.id,
-										inPerson: !!c,
-									})
-								}
-							/>
-							<Label
-								htmlFor={`in-person-${channel.id}`}
-								className="leading-snug"
-							>
-								{t("inPerson")}
-							</Label>
+						<CardDescription className="flex flex-col gap-2 pt-2">
+							{(["inPerson", "referral"] as const).map((flag) => (
+								<div key={flag} className="flex items-start gap-2">
+									<Checkbox
+										id={`${flag}-${channel.id}`}
+										checked={channel[flag]}
+										disabled={setFlags.isPending}
+										onCheckedChange={(c) =>
+											setFlags.mutate({ channelId: channel.id, [flag]: !!c })
+										}
+									/>
+									<Label
+										htmlFor={`${flag}-${channel.id}`}
+										className="leading-snug"
+									>
+										{t(flag)}
+									</Label>
+								</div>
+							))}
 						</CardDescription>
 					</CardHeader>
 					<CardContent className="flex flex-col gap-3">

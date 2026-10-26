@@ -7,7 +7,7 @@ import type {
 import { useTranslations } from "next-intl";
 
 /**
- * Where a customer stands in a project: the opportunity status once a visit
+ * Where a contact stands in a project: the opportunity status once a visit
  * converted the lead, otherwise the lead status.
  */
 export function usePipelineLabel() {

@@ -94,7 +94,7 @@
 		"signOut": "Sign out",
 		"organizations": "Companies",
 		"units": "Units",
-		"customers": "Customers",
+		"contacts": "Contacts",
 		"capture": "New enquiry",
 		"sources": "Sources",
 		"campaigns": "Campaigns",
@@ -376,9 +376,9 @@
 		"phone": "Phone",
 		"phoneHint": "Thai numbers as usual; foreign numbers with + and country code.",
 		"invalidPhone": "This doesn't look like a phone number",
-		"existing": "Existing customer: {name}",
+		"existing": "Existing contact: {name}",
 		"existingNone": "No other interests",
-		"name": "Customer name",
+		"name": "Full name",
 		"source": "Source",
 		"campaign": "Campaign (if known)",
 		"noCampaign": "No campaign",
@@ -394,11 +394,11 @@
 		"note": "Note",
 		"save": "Save enquiry",
 		"outcomes": {
-			"new_customer": "New customer saved",
+			"new_contact": "New contact saved",
 			"re_enquiry_kept": "Re-enquiry: stays with the current owner",
 			"re_enquiry_pooled": "Re-enquiry: back in the project pool",
 			"re_enquiry_logged": "Re-enquiry logged on the existing opportunity",
-			"new_lead": "Added to the existing customer"
+			"new_lead": "Added to the existing contact"
 		},
 		"missing": "Please fill in: {fields}",
 		"required": "Required",
@@ -415,22 +415,26 @@
 		"intent": "Buying for",
 		"moreRequired": "Details (required for in-person)",
 		"fit": {
-			"fits": "Fits this project — mark qualified on the customer page.",
+			"fits": "Fits this project — mark qualified on the contact page.",
 			"too_early": "Buying later than the project's window — consider Nurture.",
 			"budget_no_fit": "Budget doesn't fit this project.",
 			"autoQualified": "Qualified automatically (project rule)."
-		}
+		},
+		"referrer": "Referred by (phone, optional)",
+		"referrerHint": "The phone of the contact who referred them; they must already be a contact.",
+		"referrerNotFound": "No contact with the referrer's phone. Save them as a contact first, or leave it empty.",
+		"income": "Household income / month (optional)"
 	},
-	"customers": {
-		"title": "Customers",
-		"description": "Leads you can see. Search by name or phone.",
+	"contacts": {
+		"title": "Contacts",
+		"description": "Contacts and their leads you can see. Search by name or phone.",
 		"search": "Search name or phone",
 		"project": "Project",
 		"ownership": "Owner",
 		"ownershipAll": "Anyone",
 		"ownershipMine": "Mine",
 		"ownershipPool": "Pool",
-		"name": "Customer",
+		"name": "Contact",
 		"phone": "Phone",
 		"followUp": "Next follow-up",
 		"empty": "No leads match",
@@ -442,7 +446,7 @@
 			"opportunities": "Opportunities"
 		}
 	},
-	"customer": {
+	"contact": {
 		"profile": "Shared profile",
 		"profileHint": "Shared across projects: name, phones, LINE, email and consent.",
 		"name": "Name",
@@ -458,9 +462,6 @@
 		"giveConsent": "Mark as agreed",
 		"withdrawConsent": "Mark as withdrawn",
 		"referrer": "Referred by",
-		"referrerSet": "Set referrer by phone",
-		"noReferrer": "No referrer",
-		"referrerNotFound": "No customer with this phone",
 		"interests": "Projects",
 		"otherProjects": "Other projects",
 		"summaryLine": "{project} · {status} · {owner}",
@@ -483,7 +484,7 @@
 		"by": "{name} · {date}",
 		"system": "System",
 		"removePhoneTitle": "Remove {phone}?",
-		"removePhoneDescription": "The number is removed from this customer. Other numbers stay.",
+		"removePhoneDescription": "The number is removed from this contact. Other numbers stay.",
 		"contactDeadline": "Contact by",
 		"inPoolHint": "This lead is in the pool.",
 		"vetting": "Lead (vetting)",
@@ -495,7 +496,9 @@
 		"firstVisit": "First visit",
 		"visits": "{count} visits",
 		"fit": "Fit",
-		"funding": "Funding"
+		"funding": "Funding",
+		"income": "Income / month",
+		"referrerChanged": "Referrer updated"
 	},
 	"sources": {
 		"title": "Sources",
@@ -507,7 +510,8 @@
 		"unarchive": "Restore",
 		"unknown": "Don't know",
 		"unknownHint": "Used when the customer can't say. Managers see its share per salesperson.",
-		"inPerson": "Customer meets us in person (walk-in, event): capture needs budget, timeline, unit types and intent"
+		"inPerson": "Customer meets us in person (walk-in, event): capture needs budget, timeline, unit types and intent",
+		"referral": "Referral: capture asks who referred them (by phone)"
 	},
 	"campaigns": {
 		"title": "Campaigns",
@@ -626,7 +630,8 @@
 			"unitTypes": "Unit types wanted",
 			"intent": "Buying for",
 			"required": "Choose one.",
-			"saved": "Lead qualified"
+			"saved": "Lead qualified",
+			"income": "Household income / month (optional)"
 		},
 		"convert": {
 			"title": "Confirm visit",
@@ -657,6 +662,15 @@
 			"waiting_mortgage_result": "Waiting for mortgage result",
 			"transferred": "Mark transferred",
 			"saved": "Status: {status}"
+		},
+		"referrer": {
+			"title": "Referred by",
+			"description": "Who referred {name}? Enter their phone.",
+			"current": "Now: {name}. Enter another phone to change it.",
+			"phone": "Referrer's phone",
+			"saved": "Referrer saved",
+			"notFound": "No contact with this phone",
+			"clear": "Remove referrer"
 		}
 	},
 	"overview": {
@@ -830,8 +844,8 @@
 		"cancelled": "Cancelled"
 	},
 	"appointmentCancelReasons": {
-		"customer_cancelled": "Customer cancelled",
-		"customer_unreachable": "Can't reach the customer",
+		"contact_cancelled": "Contact cancelled",
+		"contact_unreachable": "Can't reach the contact",
 		"salesperson_unavailable": "Salesperson unavailable",
 		"showroom_closed": "Showroom closed",
 		"other": "Other"
@@ -870,5 +884,12 @@
 		"title": "Appointments",
 		"none": "No appointments yet",
 		"line": "{time} · {host}"
+	},
+	"incomeRanges": {
+		"under_30k": "Under ฿30k",
+		"30k_50k": "฿30k–50k",
+		"50k_100k": "฿50k–100k",
+		"100k_200k": "฿100k–200k",
+		"over_200k": "Over ฿200k"
 	}
 }

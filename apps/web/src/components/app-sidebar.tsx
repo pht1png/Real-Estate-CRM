@@ -72,8 +72,8 @@ export function AppSidebar({
 			badge: <PoolBadge count={poolCount} />,
 		},
 		{
-			title: t("customers"),
-			href: "/customers",
+			title: t("contacts"),
+			href: "/contacts",
 			icon: <ContactIcon />,
 			permission: { lead: ["read"] },
 		},

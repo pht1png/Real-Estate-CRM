@@ -24,6 +24,7 @@ import {
 	buyingTimelines,
 	disqualifyReasons,
 	fundingTypes,
+	incomeRanges,
 	leadStatuses,
 	lostReasons,
 	opportunityStatuses,
@@ -55,8 +56,10 @@ export const leadChannel = pgTable(
 			.notNull()
 			.references(() => organization.id),
 		name: text("name").notNull(),
-		/** The customer meets us in person (walk-in, event): capture needs full details. */
+		/** The contact meets us in person (walk-in, event): capture needs full details. */
 		inPerson: boolean("in_person").notNull().default(false),
+		/** Someone referred the contact: capture asks who (by phone). */
+		referral: boolean("referral").notNull().default(false),
 		sortOrder: integer("sort_order").notNull().default(0),
 		createdAt: createdAt(),
 	},
@@ -132,9 +135,12 @@ export const campaign = pgTable(
 	],
 );
 
-/** Shared profile (brief §4). No national ID, ID card or income data (§10). */
-export const customer = pgTable(
-	"customer",
+/**
+ * Shared profile (brief §4). No national ID, ID card or income data (§10);
+ * an income range lives on the lead, private to its owner.
+ */
+export const contact = pgTable(
+	"contact",
 	{
 		id: uuid("id").primaryKey().defaultRandom(),
 		organizationId: text("organization_id")
@@ -150,28 +156,22 @@ export const customer = pgTable(
 		consentRecordedAt: timestamp("consent_recorded_at", {
 			withTimezone: true,
 		}).notNull(),
-		referredByCustomerId: uuid("referred_by_customer_id"),
 		anonymisedAt: timestamp("anonymised_at", { withTimezone: true }),
 		createdByUserId: text("created_by_user_id").references(() => user.id),
 		createdAt: createdAt(),
 		updatedAt: updatedAt(),
 	},
 	(table) => [
-		unique("customer_org_id_unique").on(table.organizationId, table.id),
-		index("customer_org_name_idx").on(table.organizationId, table.name),
-		foreignKey({
-			name: "customer_referred_by_fkey",
-			columns: [table.organizationId, table.referredByCustomerId],
-			foreignColumns: [table.organizationId, table.id],
-		}),
+		unique("contact_org_id_unique").on(table.organizationId, table.id),
+		index("contact_org_name_idx").on(table.organizationId, table.name),
 	],
 );
 
-export const customerPhone = pgTable(
-	"customer_phone",
+export const contactPhone = pgTable(
+	"contact_phone",
 	{
 		organizationId: text("organization_id").notNull(),
-		customerId: uuid("customer_id").notNull(),
+		contactId: uuid("contact_id").notNull(),
 		/** E.164, e.g. +66812345678 (brief §3). */
 		phoneE164: text("phone_e164").notNull(),
 		isPrimary: boolean("is_primary").notNull().default(false),
@@ -179,21 +179,21 @@ export const customerPhone = pgTable(
 	},
 	(table) => [
 		primaryKey({ columns: [table.organizationId, table.phoneE164] }),
-		index("customer_phone_customer_idx").on(table.customerId),
+		index("contact_phone_contact_idx").on(table.contactId),
 		foreignKey({
-			name: "customer_phone_customer_fkey",
-			columns: [table.organizationId, table.customerId],
-			foreignColumns: [customer.organizationId, customer.id],
+			name: "contact_phone_contact_fkey",
+			columns: [table.organizationId, table.contactId],
+			foreignColumns: [contact.organizationId, contact.id],
 		}).onDelete("cascade"),
 		check(
-			"customer_phone_e164_check",
+			"contact_phone_e164_check",
 			sql`${table.phoneE164} ~ '^\\+[1-9][0-9]{6,14}$'`,
 		),
 	],
 );
 
 /**
- * Lead pipeline (the vetting queue, brief §2): a customer's enquiry about one
+ * Lead pipeline (the vetting queue, brief §2): a contact's enquiry about one
  * project. A confirmed showroom visit converts it into an opportunity.
  */
 export const lead = pgTable(
@@ -201,7 +201,7 @@ export const lead = pgTable(
 	{
 		id: uuid("id").primaryKey().defaultRandom(),
 		organizationId: text("organization_id").notNull(),
-		customerId: uuid("customer_id").notNull(),
+		contactId: uuid("contact_id").notNull(),
 		projectId: uuid("project_id").notNull(),
 		/** null = in the project's pool. */
 		ownerMemberId: text("owner_member_id"),
@@ -226,6 +226,10 @@ export const lead = pgTable(
 			.notNull()
 			.default(sql`'{}'::uuid[]`),
 		buyerIntent: text("buyer_intent", { enum: buyerIntents }),
+		/** Household income per month, as a range only (brief §10). */
+		incomeRange: text("income_range", { enum: incomeRanges }),
+		/** Who referred the contact to this project (another contact). */
+		referredByContactId: uuid("referred_by_contact_id"),
 		nextFollowUpAt: timestamp("next_follow_up_at", { withTimezone: true }),
 		claimedAt: timestamp("claimed_at", { withTimezone: true }),
 		contactDeadlineAt: timestamp("contact_deadline_at", { withTimezone: true }),
@@ -235,10 +239,7 @@ export const lead = pgTable(
 		updatedAt: updatedAt(),
 	},
 	(table) => [
-		unique("lead_customer_project_unique").on(
-			table.customerId,
-			table.projectId,
-		),
+		unique("lead_contact_project_unique").on(table.contactId, table.projectId),
 		unique("lead_org_id_unique").on(table.organizationId, table.id),
 		index("lead_project_owner_idx").on(
 			table.projectId,
@@ -251,9 +252,9 @@ export const lead = pgTable(
 			.on(table.contactDeadlineAt)
 			.where(sql`${table.contactDeadlineAt} is not null`),
 		foreignKey({
-			name: "lead_customer_fkey",
-			columns: [table.organizationId, table.customerId],
-			foreignColumns: [customer.organizationId, customer.id],
+			name: "lead_contact_fkey",
+			columns: [table.organizationId, table.contactId],
+			foreignColumns: [contact.organizationId, contact.id],
 		}),
 		foreignKey({
 			name: "lead_project_fkey",
@@ -293,6 +294,19 @@ export const lead = pgTable(
 			sql`${table.buyerIntent} is null or ${table.buyerIntent} in (${inList(buyerIntents)})`,
 		),
 		check(
+			"lead_income_range_check",
+			sql`${table.incomeRange} is null or ${table.incomeRange} in (${inList(incomeRanges)})`,
+		),
+		foreignKey({
+			name: "lead_referred_by_fkey",
+			columns: [table.organizationId, table.referredByContactId],
+			foreignColumns: [contact.organizationId, contact.id],
+		}),
+		check(
+			"lead_referrer_not_self_check",
+			sql`${table.referredByContactId} is null or ${table.referredByContactId} <> ${table.contactId}`,
+		),
+		check(
 			"lead_budget_check",
 			sql`${table.budgetMinSatang} is null or ${table.budgetMaxSatang} is null or ${table.budgetMinSatang} <= ${table.budgetMaxSatang}`,
 		),
@@ -309,7 +323,7 @@ export const opportunity = pgTable(
 		id: uuid("id").primaryKey().defaultRandom(),
 		organizationId: text("organization_id").notNull(),
 		leadId: uuid("lead_id").notNull(),
-		customerId: uuid("customer_id").notNull(),
+		contactId: uuid("contact_id").notNull(),
 		projectId: uuid("project_id").notNull(),
 		ownerMemberId: text("owner_member_id").notNull(),
 		status: text("status", { enum: opportunityStatuses })
@@ -340,9 +354,9 @@ export const opportunity = pgTable(
 			foreignColumns: [lead.organizationId, lead.id],
 		}),
 		foreignKey({
-			name: "opportunity_customer_fkey",
-			columns: [table.organizationId, table.customerId],
-			foreignColumns: [customer.organizationId, customer.id],
+			name: "opportunity_contact_fkey",
+			columns: [table.organizationId, table.contactId],
+			foreignColumns: [contact.organizationId, contact.id],
 		}),
 		foreignKey({
 			name: "opportunity_project_fkey",
@@ -469,8 +483,8 @@ export const activity = pgTable(
 
 export const crmRelations = defineRelationsPart(
 	{
-		customer,
-		customerPhone,
+		contact,
+		contactPhone,
 		lead,
 		opportunity,
 		appointment,
@@ -482,24 +496,24 @@ export const crmRelations = defineRelationsPart(
 		unitType,
 	},
 	(r) => ({
-		customer: {
-			phones: r.many.customerPhone({
-				from: r.customer.id,
-				to: r.customerPhone.customerId,
+		contact: {
+			phones: r.many.contactPhone({
+				from: r.contact.id,
+				to: r.contactPhone.contactId,
 			}),
 			leads: r.many.lead({
-				from: r.customer.id,
-				to: r.lead.customerId,
+				from: r.contact.id,
+				to: r.lead.contactId,
 			}),
 			opportunities: r.many.opportunity({
-				from: r.customer.id,
-				to: r.opportunity.customerId,
+				from: r.contact.id,
+				to: r.opportunity.contactId,
 			}),
 		},
 		lead: {
-			customer: r.one.customer({
-				from: r.lead.customerId,
-				to: r.customer.id,
+			contact: r.one.contact({
+				from: r.lead.contactId,
+				to: r.contact.id,
 			}),
 			activities: r.many.activity({
 				from: r.lead.id,

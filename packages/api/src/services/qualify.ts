@@ -3,6 +3,7 @@ import {
 	activity,
 	buyerIntents,
 	buyingTimelines,
+	incomeRanges,
 	lead,
 	unitType,
 } from "@Real-Estate-CRM/db/schema/index";
@@ -37,6 +38,8 @@ export const qualifyLeadInput = z
 		buyingTimeline: z.enum(buyingTimelines),
 		unitTypeIds: z.array(z.uuid()).max(50),
 		buyerIntent: z.enum(buyerIntents),
+		/** Optional; a range only (brief §10). Null clears it. */
+		incomeRange: z.enum(incomeRanges).nullable().optional(),
 		note: z.string().trim().max(1000).optional(),
 		nextFollowUpAt: futureDateTime,
 	})
@@ -106,6 +109,9 @@ export async function qualifyLead(
 				buyingTimeline: input.buyingTimeline,
 				unitTypeIds,
 				buyerIntent: input.buyerIntent,
+				...(input.incomeRange !== undefined && {
+					incomeRange: input.incomeRange,
+				}),
 				qualifiedAt: now,
 				contactDeadlineAt: null,
 				nextFollowUpAt,
@@ -136,6 +142,8 @@ export async function qualifyLead(
 				buyingTimeline: input.buyingTimeline,
 				unitTypeIds,
 				buyerIntent: input.buyerIntent,
+				incomeRange:
+					input.incomeRange === undefined ? row.incomeRange : input.incomeRange,
 			},
 		});
 	});

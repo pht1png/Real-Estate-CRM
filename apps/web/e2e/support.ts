@@ -211,12 +211,12 @@ export async function fillAndSubmit(
 export async function poolLead(owner: Page, name: string, phone: string) {
 	await openCapture(owner);
 	await choose(owner, "โครงการ", "Riverside");
-	// exact: the customer page behind the sheet has "เพิ่มเบอร์โทร".
+	// exact: the contact page behind the sheet has "เพิ่มเบอร์โทร".
 	await owner.getByLabel("เบอร์โทร", { exact: true }).fill(phone);
-	await owner.getByLabel("ชื่อลูกค้า").fill(name);
+	await owner.getByLabel("ชื่อ-นามสกุล").fill(name);
 	await choose(owner, "แหล่งที่มา", "Facebook");
 	await owner.getByRole("button", { name: "บันทึกลูกค้า", exact: true }).click();
-	// Saved once the customer page opens (a toast from an earlier lead could linger).
+	// Saved once the contact page opens (a toast from an earlier lead could linger).
 	await expect(owner.getByRole("heading", { name, level: 1 })).toBeVisible();
 }
 

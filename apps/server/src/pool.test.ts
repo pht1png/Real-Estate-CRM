@@ -64,7 +64,7 @@ async function poolLead(s: Setup, ownerMemberId: string | null = null) {
 	const n = String(phoneCounter++ % 10_000).padStart(4, "0");
 	const { leadId } = await s.manager.caller.lead.capture({
 		projectId: s.projectId,
-		name: `Customer ${n}`,
+		name: `Contact ${n}`,
 		phone: `08123${n}0`,
 		sourceId: s.sourceId,
 		marketingConsent: false,

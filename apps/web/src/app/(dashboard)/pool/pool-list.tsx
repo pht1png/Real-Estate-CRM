@@ -45,7 +45,7 @@ const ALL = "all";
 export function PoolList() {
 	const t = useTranslations("pool");
 	const tc = useTranslations("common");
-	const tcust = useTranslations("customers");
+	const tcust = useTranslations("contacts");
 	const format = useFormatter();
 	const now = useNow({ updateInterval: 60_000 });
 	const can = useCan();
@@ -139,10 +139,10 @@ export function PoolList() {
 									<div className="min-w-0">
 										<div className="flex items-center gap-2">
 											<Link
-												href={`/customers/${l.customerId}` as Route}
+												href={`/contacts/${l.contactId}` as Route}
 												className="truncate font-medium underline-offset-4 hover:underline"
 											>
-												{l.customerName}
+												{l.contactName}
 											</Link>
 											{l.priority && <Badge>{tcust("priority")}</Badge>}
 										</div>

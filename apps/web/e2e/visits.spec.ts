@@ -46,8 +46,8 @@ test("salesperson on a phone: book a tour, clash, arrived → qualify → opport
 			.filter({ hasText: "Khun Ploy" }),
 	);
 
-	// Book a first tour from the customer page.
-	await m.goto("/customers");
+	// Book a first tour from the contact page.
+	await m.goto("/contacts");
 	await m.getByRole("link", { name: "Khun Ploy" }).click();
 	const card = m
 		.getByRole("heading", { name: "Riverside" })
@@ -80,7 +80,7 @@ test("salesperson on a phone: book a tour, clash, arrived → qualify → opport
 	await visit.getByRole("button", { name: "ลูกค้าเข้าชมแล้ว" }).click();
 	await expect(visit).toBeHidden();
 
-	await m.goto("/customers?pipeline=opportunities");
+	await m.goto("/contacts?pipeline=opportunities");
 	await m.getByRole("link", { name: "Khun Ploy" }).click();
 	const opportunity = card.locator('[data-kind="opportunity"]');
 	await expect(opportunity).toBeVisible();
@@ -166,7 +166,7 @@ test("nurture releases a lead to the Nurturing pool, where another salesperson c
 
 	const m = malee.page;
 	await claimFromPool(m, "Khun Dao");
-	await m.goto("/customers");
+	await m.goto("/contacts");
 	await m.getByRole("link", { name: "Khun Dao" }).click();
 	const card = m
 		.getByRole("heading", { name: "Riverside" })
@@ -181,7 +181,7 @@ test("nurture releases a lead to the Nurturing pool, where another salesperson c
 	await expect(nurture).toBeHidden();
 
 	// Gone from Malee's list; not in the New tab either.
-	await m.goto("/customers?ownership=mine");
+	await m.goto("/contacts?ownership=mine");
 	await expect(m.getByRole("link", { name: "Khun Dao" })).toBeHidden();
 
 	const s = somchai.page;
@@ -197,7 +197,7 @@ test("nurture releases a lead to the Nurturing pool, where another salesperson c
 	await expect(dao).toHaveCount(0);
 
 	// Somchai owns it now, reopened as Attempting.
-	await s.goto("/customers?ownership=mine");
+	await s.goto("/contacts?ownership=mine");
 	await s.getByRole("link", { name: "Khun Dao" }).click();
 	await expect(s.getByText("กำลังติดต่อ").first()).toBeVisible();
 

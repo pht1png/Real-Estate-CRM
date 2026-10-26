@@ -38,24 +38,22 @@ import {
 } from "../services/campaign";
 import { captureEnquiry, captureEnquiryInput } from "../services/capture";
 import {
-	addCustomerPhone,
+	addContactPhone,
 	consentInput,
-	customerIdInput,
-	customerPhoneInput,
-	getCustomer,
+	contactIdInput,
+	contactPhoneInput,
+	getContact,
 	listLeads,
 	listLeadsInput,
 	listOpportunities,
 	listOpportunitiesInput,
 	lookupByPhone,
 	phoneLookupInput,
-	referrerInput,
-	removeCustomerPhone,
+	removeContactPhone,
 	setConsent,
-	setReferrer,
-	updateCustomer,
-	updateCustomerInput,
-} from "../services/customer";
+	updateContact,
+	updateContactInput,
+} from "../services/contact";
 import {
 	disqualifyLead,
 	disqualifyLeadInput,
@@ -69,7 +67,7 @@ import {
 import {
 	archiveSource,
 	archiveSourceInput,
-	channelInPersonInput,
+	channelFlagsInput,
 	createChannel,
 	createChannelInput,
 	createSource,
@@ -79,7 +77,7 @@ import {
 	renameChannelInput,
 	renameSource,
 	renameSourceInput,
-	setChannelInPerson,
+	setChannelFlags,
 } from "../services/lead-source";
 import { getOverview } from "../services/overview";
 import {
@@ -90,6 +88,7 @@ import {
 	poolCount,
 } from "../services/pool";
 import { qualifyLead, qualifyLeadInput } from "../services/qualify";
+import { setLeadReferrer, setReferrerInput } from "../services/referrer";
 import {
 	getRulesForTenant,
 	updateRules,
@@ -108,7 +107,7 @@ import {
 const read = requirePermission({ lead: ["read"] });
 const capture = requirePermission({ lead: ["capture"] });
 const claim = requirePermission({ lead: ["claim"] });
-const editCustomer = requirePermission({ customer: ["update"] });
+const editContact = requirePermission({ contact: ["update"] });
 const manageSources = requirePermission({ leadSource: ["manage"] });
 const manageCampaigns = requirePermission({ campaign: ["manage"] });
 
@@ -151,6 +150,9 @@ export const leadRouter = router({
 	addNote: read
 		.input(addNoteInput)
 		.mutation(({ ctx, input }) => addNote(ctx.db, ctx.tenant, input)),
+	setReferrer: read
+		.input(setReferrerInput)
+		.mutation(({ ctx, input }) => setLeadReferrer(ctx.db, ctx.tenant, input)),
 });
 
 /** Opportunity pipeline, created by a confirmed visit. */
@@ -229,27 +231,24 @@ export const todoRouter = router({
 	count: read.query(({ ctx }) => todoCount(ctx.db, ctx.tenant)),
 });
 
-export const customerRouter = router({
+export const contactRouter = router({
 	get: read
-		.input(customerIdInput)
-		.query(({ ctx, input }) => getCustomer(ctx.db, ctx.tenant, input)),
-	update: editCustomer
-		.input(updateCustomerInput)
-		.mutation(({ ctx, input }) => updateCustomer(ctx.db, ctx.tenant, input)),
-	addPhone: editCustomer
-		.input(customerPhoneInput)
-		.mutation(({ ctx, input }) => addCustomerPhone(ctx.db, ctx.tenant, input)),
-	removePhone: editCustomer
-		.input(customerPhoneInput)
+		.input(contactIdInput)
+		.query(({ ctx, input }) => getContact(ctx.db, ctx.tenant, input)),
+	update: editContact
+		.input(updateContactInput)
+		.mutation(({ ctx, input }) => updateContact(ctx.db, ctx.tenant, input)),
+	addPhone: editContact
+		.input(contactPhoneInput)
+		.mutation(({ ctx, input }) => addContactPhone(ctx.db, ctx.tenant, input)),
+	removePhone: editContact
+		.input(contactPhoneInput)
 		.mutation(({ ctx, input }) =>
-			removeCustomerPhone(ctx.db, ctx.tenant, input),
+			removeContactPhone(ctx.db, ctx.tenant, input),
 		),
-	setConsent: editCustomer
+	setConsent: editContact
 		.input(consentInput)
 		.mutation(({ ctx, input }) => setConsent(ctx.db, ctx.tenant, input)),
-	setReferrer: editCustomer
-		.input(referrerInput)
-		.mutation(({ ctx, input }) => setReferrer(ctx.db, ctx.tenant, input)),
 });
 
 export const leadSourceRouter = router({
@@ -261,11 +260,9 @@ export const leadSourceRouter = router({
 	renameChannel: manageSources
 		.input(renameChannelInput)
 		.mutation(({ ctx, input }) => renameChannel(ctx.db, ctx.tenant, input)),
-	setChannelInPerson: manageSources
-		.input(channelInPersonInput)
-		.mutation(({ ctx, input }) =>
-			setChannelInPerson(ctx.db, ctx.tenant, input),
-		),
+	setChannelFlags: manageSources
+		.input(channelFlagsInput)
+		.mutation(({ ctx, input }) => setChannelFlags(ctx.db, ctx.tenant, input)),
 	createSource: manageSources
 		.input(createSourceInput)
 		.mutation(({ ctx, input }) => createSource(ctx.db, ctx.tenant, input)),

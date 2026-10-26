@@ -13,31 +13,31 @@ import { useTRPC } from "@/utils/trpc";
 import { LeadCard } from "./lead-card";
 import { ProfileCard } from "./profile-card";
 
-export function CustomerPage({ customerId }: { customerId: string }) {
-	const t = useTranslations("customer");
+export function ContactPage({ contactId }: { contactId: string }) {
+	const t = useTranslations("contact");
 	const pipelineLabel = usePipelineLabel();
 	const tn = useTranslations("nav");
 	const trpc = useTRPC();
-	const customer = useQuery(trpc.customer.get.queryOptions({ customerId }));
+	const contact = useQuery(trpc.contact.get.queryOptions({ contactId }));
 
-	if (!customer.data) return <Spinner />;
-	const c = customer.data;
+	if (!contact.data) return <Spinner />;
+	const c = contact.data;
 	const visible = c.leads.filter((i) => i.visible);
 	const hidden = c.leads.filter((i) => !i.visible);
 
 	return (
 		<>
 			<Link
-				href="/customers"
+				href="/contacts"
 				className="text-muted-foreground flex w-fit items-center gap-1 text-sm hover:underline"
 			>
 				<ChevronLeftIcon className="size-4" />
-				{tn("customers")}
+				{tn("contacts")}
 			</Link>
 			<PageHeader title={c.name} />
 			<div className="grid gap-6 lg:grid-cols-[2fr_3fr]">
 				{/* Remount when the server data changes so edits start from saved values. */}
-				<ProfileCard key={`${c.name}|${c.lineId}|${c.email}`} customer={c} />
+				<ProfileCard key={`${c.name}|${c.lineId}|${c.email}`} contact={c} />
 				<section className="flex flex-col gap-4">
 					<h2 className="text-lg font-semibold">{t("interests")}</h2>
 					{visible.map((i) =>
@@ -45,7 +45,7 @@ export function CustomerPage({ customerId }: { customerId: string }) {
 							<LeadCard
 								key={i.id}
 								lead={i}
-								customerName={c.name}
+								contactName={c.name}
 								phoneE164={c.phones[0]?.phoneE164 ?? null}
 							/>
 						) : null,

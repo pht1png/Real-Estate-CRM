@@ -41,7 +41,7 @@ export const unitStatuses = [
 export type UnitStatus = (typeof unitStatuses)[number];
 
 /**
- * Lead pipeline (the vetting queue, brief §2): a customer's enquiry about one
+ * Lead pipeline (the vetting queue, brief §2): a contact's enquiry about one
  * project. A confirmed showroom visit converts it into an opportunity.
  */
 export const leadStatuses = [
@@ -135,7 +135,7 @@ export const activityTypes = [
 ] as const;
 export type ActivityType = (typeof activityTypes)[number];
 
-/** Activities that count as the owner having contacted the customer. */
+/** Activities that count as the owner having contacted the contact. */
 export const contactActivityTypes: readonly ActivityType[] = [
 	"call",
 	"line",
@@ -172,6 +172,16 @@ export const temperatures = ["warm", "hot"] as const;
 export type Temperature = (typeof temperatures)[number];
 
 export const buyerIntents = ["own_stay", "investment"] as const;
+
+/** Household income per month (baht), as a range only: never an exact figure (brief §10). */
+export const incomeRanges = [
+	"under_30k",
+	"30k_50k",
+	"50k_100k",
+	"100k_200k",
+	"over_200k",
+] as const;
+export type IncomeRange = (typeof incomeRanges)[number];
 export type BuyerIntent = (typeof buyerIntents)[number];
 
 /** Why a lead leaves the vetting queue (brief §6); "other" needs a note. */
@@ -242,8 +252,8 @@ export type AppointmentStatus = (typeof appointmentStatuses)[number];
 
 /** Why an appointment was cancelled; "other" needs a note. A reschedule is not a cancel. */
 export const appointmentCancelReasons = [
-	"customer_cancelled",
-	"customer_unreachable",
+	"contact_cancelled",
+	"contact_unreachable",
 	"salesperson_unavailable",
 	"showroom_closed",
 	"other",

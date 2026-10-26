@@ -3,7 +3,7 @@ import {
 	activity,
 	appointment,
 	appointmentCancelReasons,
-	customer,
+	contact,
 	lead,
 	opportunity,
 	project,
@@ -111,7 +111,7 @@ async function resolveTarget(
 	const row = await requireVisibleLead(tx, tenant, input.leadId ?? "");
 	requireActor(tenant, row);
 	if (row.status !== "connected" && row.status !== "qualified") {
-		badRequest("Book a tour once you've spoken to the customer");
+		badRequest("Book a tour once you've spoken to the contact");
 	}
 	if (!row.ownerMemberId) badRequest("Claim or assign the lead first");
 	return {
@@ -406,11 +406,11 @@ export async function appointmentSlots(
 			id: appointment.id,
 			startsAt: appointment.startsAt,
 			endsAt: appointment.endsAt,
-			customerName: customer.name,
+			contactName: contact.name,
 		})
 		.from(appointment)
 		.innerJoin(lead, eq(lead.id, appointment.leadId))
-		.innerJoin(customer, eq(customer.id, lead.customerId))
+		.innerJoin(contact, eq(contact.id, lead.contactId))
 		.where(
 			and(
 				eq(appointment.organizationId, tenant.organizationId),

@@ -19,7 +19,7 @@ export const statements = {
 	// M3: capture = quick capture; assign = choose an owner / send to pool.
 	// M4: claim = take a lead from the pool (salespeople only, brief §6).
 	lead: ["capture", "read", "assign", "claim"],
-	customer: ["update"],
+	contact: ["update"],
 	leadSource: ["manage"],
 	campaign: ["manage"],
 	rules: ["update"],
@@ -35,7 +35,7 @@ const settings = {
 	audit: ["read"],
 	unit: ["read", "manage", "price", "block"],
 	lead: ["capture", "read", "assign"],
-	customer: ["update"],
+	contact: ["update"],
 	leadSource: ["manage"],
 	campaign: ["manage"],
 	rules: ["update"],
@@ -54,12 +54,12 @@ export const roles = {
 		team: ["read"],
 		unit: ["read", "price", "block"],
 		lead: ["capture", "read", "assign"],
-		customer: ["update"],
+		contact: ["update"],
 	}),
 	salesperson: ac.newRole({
 		unit: ["read"],
 		lead: ["capture", "read", "claim"],
-		customer: ["update"],
+		contact: ["update"],
 	}),
 };
 

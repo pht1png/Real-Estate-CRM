@@ -24,7 +24,7 @@ import type { Tenant } from "./tenancy";
 type Tx = Pick<Database, "select" | "insert" | "update">;
 
 const visitFields = {
-	/** When the customer was at the showroom; defaults to now, never in the future. */
+	/** When the contact was at the showroom; defaults to now, never in the future. */
 	visitedAt: z.iso.datetime({ offset: true }).optional(),
 	note: z.string().trim().max(1000).optional(),
 	nextFollowUpAt: futureDateTime,
@@ -137,7 +137,7 @@ export async function lockVisibleLead(tx: Tx, tenant: Tenant, leadId: string) {
 }
 
 /**
- * Confirm visit (brief §2): the salesperson confirms the customer actually
+ * Confirm visit (brief §2): the salesperson confirms the contact actually
  * came to the showroom, and the qualified lead converts.
  */
 export async function confirmVisit(

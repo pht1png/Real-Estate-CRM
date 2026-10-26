@@ -1,8 +1,8 @@
 import {
 	activity,
 	auditLog,
-	customer,
-	customerPhone,
+	contact,
+	contactPhone,
 	lead,
 	opportunity,
 } from "@Real-Estate-CRM/db/schema/index";
@@ -69,7 +69,7 @@ async function setup() {
 	// details rule has its own tests (qualification.test.ts).
 	const offline = sources.channels.find((c) => c.name === "Offline");
 	if (offline) {
-		await admin.caller.leadSource.setChannelInPerson({
+		await admin.caller.leadSource.setChannelFlags({
 			channelId: offline.id,
 			inPerson: false,
 		});
@@ -165,7 +165,7 @@ describe("sources and campaigns", () => {
 		const ok = await s.salesA.caller.lead.capture(
 			walkIn(s, { sourceId: s.facebookId, campaignId }),
 		);
-		expect(ok.outcome).toBe("new_customer");
+		expect(ok.outcome).toBe("new_contact");
 		// A campaign of another project can't be used.
 		expect(
 			await codeOf(
@@ -201,7 +201,7 @@ describe("quick capture", () => {
 		const result = await s.salesA.caller.lead.capture(
 			walkIn(s, { budgetMaxSatang: 400_000_000, buyingTimeline: "1_3_months" }),
 		);
-		expect(result.outcome).toBe("new_customer");
+		expect(result.outcome).toBe("new_contact");
 		const [row] = await db
 			.select()
 			.from(lead)
@@ -217,13 +217,13 @@ describe("quick capture", () => {
 		});
 		const [phone] = await db
 			.select()
-			.from(customerPhone)
-			.where(eq(customerPhone.customerId, result.customerId));
+			.from(contactPhone)
+			.where(eq(contactPhone.contactId, result.contactId));
 		expect(phone?.phoneE164).toBe("+66812345678");
 		const [cust] = await db
 			.select()
-			.from(customer)
-			.where(eq(customer.id, result.customerId));
+			.from(contact)
+			.where(eq(contact.id, result.contactId));
 		expect(cust).toMatchObject({
 			marketingConsent: true,
 			consentRecordedByUserId: s.salesA.user.id,
@@ -314,7 +314,7 @@ describe("quick capture", () => {
 });
 
 describe("duplicates and re-enquiry", () => {
-	test("the same phone in another format and project adds a lead to the same customer", async () => {
+	test("the same phone in another format and project adds a lead to the same contact", async () => {
 		const s = await setup();
 		const first = await s.salesA.caller.lead.capture(walkIn(s));
 		const second = await s.salesB.caller.lead.capture(
@@ -325,19 +325,19 @@ describe("duplicates and re-enquiry", () => {
 			}),
 		);
 		expect(second).toMatchObject({
-			customerId: first.customerId,
+			contactId: first.contactId,
 			outcome: "new_lead",
 		});
 
 		const lookup = await s.salesB.caller.lead.lookupPhone({
 			phone: "0812345678",
 		});
-		expect(lookup.customer?.name).toBe("Khun Somchai");
-		expect(lookup.customer?.leads.map((i) => i.projectName).sort()).toEqual([
+		expect(lookup.contact?.name).toBe("Khun Somchai");
+		expect(lookup.contact?.leads.map((i) => i.projectName).sort()).toEqual([
 			"Hillside",
 			"Riverside",
 		]);
-		expect(Object.keys(lookup.customer?.leads[0] ?? {}).sort()).toEqual([
+		expect(Object.keys(lookup.contact?.leads[0] ?? {}).sort()).toEqual([
 			"opportunityStatus",
 			"ownerName",
 			"projectId",
@@ -470,16 +470,16 @@ describe("duplicates and re-enquiry", () => {
 		]);
 	});
 
-	test("five simultaneous captures of a new phone create one customer and one lead", async () => {
+	test("five simultaneous captures of a new phone create one contact and one lead", async () => {
 		const s = await setup();
 		const results = await Promise.all(
 			[s.salesA, s.salesB, s.salesA, s.salesB, s.salesA].map((who) =>
 				who.caller.lead.capture(walkIn(s, { phone: "0855555555" })),
 			),
 		);
-		expect(new Set(results.map((r) => r.customerId)).size).toBe(1);
+		expect(new Set(results.map((r) => r.contactId)).size).toBe(1);
 		expect(new Set(results.map((r) => r.leadId)).size).toBe(1);
-		expect(results.filter((r) => r.outcome === "new_customer").length).toBe(1);
+		expect(results.filter((r) => r.outcome === "new_contact").length).toBe(1);
 	});
 
 	test("re-enquiry with a new budget re-scores the lead", async () => {
@@ -503,7 +503,7 @@ describe("visibility (brief §4)", () => {
 			walkIn(s, { budgetMaxSatang: 400_000_000 }),
 		);
 		expect(
-			await codeOf(s.salesB.caller.customer.get({ customerId: a.customerId })),
+			await codeOf(s.salesB.caller.contact.get({ contactId: a.contactId })),
 		).toBe("NOT_FOUND");
 		expect(
 			await codeOf(
@@ -514,8 +514,8 @@ describe("visibility (brief §4)", () => {
 		await s.salesB.caller.lead.capture(
 			walkIn(s, { projectId: s.otherProjectId }),
 		);
-		const page = await s.salesB.caller.customer.get({
-			customerId: a.customerId,
+		const page = await s.salesB.caller.contact.get({
+			contactId: a.contactId,
 		});
 		const theirs = page.leads.find((i) => i.projectName === "Riverside");
 		expect(theirs).toEqual({
@@ -554,21 +554,21 @@ describe("visibility (brief §4)", () => {
 	});
 });
 
-describe("customer profile", () => {
+describe("contact profile", () => {
 	test("consent changes record who and when and are audited; capture never withdraws consent", async () => {
 		const s = await setup();
 		const a = await s.salesA.caller.lead.capture(
 			walkIn(s, { marketingConsent: true }),
 		);
 		await s.salesA.caller.lead.capture(walkIn(s, { marketingConsent: false }));
-		let page = await s.salesA.caller.customer.get({ customerId: a.customerId });
+		let page = await s.salesA.caller.contact.get({ contactId: a.contactId });
 		expect(page.marketingConsent).toBe(true);
 
-		await s.salesA.caller.customer.setConsent({
-			customerId: a.customerId,
+		await s.salesA.caller.contact.setConsent({
+			contactId: a.contactId,
 			marketingConsent: false,
 		});
-		page = await s.salesA.caller.customer.get({ customerId: a.customerId });
+		page = await s.salesA.caller.contact.get({ contactId: a.contactId });
 		expect(page).toMatchObject({
 			marketingConsent: false,
 			consentRecordedBy: s.salesA.user.name,
@@ -576,40 +576,40 @@ describe("customer profile", () => {
 		const [audit] = await db
 			.select()
 			.from(auditLog)
-			.where(eq(auditLog.action, "customer.consent_change"));
+			.where(eq(auditLog.action, "contact.consent_change"));
 		expect(audit?.after).toEqual({ marketingConsent: false });
 	});
 
-	test("phones are unique per company and a customer keeps at least one", async () => {
+	test("phones are unique per company and a contact keeps at least one", async () => {
 		const s = await setup();
 		const a = await s.salesA.caller.lead.capture(walkIn(s));
 		await s.salesA.caller.lead.capture(walkIn(s, { phone: "0866666666" }));
 		expect(
 			await codeOf(
-				s.salesA.caller.customer.addPhone({
-					customerId: a.customerId,
+				s.salesA.caller.contact.addPhone({
+					contactId: a.contactId,
 					phone: "0866666666",
 				}),
 			),
 		).toBe("CONFLICT");
-		await s.salesA.caller.customer.addPhone({
-			customerId: a.customerId,
+		await s.salesA.caller.contact.addPhone({
+			contactId: a.contactId,
 			phone: "+86 138 0013 8000",
 		});
-		await s.salesA.caller.customer.removePhone({
-			customerId: a.customerId,
+		await s.salesA.caller.contact.removePhone({
+			contactId: a.contactId,
 			phone: "081-234-5678",
 		});
-		const page = await s.salesA.caller.customer.get({
-			customerId: a.customerId,
+		const page = await s.salesA.caller.contact.get({
+			contactId: a.contactId,
 		});
 		expect(page.phones).toMatchObject([
 			{ phoneE164: "+8613800138000", isPrimary: true },
 		]);
 		expect(
 			await codeOf(
-				s.salesA.caller.customer.removePhone({
-					customerId: a.customerId,
+				s.salesA.caller.contact.removePhone({
+					contactId: a.contactId,
 					phone: "+8613800138000",
 				}),
 			),
@@ -650,18 +650,18 @@ describe("cross-tenant isolation (org B cannot read or change org A)", () => {
 		const adminB = b.admin.caller;
 
 		const attempts: Record<string, () => Promise<unknown>> = {
-			"customer.get": () =>
-				adminB.customer.get({ customerId: captured.customerId }),
-			"customer.update": () =>
-				adminB.customer.update({ customerId: captured.customerId, name: "X" }),
-			"customer.addPhone": () =>
-				adminB.customer.addPhone({
-					customerId: captured.customerId,
+			"contact.get": () =>
+				adminB.contact.get({ contactId: captured.contactId }),
+			"contact.update": () =>
+				adminB.contact.update({ contactId: captured.contactId, name: "X" }),
+			"contact.addPhone": () =>
+				adminB.contact.addPhone({
+					contactId: captured.contactId,
 					phone: "0877777777",
 				}),
-			"customer.setConsent": () =>
-				adminB.customer.setConsent({
-					customerId: captured.customerId,
+			"contact.setConsent": () =>
+				adminB.contact.setConsent({
+					contactId: captured.contactId,
 					marketingConsent: false,
 				}),
 			"lead.addNote": () =>
@@ -678,13 +678,13 @@ describe("cross-tenant isolation (org B cannot read or change org A)", () => {
 			Object.fromEntries(Object.keys(results).map((k) => [k, "NOT_FOUND"])),
 		);
 
-		// Same phone in company B is a different customer; A's data stays invisible.
+		// Same phone in company B is a different contact; A's data stays invisible.
 		expect(
-			(await adminB.lead.lookupPhone({ phone: "0812345678" })).customer,
+			(await adminB.lead.lookupPhone({ phone: "0812345678" })).contact,
 		).toBeNull();
 		expect(await adminB.lead.list({})).toEqual([]);
 		const bLead = await b.salesA.caller.lead.capture(walkIn(b));
-		expect(bLead.customerId).not.toBe(captured.customerId);
+		expect(bLead.contactId).not.toBe(captured.contactId);
 	});
 });
 

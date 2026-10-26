@@ -16,6 +16,7 @@ export function ChoiceChips<T extends string>({
 	invalid,
 	error,
 	multiple,
+	clearable,
 }: {
 	legend: string;
 	options: { value: T; label: string }[];
@@ -24,6 +25,8 @@ export function ChoiceChips<T extends string>({
 	invalid?: boolean;
 	error?: string;
 	multiple?: boolean;
+	/** Single choice that may be left empty: tapping the chosen one clears it. */
+	clearable?: boolean;
 }) {
 	return (
 		<FieldSet data-invalid={invalid || undefined}>
@@ -45,7 +48,9 @@ export function ChoiceChips<T extends string>({
 										? on
 											? value.filter((v) => v !== o.value)
 											: [...value, o.value]
-										: [o.value],
+										: on && clearable
+											? []
+											: [o.value],
 								)
 							}
 						>

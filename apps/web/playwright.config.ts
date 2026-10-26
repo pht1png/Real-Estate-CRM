@@ -16,6 +16,8 @@ export default defineConfig({
 	reporter: process.env.CI ? "github" : "list",
 	use: {
 		baseURL: webUrl,
+		// The projects' time zone, so test times mean the same on CI (UTC) and locally.
+		timezoneId: "Asia/Bangkok",
 		trace: "retain-on-failure",
 	},
 	projects: [

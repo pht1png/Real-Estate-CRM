@@ -118,7 +118,7 @@ export async function inviteSalesperson(
 					viewport: { width: 390, height: 844 },
 					isMobile: true,
 					hasTouch: true,
-					// The project's time zone: "today" on To do matches the showroom's day.
+					// Same time zone as the config (playwright.config.ts), explicitly.
 					timezoneId: "Asia/Bangkok",
 				}
 			: {},
@@ -256,10 +256,25 @@ export async function fillWalkInDetails(page: Page) {
 	await page.getByRole("button", { name: "อยู่เอง" }).click();
 }
 
-/** A date as a datetime-local value in the browser's time zone. */
+/**
+ * A date as a datetime-local value in Asia/Bangkok, the time zone every test
+ * browser runs in (playwright.config.ts), whatever the machine's clock is.
+ */
 export function dateTimeLocal(d: Date) {
-	const pad = (n: number) => String(n).padStart(2, "0");
-	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+	const p = Object.fromEntries(
+		new Intl.DateTimeFormat("en-CA", {
+			timeZone: "Asia/Bangkok",
+			hourCycle: "h23",
+			year: "numeric",
+			month: "2-digit",
+			day: "2-digit",
+			hour: "2-digit",
+			minute: "2-digit",
+		})
+			.formatToParts(d)
+			.map((x) => [x.type, x.value]),
+	);
+	return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
 }
 
 /** Claims a lead from the Pool page (the New tab). */

@@ -163,7 +163,7 @@ export function BookAppointmentForm({
 				</DialogTitle>
 				<DialogDescription>
 					{t("bookDescription", {
-						name: target.customerName,
+						name: target.contactName,
 						minutes: slots.data?.minutes ?? 60,
 					})}
 				</DialogDescription>
@@ -214,7 +214,7 @@ export function BookAppointmentForm({
 								.map((b) =>
 									t("bookedItem", {
 										time: `${time(b.startsAt)}–${time(b.endsAt)}`,
-										name: b.customerName,
+										name: b.contactName,
 									}),
 								)
 								.join(", ")}
@@ -245,11 +245,11 @@ export function BookAppointmentForm({
 /** Cancel with a reason (Other needs a note). Rescheduling is not a cancel. */
 export function CancelAppointmentForm({
 	appointmentId,
-	customerName,
+	contactName,
 	onDone,
 }: {
 	appointmentId: string;
-	customerName: string;
+	contactName: string;
 	onDone: () => void;
 }) {
 	const t = useTranslations("appointments");
@@ -289,7 +289,7 @@ export function CancelAppointmentForm({
 			<DialogHeader>
 				<DialogTitle>{t("cancel")}</DialogTitle>
 				<DialogDescription>
-					{t("cancelDescription", { name: customerName })}
+					{t("cancelDescription", { name: contactName })}
 				</DialogDescription>
 			</DialogHeader>
 			<FieldGroup className="py-4">
@@ -369,7 +369,7 @@ function NoShowForm({
 		>
 			<DialogHeader>
 				<DialogTitle>
-					{t("noShowTitle", { name: target.customerName })}
+					{t("noShowTitle", { name: target.contactName })}
 				</DialogTitle>
 				<DialogDescription>{t("noShowDescription")}</DialogDescription>
 			</DialogHeader>
@@ -397,7 +397,7 @@ export type AppointmentTarget = {
 	leadId: string;
 	opportunityId: string | null;
 	startsAt: Date | string;
-	customerName: string;
+	contactName: string;
 	projectId?: string;
 	/** First tours: a qualified lead converts on arrival; others qualify first. */
 	qualified?: boolean;
@@ -419,11 +419,11 @@ export function AppointmentActions({
 	const [pane, setPane] = useState<Pane | null>(null);
 	// The visit's follow-up belongs to the lead (first tour) or the opportunity.
 	const target: FormTarget = a.opportunityId
-		? { kind: "opportunity", id: a.opportunityId, customerName: a.customerName }
+		? { kind: "opportunity", id: a.opportunityId, contactName: a.contactName }
 		: {
 				kind: "lead",
 				id: a.leadId,
-				customerName: a.customerName,
+				contactName: a.contactName,
 				projectId: a.projectId,
 				qualification: a.qualification,
 				priceRange: a.priceRange,
@@ -507,7 +507,7 @@ export function AppointmentActions({
 					{pane === "cancel" && (
 						<CancelAppointmentForm
 							appointmentId={a.appointmentId}
-							customerName={a.customerName}
+							contactName={a.contactName}
 							onDone={done}
 						/>
 					)}

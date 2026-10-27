@@ -3,7 +3,7 @@ import { type AuditEntry, insertAudit } from "@Real-Estate-CRM/db/audit";
 import {
 	activity,
 	campaign,
-	customer,
+	contact,
 	lead,
 	leadSource,
 	member,
@@ -297,8 +297,8 @@ export async function listPool(
 	return db
 		.select({
 			leadId: lead.id,
-			customerId: customer.id,
-			customerName: customer.name,
+			contactId: contact.id,
+			contactName: contact.name,
 			projectId: project.id,
 			projectName: project.name,
 			priority: lead.priority,
@@ -314,7 +314,7 @@ export async function listPool(
 			nurtureNote: sql<string | null>`(select x.note from ${lastNurture} x)`,
 		})
 		.from(lead)
-		.innerJoin(customer, eq(customer.id, lead.customerId))
+		.innerJoin(contact, eq(contact.id, lead.contactId))
 		.innerJoin(project, eq(project.id, lead.projectId))
 		.innerJoin(leadSource, eq(leadSource.id, lead.sourceId))
 		.leftJoin(campaign, eq(campaign.id, lead.campaignId))

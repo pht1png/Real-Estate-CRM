@@ -112,13 +112,13 @@ describe("in-person sources need full details at capture", () => {
 		const s = await setup();
 		expect(
 			await codeOf(
-				s.sales.caller.leadSource.setChannelInPerson({
+				s.sales.caller.leadSource.setChannelFlags({
 					channelId: s.offline.id,
 					inPerson: false,
 				}),
 			),
 		).toBe("FORBIDDEN");
-		await s.admin.caller.leadSource.setChannelInPerson({
+		await s.admin.caller.leadSource.setChannelFlags({
 			channelId: s.offline.id,
 			inPerson: false,
 		});
@@ -133,7 +133,7 @@ describe("in-person sources need full details at capture", () => {
 		const b = await setup();
 		expect(
 			await codeOf(
-				b.admin.caller.leadSource.setChannelInPerson({
+				b.admin.caller.leadSource.setChannelFlags({
 					channelId: s.offline.id,
 					inPerson: true,
 				}),
@@ -257,13 +257,13 @@ describe("qualification check and qualify before converting", () => {
 		expect((await row(noFit.leadId))?.status).toBe("new");
 	});
 
-	test("auto-qualify is off by default; the customer page shows the fit", async () => {
+	test("auto-qualify is off by default; the contact page shows the fit", async () => {
 		const s = await setup();
 		const res = await s.sales.caller.lead.capture(walkIn(s));
 		expect(res.fit).toBe("fits");
 		expect((await row(res.leadId))?.status).toBe("new");
-		const page = await s.sales.caller.customer.get({
-			customerId: res.customerId,
+		const page = await s.sales.caller.contact.get({
+			contactId: res.contactId,
 		});
 		const l = page.leads.find((x) => x.id === res.leadId);
 		expect(l?.visible && l.fit).toBe("fits");

@@ -223,7 +223,7 @@ describe("booking appointments", () => {
 		// A cancelled appointment frees its slot.
 		await s.salesA.caller.appointment.cancel({
 			appointmentId: first.appointmentId,
-			reason: "customer_cancelled",
+			reason: "contact_cancelled",
 		});
 		const three = await connected(s);
 		expect(
@@ -399,7 +399,7 @@ describe("changing appointments", () => {
 			() =>
 				b.manager.caller.appointment.cancel({
 					appointmentId,
-					reason: "customer_cancelled",
+					reason: "contact_cancelled",
 				}),
 			() =>
 				b.manager.caller.appointment.noShow({
@@ -422,7 +422,7 @@ describe("changing appointments", () => {
 			await codeOf(
 				a.salesB.caller.appointment.cancel({
 					appointmentId,
-					reason: "customer_cancelled",
+					reason: "contact_cancelled",
 				}),
 			),
 		).toBe("NOT_FOUND");
@@ -738,7 +738,7 @@ describe("funding, status and hot / warm", () => {
 				db.insert(opportunity).values({
 					organizationId: s.org.id,
 					leadId,
-					customerId: (await opportunityRow(opportunityId)).customerId,
+					contactId: (await opportunityRow(opportunityId)).contactId,
 					projectId: s.projectId,
 					ownerMemberId: s.salesA.member.id,
 					firstVisitAt: new Date(),
@@ -766,9 +766,9 @@ describe("funding, status and hot / warm", () => {
 	test("hot / warm is computed: timeline, budget fit, cash, a second visit", async () => {
 		const s = await setup();
 		const { opportunityId, leadId } = await converted(s);
-		const customerId = (await opportunityRow(opportunityId)).customerId;
+		const contactId = (await opportunityRow(opportunityId)).contactId;
 		const temperature = async () =>
-			(await s.salesA.caller.customer.get({ customerId })).leads.find(
+			(await s.salesA.caller.contact.get({ contactId })).leads.find(
 				(l) => l.id === leadId && l.visible,
 			);
 		// Visited + buying within 3 months; no priced units yet → warm.

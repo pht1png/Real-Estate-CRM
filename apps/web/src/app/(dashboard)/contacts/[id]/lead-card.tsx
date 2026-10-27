@@ -28,6 +28,8 @@ import {
 } from "@Real-Estate-CRM/ui/components/card";
 import { Textarea } from "@Real-Estate-CRM/ui/components/textarea";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { Route } from "next";
+import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -44,28 +46,28 @@ import { useCan, useMe } from "@/hooks/use-me";
 import { useFormatBaht } from "@/lib/money";
 import { useTRPC } from "@/utils/trpc";
 
-import type { CustomerDetail } from "./profile-card";
+import type { ContactDetail } from "./profile-card";
 
-type VisibleLead = Extract<CustomerDetail["leads"][number], { visible: true }>;
+type VisibleLead = Extract<ContactDetail["leads"][number], { visible: true }>;
 
 const isIn = <T extends string>(list: readonly T[], v: unknown): v is T =>
 	typeof v === "string" && (list as readonly string[]).includes(v);
 
 /**
- * One project for this customer: the opportunity (green) once a visit
+ * One project for this contact: the opportunity (green) once a visit
  * converted the lead, the lead (blue, vetting) with its qualification, the
  * showroom appointments, and one timeline.
  */
 export function LeadCard({
 	lead: l,
 	phoneE164,
-	customerName,
+	contactName,
 }: {
 	lead: VisibleLead;
 	phoneE164: string | null;
-	customerName: string;
+	contactName: string;
 }) {
-	const t = useTranslations("customer");
+	const t = useTranslations("contact");
 	const tls = useTranslations("leadStatuses");
 	const tos = useTranslations("opportunityStatuses");
 	const tfund = useTranslations("fundingTypes");
@@ -77,9 +79,10 @@ export function LeadCard({
 	const ta = useTranslations("activityTypes");
 	const tt = useTranslations("timelines");
 	const ti = useTranslations("buyerIntents");
+	const tir = useTranslations("incomeRanges");
 	const tf = useTranslations("fit");
 	const tsig = useTranslations("signals");
-	const tcust = useTranslations("customers");
+	const tcust = useTranslations("contacts");
 	const tc = useTranslations("common");
 	const format = useFormatter();
 	const formatBaht = useFormatBaht();
@@ -104,7 +107,7 @@ export function LeadCard({
 		trpc.lead.addNote.mutationOptions({
 			onSuccess: async () => {
 				setNote("");
-				await queryClient.invalidateQueries(trpc.customer.pathFilter());
+				await queryClient.invalidateQueries(trpc.contact.pathFilter());
 			},
 			onError: (e) => toast.error(e.message),
 		}),
@@ -142,6 +145,9 @@ export function LeadCard({
 			isIn<AppointmentCancelReason>(appointmentCancelReasons, data?.reason)
 		) {
 			return ` · ${tacr(data.reason)}`;
+		}
+		if (type === "note" && data && "referrer" in data) {
+			return ` · ${t("referrerChanged")}`;
 		}
 		const funding = data?.funding as { to?: unknown } | undefined;
 		if (type === "note" && isIn<FundingType>(fundingTypes, funding?.to)) {
@@ -226,7 +232,7 @@ export function LeadCard({
 								target={{
 									kind: "opportunity",
 									id: opp.id,
-									customerName,
+									contactName,
 									phoneE164,
 									nextFollowUpAt: opp.nextFollowUpAt,
 									status: opp.status,
@@ -295,6 +301,25 @@ export function LeadCard({
 								label: t("intent"),
 								value: l.buyerIntent ? ti(l.buyerIntent) : t("notSet"),
 							},
+							{
+								label: t("income"),
+								value: l.incomeRange ? tir(l.incomeRange) : t("notSet"),
+							},
+							...(l.referredBy
+								? [
+										{
+											label: t("referrer"),
+											value: (
+												<Link
+													href={`/contacts/${l.referredBy.id}` as Route}
+													className="underline-offset-4 hover:underline"
+												>
+													{l.referredBy.name}
+												</Link>
+											),
+										},
+									]
+								: []),
 							...(leadOpen
 								? [
 										{
@@ -327,11 +352,12 @@ export function LeadCard({
 							target={{
 								kind: "lead",
 								id: l.id,
-								customerName,
+								contactName,
 								phoneE164,
 								nextFollowUpAt: l.nextFollowUpAt,
 								status: l.status,
 								fit: l.fit,
+								referredBy: l.referredBy,
 								projectId: l.projectId,
 								priceRange,
 								qualification: {
@@ -340,6 +366,7 @@ export function LeadCard({
 									buyingTimeline: l.buyingTimeline,
 									unitTypeIds: l.unitTypeIds,
 									buyerIntent: l.buyerIntent,
+									incomeRange: l.incomeRange,
 								},
 							}}
 						/>
@@ -381,7 +408,7 @@ export function LeadCard({
 												leadId: l.id,
 												opportunityId: a.opportunityId,
 												startsAt: a.startsAt,
-												customerName,
+												contactName,
 												projectId: l.projectId,
 												qualified: l.status === "qualified",
 												qualification: {
@@ -390,6 +417,7 @@ export function LeadCard({
 													buyingTimeline: l.buyingTimeline,
 													unitTypeIds: l.unitTypeIds,
 													buyerIntent: l.buyerIntent,
+													incomeRange: l.incomeRange,
 												},
 												priceRange,
 											}}

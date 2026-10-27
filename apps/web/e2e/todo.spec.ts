@@ -117,7 +117,7 @@ test("salesperson on a phone: pool, To do sections, qualify, confirmed visit →
 	await expect(mali).toHaveCount(0);
 
 	// Nida comes to the showroom (already qualified): Confirm visit → green opportunity.
-	await m.goto("/customers");
+	await m.goto("/contacts");
 	await m.getByRole("link", { name: "Khun Nida" }).click();
 	const card = m
 		.getByRole("heading", { name: "Riverside" })
@@ -151,7 +151,7 @@ test("salesperson on a phone: pool, To do sections, qualify, confirmed visit →
 	await openCapture(m);
 	await choose(m, "โครงการ", "Riverside");
 	await m.getByLabel("เบอร์โทร", { exact: true }).fill("086-555-1234");
-	await m.getByLabel("ชื่อลูกค้า").fill("Khun Arun");
+	await m.getByLabel("ชื่อ-นามสกุล").fill("Khun Arun");
 	await choose(m, "แหล่งที่มา", "Walk-in");
 	await m.getByRole("button", { name: "บันทึกลูกค้า", exact: true }).click();
 	await expect(

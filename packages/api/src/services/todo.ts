@@ -1,7 +1,7 @@
 import type { Database } from "@Real-Estate-CRM/db";
 import {
 	appointment,
-	customer,
+	contact,
 	type FitResult,
 	lead,
 	openLeadStatuses,
@@ -27,7 +27,7 @@ const LIMIT = 100;
 
 const primaryPhone = sql<
 	string | null
->`(select p.phone_e164 from customer_phone p where p.customer_id = ${customer.id} order by p.is_primary desc limit 1)`;
+>`(select p.phone_e164 from contact_phone p where p.contact_id = ${contact.id} order by p.is_primary desc limit 1)`;
 /** Start of today in the project's time zone (brief §3: working days per project). */
 const startOfToday = (now: Date) =>
 	sql<string>`(date_trunc('day', ${now}::timestamptz at time zone ${project.timeZone}) at time zone ${project.timeZone})`;
@@ -72,8 +72,8 @@ export async function getTodo(db: Database, tenant: Tenant) {
 		db
 			.select({
 				id: lead.id,
-				customerId: customer.id,
-				customerName: customer.name,
+				contactId: contact.id,
+				contactName: contact.name,
 				projectId: project.id,
 				projectName: project.name,
 				status: lead.status,
@@ -86,13 +86,14 @@ export async function getTodo(db: Database, tenant: Tenant) {
 				buyingTimeline: lead.buyingTimeline,
 				unitTypeIds: lead.unitTypeIds,
 				buyerIntent: lead.buyerIntent,
+				incomeRange: lead.incomeRange,
 				qualificationRules: project.qualificationRules,
 				minPriceSatang: priceBound("min", lead.projectId),
 				maxPriceSatang: priceBound("max", lead.projectId),
 				primaryPhone,
 			})
 			.from(lead)
-			.innerJoin(customer, eq(customer.id, lead.customerId))
+			.innerJoin(contact, eq(contact.id, lead.contactId))
 			.innerJoin(project, eq(project.id, lead.projectId))
 			.where(
 				and(
@@ -109,8 +110,8 @@ export async function getTodo(db: Database, tenant: Tenant) {
 		db
 			.select({
 				id: opportunity.id,
-				customerId: customer.id,
-				customerName: customer.name,
+				contactId: contact.id,
+				contactName: contact.name,
 				projectId: project.id,
 				projectName: project.name,
 				status: opportunity.status,
@@ -129,7 +130,7 @@ export async function getTodo(db: Database, tenant: Tenant) {
 			})
 			.from(opportunity)
 			.innerJoin(lead, eq(lead.id, opportunity.leadId))
-			.innerJoin(customer, eq(customer.id, opportunity.customerId))
+			.innerJoin(contact, eq(contact.id, opportunity.contactId))
 			.innerJoin(project, eq(project.id, opportunity.projectId))
 			.where(
 				and(
@@ -151,8 +152,8 @@ export async function getTodo(db: Database, tenant: Tenant) {
 				opportunityId: appointment.opportunityId,
 				startsAt: appointment.startsAt,
 				endsAt: appointment.endsAt,
-				customerId: customer.id,
-				customerName: customer.name,
+				contactId: contact.id,
+				contactName: contact.name,
 				projectId: project.id,
 				projectName: project.name,
 				leadStatus: lead.status,
@@ -161,6 +162,7 @@ export async function getTodo(db: Database, tenant: Tenant) {
 				buyingTimeline: lead.buyingTimeline,
 				unitTypeIds: lead.unitTypeIds,
 				buyerIntent: lead.buyerIntent,
+				incomeRange: lead.incomeRange,
 				minPriceSatang: priceBound("min", lead.projectId),
 				maxPriceSatang: priceBound("max", lead.projectId),
 				today: sql<boolean>`${appointment.startsAt} >= ${startOfToday(now)}`,
@@ -168,7 +170,7 @@ export async function getTodo(db: Database, tenant: Tenant) {
 			})
 			.from(appointment)
 			.innerJoin(lead, eq(lead.id, appointment.leadId))
-			.innerJoin(customer, eq(customer.id, lead.customerId))
+			.innerJoin(contact, eq(contact.id, lead.contactId))
 			.innerJoin(project, eq(project.id, lead.projectId))
 			.where(
 				and(
@@ -217,8 +219,8 @@ export async function getTodo(db: Database, tenant: Tenant) {
 		return {
 			kind: "lead" as const,
 			id: r.id,
-			customerId: r.customerId,
-			customerName: r.customerName,
+			contactId: r.contactId,
+			contactName: r.contactName,
 			projectId: r.projectId,
 			projectName: r.projectName,
 			status: r.status,
@@ -237,6 +239,7 @@ export async function getTodo(db: Database, tenant: Tenant) {
 				buyingTimeline: r.buyingTimeline,
 				unitTypeIds: r.unitTypeIds,
 				buyerIntent: r.buyerIntent,
+				incomeRange: r.incomeRange,
 			},
 			priceRange:
 				r.minPriceSatang !== null && r.maxPriceSatang !== null
@@ -267,8 +270,8 @@ export async function getTodo(db: Database, tenant: Tenant) {
 			{
 				kind: "opportunity" as const,
 				id: r.id,
-				customerId: r.customerId,
-				customerName: r.customerName,
+				contactId: r.contactId,
+				contactName: r.contactName,
 				projectId: r.projectId,
 				projectName: r.projectName,
 				status: r.status,
@@ -300,8 +303,8 @@ export async function getTodo(db: Database, tenant: Tenant) {
 		today: r.today,
 		startsAt: r.startsAt,
 		endsAt: r.endsAt,
-		customerId: r.customerId,
-		customerName: r.customerName,
+		contactId: r.contactId,
+		contactName: r.contactName,
 		projectId: r.projectId,
 		projectName: r.projectName,
 		/** Prefill for qualifying an unvetted guest face to face. */
@@ -311,6 +314,7 @@ export async function getTodo(db: Database, tenant: Tenant) {
 			buyingTimeline: r.buyingTimeline,
 			unitTypeIds: r.unitTypeIds,
 			buyerIntent: r.buyerIntent,
+			incomeRange: r.incomeRange,
 		},
 		priceRange:
 			r.minPriceSatang !== null && r.maxPriceSatang !== null

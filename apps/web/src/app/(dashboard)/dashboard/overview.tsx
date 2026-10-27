@@ -30,9 +30,9 @@ import { useTRPC } from "@/utils/trpc";
 const WORKING_ROLES = ["salesperson", "sales_manager"];
 
 const leadsLink = (status: LeadStatus) =>
-	`/customers?ownership=mine&status=${status}` as Route;
+	`/contacts?ownership=mine&status=${status}` as Route;
 const opportunitiesLink = (status: OpportunityStatus) =>
-	`/customers?pipeline=opportunities&ownership=mine&opportunityStatus=${status}` as Route;
+	`/contacts?pipeline=opportunities&ownership=mine&opportunityStatus=${status}` as Route;
 
 export function Overview({ name }: { name: string }) {
 	const t = useTranslations("overview");

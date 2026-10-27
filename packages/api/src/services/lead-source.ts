@@ -8,20 +8,28 @@ import { badRequest, conflict, isUniqueViolation, notFound } from "./errors";
 import type { Tenant } from "./tenancy";
 
 /** Starting list for every company (brief §5); admins rename, add or archive. */
-const DEFAULTS: { channel: string; inPerson: boolean; sources: string[] }[] = [
+const DEFAULTS: {
+	channel: string;
+	inPerson: boolean;
+	referral: boolean;
+	sources: string[];
+}[] = [
 	{
 		channel: "Online",
 		inPerson: false,
+		referral: false,
 		sources: ["Facebook", "Google", "Website", "LINE"],
 	},
 	{
 		channel: "Offline",
 		inPerson: true,
+		referral: false,
 		sources: ["Walk-in", "Billboard", "Event"],
 	},
 	{
 		channel: "Referral",
 		inPerson: false,
+		referral: true,
 		sources: ["Existing owner", "Friends & family"],
 	},
 ];
@@ -49,6 +57,7 @@ export async function ensureDefaultSources(tx: Tx, organizationId: string) {
 				organizationId,
 				name: d.channel,
 				inPerson: d.inPerson,
+				referral: d.referral,
 				sortOrder: i,
 			})
 			.onConflictDoNothing()
@@ -83,10 +92,15 @@ export const archiveSourceInput = z.strictObject({
 	sourceId: z.uuid(),
 	archived: z.boolean(),
 });
-export const channelInPersonInput = z.strictObject({
-	channelId: z.uuid(),
-	inPerson: z.boolean(),
-});
+export const channelFlagsInput = z
+	.strictObject({
+		channelId: z.uuid(),
+		inPerson: z.boolean().optional(),
+		referral: z.boolean().optional(),
+	})
+	.refine((v) => v.inPerson !== undefined || v.referral !== undefined, {
+		message: "Give a flag to change",
+	});
 
 /** Channels with their sources (archived included, flagged) and the "Don't know" source. */
 export async function listLeadSources(db: Database, tenant: Tenant) {
@@ -97,6 +111,7 @@ export async function listLeadSources(db: Database, tenant: Tenant) {
 				id: leadChannel.id,
 				name: leadChannel.name,
 				inPerson: leadChannel.inPerson,
+				referral: leadChannel.referral,
 			})
 			.from(leadChannel)
 			.where(eq(leadChannel.organizationId, tenant.organizationId))
@@ -135,6 +150,7 @@ export async function requireActiveSource(
 			id: leadSource.id,
 			channelId: leadSource.channelId,
 			inPerson: sql<boolean>`coalesce(${leadChannel.inPerson}, false)`,
+			referral: sql<boolean>`coalesce(${leadChannel.referral}, false)`,
 		})
 		.from(leadSource)
 		.leftJoin(leadChannel, eq(leadChannel.id, leadSource.channelId))
@@ -182,29 +198,33 @@ export async function createChannel(
 	}
 }
 
-/** Admins mark channels where the customer meets us in person (capture needs details). */
-export async function setChannelInPerson(
+/**
+ * Admins mark channels where the contact meets us in person (capture needs
+ * details), or comes through a referral (capture asks who referred them).
+ */
+export async function setChannelFlags(
 	db: Database,
 	tenant: Tenant,
-	input: z.infer<typeof channelInPersonInput>,
+	input: z.infer<typeof channelFlagsInput>,
 ) {
+	const { channelId, ...flags } = input;
 	await db.transaction(async (tx) => {
 		const updated = await tx
 			.update(leadChannel)
-			.set({ inPerson: input.inPerson })
+			.set(flags)
 			.where(
 				and(
-					eq(leadChannel.id, input.channelId),
+					eq(leadChannel.id, channelId),
 					eq(leadChannel.organizationId, tenant.organizationId),
 				),
 			)
 			.returning({ id: leadChannel.id });
 		if (updated.length === 0) notFound("Channel");
 		await writeAudit(tx, tenant, {
-			action: "lead_channel.in_person",
+			action: "lead_channel.flags",
 			entityType: "lead_channel",
-			entityId: input.channelId,
-			after: { inPerson: input.inPerson },
+			entityId: channelId,
+			after: flags,
 		});
 	});
 }

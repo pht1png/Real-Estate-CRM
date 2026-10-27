@@ -39,7 +39,7 @@ import { listMembersInScope } from "../services/team";
 import {
 	appointmentRouter,
 	campaignRouter,
-	customerRouter,
+	contactRouter,
 	leadRouter,
 	leadSourceRouter,
 	opportunityRouter,
@@ -101,7 +101,7 @@ export const appRouter = router({
 	lead: leadRouter,
 	opportunity: opportunityRouter,
 	appointment: appointmentRouter,
-	customer: customerRouter,
+	contact: contactRouter,
 	leadSource: leadSourceRouter,
 	campaign: campaignRouter,
 	rules: rulesRouter,

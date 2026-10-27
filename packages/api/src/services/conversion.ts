@@ -33,7 +33,7 @@ export async function openOpportunity(
 		.values({
 			organizationId: tenant.organizationId,
 			leadId: row.id,
-			customerId: row.customerId,
+			contactId: row.contactId,
 			projectId: row.projectId,
 			ownerMemberId: row.ownerMemberId,
 			firstVisitAt: visitedAt,

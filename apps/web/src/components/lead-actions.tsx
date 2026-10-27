@@ -45,6 +45,7 @@ import {
 	ThumbsDownIcon,
 	TimerResetIcon,
 	UserCheckIcon,
+	UsersIcon,
 	XCircleIcon,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -62,6 +63,7 @@ import {
 	NoteForm,
 	OutcomeForm,
 	QualifyForm,
+	ReferrerForm,
 	RescheduleForm,
 	useLeadError,
 	useRefreshLeads,
@@ -105,6 +107,8 @@ export type ActionTarget = FormTarget & {
 	/** Qualification check (brief §6): suggests the next step, never acts alone. */
 	fit?: FitResult | null;
 	fundingType?: FundingType | null;
+	/** Leads: who referred the contact (shown and changed from the ⋯ menu). */
+	referredBy?: { name: string } | null;
 };
 
 /** Manual moves offered on an opportunity; the rest come from deposits (M6). */
@@ -134,6 +138,7 @@ type Pane =
 	  }
 	| { kind: "convert" }
 	| { kind: "book" }
+	| { kind: "referrer" }
 	| { kind: "funding" }
 	| {
 			kind: "close";
@@ -294,6 +299,12 @@ export function LeadActions({
 										<DoorOpenIcon />
 										{t("confirmVisit")}
 									</DropdownMenuItem>
+									<DropdownMenuItem
+										onClick={() => setPane({ kind: "referrer" })}
+									>
+										<UsersIcon />
+										{t("referrer.title")}
+									</DropdownMenuItem>
 								</>
 							)}
 							{canBook && (
@@ -429,6 +440,13 @@ export function LeadActions({
 					{pane?.kind === "convert" && (
 						<VisitForm target={target} onDone={done} />
 					)}
+					{pane?.kind === "referrer" && (
+						<ReferrerForm
+							target={target}
+							current={target.referredBy}
+							onDone={done}
+						/>
+					)}
 					{pane?.kind === "book" && (
 						<BookAppointmentForm target={target} onDone={done} />
 					)}
@@ -481,7 +499,7 @@ function ResultChoice({
 		<>
 			<DialogHeader>
 				<DialogTitle>
-					{t("result.title", { name: target.customerName })}
+					{t("result.title", { name: target.contactName })}
 				</DialogTitle>
 				<DialogDescription>{t("result.description")}</DialogDescription>
 			</DialogHeader>

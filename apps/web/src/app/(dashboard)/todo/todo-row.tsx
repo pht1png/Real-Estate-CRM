@@ -36,7 +36,7 @@ export function TodoRow({
 	size?: "default" | "lg";
 }) {
 	const t = useTranslations("todo");
-	const tc = useTranslations("customers");
+	const tc = useTranslations("contacts");
 	const tf = useTranslations("fit");
 	const format = useFormatter();
 	const pipelineLabel = usePipelineLabel();
@@ -121,13 +121,13 @@ export function TodoRow({
 				<div className="flex min-w-0 flex-col gap-1">
 					<TypeBadge kind={l.kind} />
 					<Link
-						href={`/customers/${l.customerId}` as Route}
+						href={`/contacts/${l.contactId}` as Route}
 						className={cn(
 							"font-medium underline-offset-4 hover:underline",
 							size === "lg" && "text-xl",
 						)}
 					>
-						{l.customerName}
+						{l.contactName}
 					</Link>
 				</div>
 				{l.priority && <Badge>{tc("priority")}</Badge>}
@@ -193,10 +193,10 @@ export function AppointmentRow({
 			<div className="flex min-w-0 flex-col gap-1">
 				<TypeBadge kind={kind} />
 				<Link
-					href={`/customers/${a.customerId}` as Route}
+					href={`/contacts/${a.contactId}` as Route}
 					className="font-medium underline-offset-4 hover:underline"
 				>
-					{a.customerName}
+					{a.contactName}
 				</Link>
 			</div>
 			<AttributeList items={items} />

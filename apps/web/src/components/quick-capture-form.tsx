@@ -6,6 +6,8 @@ import {
 	type BuyingTimeline,
 	buyerIntents,
 	buyingTimelines,
+	type IncomeRange,
+	incomeRanges,
 } from "@Real-Estate-CRM/db/constants";
 import { Alert, AlertDescription } from "@Real-Estate-CRM/ui/components/alert";
 import { Button } from "@Real-Estate-CRM/ui/components/button";
@@ -114,6 +116,7 @@ export function QuickCaptureForm({ onDone }: { onDone: () => void }) {
 	const pipelineLabel = usePipelineLabel();
 	const tt = useTranslations("timelines");
 	const ti = useTranslations("buyerIntents");
+	const tir = useTranslations("incomeRanges");
 	const tsrc = useTranslations("sources");
 	const trpc = useTRPC();
 	const queryClient = useQueryClient();
@@ -145,6 +148,8 @@ export function QuickCaptureForm({ onDone }: { onDone: () => void }) {
 	const [note, setNote] = useState("");
 	const [unitTypeIds, setUnitTypeIds] = useState<string[]>([]);
 	const [intent, setIntent] = useState<BuyerIntent | "">("");
+	const [income, setIncome] = useState<IncomeRange[]>([]);
+	const [referrerPhone, setReferrerPhone] = useState("");
 	// When the enquiry really came in (forgot to log a walk-in at once).
 	const [receivedAt, setReceivedAt] = useState(() =>
 		toDateTimeLocal(new Date()),
@@ -165,10 +170,10 @@ export function QuickCaptureForm({ onDone }: { onDone: () => void }) {
 			{ enabled: !!lookupPhone },
 		),
 	);
-	const existing = lookupPhone ? lookup.data?.customer : null;
+	const existing = lookupPhone ? lookup.data?.contact : null;
 
 	// Derived, not copied into state: default project, and the existing
-	// customer's name until the user types their own.
+	// contact's name until the user types their own.
 	const projectId = chosenProjectId || projects.data?.[0]?.id || "";
 	const name = typedName ?? existing?.name ?? "";
 
@@ -176,9 +181,12 @@ export function QuickCaptureForm({ onDone }: { onDone: () => void }) {
 		.flatMap((c) => c.sources)
 		.find((s) => s.id === sourceId);
 	// In person (walk-in, event): the details section is required (brief §6).
-	const inPerson = !!sources.data?.channels.find(
+	const channel = sources.data?.channels.find(
 		(c) => c.id === selectedSource?.channelId,
-	)?.inPerson;
+	);
+	const inPerson = !!channel?.inPerson;
+	// Referral channels ask who referred them (optional, by phone).
+	const referral = !!channel?.referral;
 	const unitTypes = useQuery(
 		trpc.unitType.list.queryOptions({ projectId }, { enabled: !!projectId }),
 	);
@@ -252,12 +260,15 @@ export function QuickCaptureForm({ onDone }: { onDone: () => void }) {
 				});
 				onDone();
 				await queryClient.invalidateQueries(trpc.lead.pathFilter());
-				await queryClient.invalidateQueries(trpc.customer.pathFilter());
+				await queryClient.invalidateQueries(trpc.contact.pathFilter());
 				await queryClient.invalidateQueries(trpc.overview.pathFilter());
 				await queryClient.invalidateQueries(trpc.todo.pathFilter());
-				router.push(`/customers/${result.customerId}` as Route);
+				router.push(`/contacts/${result.contactId}` as Route);
 			},
 			onError: (e) => {
+				if (e.message === "Referrer not found") {
+					return toast.error(t("referrerNotFound"));
+				}
 				const code = ERROR_CODES.find((c) => c === e.data?.code);
 				toast.error(t(code ? `errors.${code}` : "errors.default"));
 			},
@@ -290,6 +301,9 @@ export function QuickCaptureForm({ onDone }: { onDone: () => void }) {
 						timeline === NONE ? undefined : (timeline as BuyingTimeline),
 					unitTypeIds: unitTypeIds.length ? unitTypeIds : undefined,
 					buyerIntent: intent || undefined,
+					incomeRange: income[0],
+					referrerPhone:
+						referral && referrerPhone.trim() ? referrerPhone.trim() : undefined,
 					receivedAt: new Date(
 						Math.min(new Date(receivedAt).getTime(), Date.now()),
 					).toISOString(),
@@ -369,7 +383,7 @@ export function QuickCaptureForm({ onDone }: { onDone: () => void }) {
 					<FieldLabel htmlFor="cap-name">{t("name")}</FieldLabel>
 					<Input
 						id="cap-name"
-						name="customerName"
+						name="contactName"
 						autoComplete="off"
 						value={name}
 						maxLength={120}
@@ -422,6 +436,20 @@ export function QuickCaptureForm({ onDone }: { onDone: () => void }) {
 							onChange={setCampaignId}
 							items={campaignItems}
 						/>
+					</Field>
+				)}
+				{referral && (
+					<Field>
+						<FieldLabel htmlFor="cap-referrer">{t("referrer")}</FieldLabel>
+						<Input
+							id="cap-referrer"
+							name="referrerPhone"
+							type="tel"
+							autoComplete="off"
+							value={referrerPhone}
+							onChange={(e) => setReferrerPhone(e.target.value)}
+						/>
+						<FieldDescription>{t("referrerHint")}</FieldDescription>
 					</Field>
 				)}
 				<div className="flex items-start gap-2">
@@ -550,6 +578,13 @@ export function QuickCaptureForm({ onDone }: { onDone: () => void }) {
 								options={buyerIntents.map((v) => ({ value: v, label: ti(v) }))}
 								value={intent ? [intent] : []}
 								onChange={(v) => setIntent((v[0] as BuyerIntent) ?? "")}
+							/>
+							<ChoiceChips
+								legend={t("income")}
+								options={incomeRanges.map((v) => ({ value: v, label: tir(v) }))}
+								value={income}
+								onChange={setIncome}
+								clearable
 							/>
 							<Field>
 								<FieldLabel htmlFor="cap-note">{t("note")}</FieldLabel>

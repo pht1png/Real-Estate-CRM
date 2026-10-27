@@ -3,8 +3,8 @@ import {
 	activity,
 	appointment,
 	campaign,
-	customer,
-	customerPhone,
+	contact,
+	contactPhone,
 	lead,
 	leadSource,
 	leadStatuses,
@@ -45,7 +45,7 @@ type Executor = Pick<Database, "select">;
 export const phoneLookupInput = z.strictObject({
 	phone: z.string().trim().max(40),
 });
-export const customerIdInput = z.strictObject({ customerId: z.uuid() });
+export const contactIdInput = z.strictObject({ contactId: z.uuid() });
 const search = z.string().trim().max(120).optional();
 export const listLeadsInput = z.strictObject({
 	query: search,
@@ -62,23 +62,19 @@ export const listOpportunitiesInput = z.strictObject({
 		.optional(),
 	ownership: z.enum(["mine", "all"]).optional(),
 });
-export const updateCustomerInput = z.strictObject({
-	customerId: z.uuid(),
+export const updateContactInput = z.strictObject({
+	contactId: z.uuid(),
 	name: z.string().trim().min(1).max(120).optional(),
 	lineId: z.string().trim().max(80).nullable().optional(),
 	email: z.email().max(200).nullable().optional(),
 });
-export const customerPhoneInput = z.strictObject({
-	customerId: z.uuid(),
+export const contactPhoneInput = z.strictObject({
+	contactId: z.uuid(),
 	phone: z.string().trim().min(3).max(40),
 });
 export const consentInput = z.strictObject({
-	customerId: z.uuid(),
+	contactId: z.uuid(),
 	marketingConsent: z.boolean(),
-});
-export const referrerInput = z.strictObject({
-	customerId: z.uuid(),
-	referrerCustomerId: z.uuid().nullable(),
 });
 
 const ownerUser = aliasedTable(user, "owner_user");
@@ -88,16 +84,16 @@ const latestOpportunityStatus = sql<
 	(typeof opportunityStatuses)[number] | null
 >`(select o.status from opportunity o where o.lead_id = ${sql.raw(`"lead"."id"`)} order by o.created_at desc limit 1)`;
 
-/** Every lead of a customer, with project, owner and opportunity status (no private fields). */
+/** Every lead of a contact, with project, owner and opportunity status (no private fields). */
 function leadSummaries(
 	db: Executor,
 	organizationId: string,
-	customerIds: string[],
+	contactIds: string[],
 ) {
 	return db
 		.select({
 			id: lead.id,
-			customerId: lead.customerId,
+			contactId: lead.contactId,
 			projectId: lead.projectId,
 			projectName: project.name,
 			status: lead.status,
@@ -112,14 +108,14 @@ function leadSummaries(
 		.where(
 			and(
 				eq(lead.organizationId, organizationId),
-				inArray(lead.customerId, customerIds),
+				inArray(lead.contactId, contactIds),
 			),
 		)
 		.orderBy(asc(project.name));
 }
 
 /**
- * Duplicate check while typing (brief §6): the customer behind a phone, with a
+ * Duplicate check while typing (brief §6): the contact behind a phone, with a
  * summary line per project (project · lead or opportunity status · owner) — never
  * private details.
  */
@@ -129,22 +125,22 @@ export async function lookupByPhone(
 	input: z.infer<typeof phoneLookupInput>,
 ) {
 	const phone = normalizePhone(input.phone);
-	if (!phone) return { phone: null, customer: null };
+	if (!phone) return { phone: null, contact: null };
 	const [match] = await db
-		.select({ id: customer.id, name: customer.name })
-		.from(customerPhone)
-		.innerJoin(customer, eq(customer.id, customerPhone.customerId))
+		.select({ id: contact.id, name: contact.name })
+		.from(contactPhone)
+		.innerJoin(contact, eq(contact.id, contactPhone.contactId))
 		.where(
 			and(
-				eq(customerPhone.organizationId, tenant.organizationId),
-				eq(customerPhone.phoneE164, phone),
+				eq(contactPhone.organizationId, tenant.organizationId),
+				eq(contactPhone.phoneE164, phone),
 			),
 		);
-	if (!match) return { phone, customer: null };
+	if (!match) return { phone, contact: null };
 	const leads = await leadSummaries(db, tenant.organizationId, [match.id]);
 	return {
 		phone,
-		customer: {
+		contact: {
 			...match,
 			leads: leads.map(
 				({ projectId, projectName, status, opportunityStatus, ownerName }) => ({
@@ -159,71 +155,66 @@ export async function lookupByPhone(
 	};
 }
 
-/** The customer if the tenant may open their page: unscoped roles, or any visible lead. */
-async function requireCustomerAccess(
+/** The contact if the tenant may open their page: unscoped roles, or any visible lead. */
+async function requireContactAccess(
 	db: Executor,
 	tenant: Tenant,
-	customerId: string,
+	contactId: string,
 ) {
 	const [row] = await db
 		.select()
-		.from(customer)
+		.from(contact)
 		.where(
 			and(
-				eq(customer.id, customerId),
-				eq(customer.organizationId, tenant.organizationId),
+				eq(contact.id, contactId),
+				eq(contact.organizationId, tenant.organizationId),
 			),
 		);
-	if (!row) notFound("Customer");
+	if (!row) notFound("Contact");
 	if (tenant.projectIds !== null) {
 		const [visible] = await db
 			.select({ id: lead.id })
 			.from(lead)
-			.where(and(eq(lead.customerId, customerId), visibleLeadCondition(tenant)))
+			.where(and(eq(lead.contactId, contactId), visibleLeadCondition(tenant)))
 			.limit(1);
-		if (!visible) notFound("Customer");
+		if (!visible) notFound("Contact");
 	}
 	return row;
 }
 
 /**
- * Customer page: shared profile; per visible project the lead (vetting) and
+ * Contact page: shared profile; per visible project the lead (vetting) and
  * its latest opportunity, its appointments and one timeline; summary lines
  * for the rest.
  */
-export async function getCustomer(
+export async function getContact(
 	db: Database,
 	tenant: Tenant,
-	input: z.infer<typeof customerIdInput>,
+	input: z.infer<typeof contactIdInput>,
 ) {
-	const row = await requireCustomerAccess(db, tenant, input.customerId);
+	const row = await requireContactAccess(db, tenant, input.contactId);
 	const consentBy = aliasedTable(user, "consent_user");
-	const [[consent], phones, summaries, [referrer]] = await Promise.all([
+	const [[consent], phones, summaries] = await Promise.all([
 		db
 			.select({ name: consentBy.name })
 			.from(consentBy)
 			.where(eq(consentBy.id, row.consentRecordedByUserId ?? "")),
 		db
 			.select({
-				phoneE164: customerPhone.phoneE164,
-				isPrimary: customerPhone.isPrimary,
+				phoneE164: contactPhone.phoneE164,
+				isPrimary: contactPhone.isPrimary,
 			})
-			.from(customerPhone)
-			.where(eq(customerPhone.customerId, row.id))
-			.orderBy(desc(customerPhone.isPrimary), asc(customerPhone.createdAt)),
+			.from(contactPhone)
+			.where(eq(contactPhone.contactId, row.id))
+			.orderBy(desc(contactPhone.isPrimary), asc(contactPhone.createdAt)),
 		leadSummaries(db, tenant.organizationId, [row.id]),
-		row.referredByCustomerId
-			? db
-					.select({ id: customer.id, name: customer.name })
-					.from(customer)
-					.where(eq(customer.id, row.referredByCustomerId))
-			: Promise.resolve([]),
 	]);
 
 	const visibleIds = summaries
 		.filter((s) => canSeeLead(tenant, s))
 		.map((s) => s.id);
 	const hostUser = aliasedTable(user, "host_user");
+	const referrer = aliasedTable(contact, "referrer");
 	const [details, opportunities, appointments, activities] = visibleIds.length
 		? await Promise.all([
 				db
@@ -232,6 +223,8 @@ export async function getCustomer(
 						sourceName: leadSource.name,
 						campaignName: campaign.name,
 						campaignCode: campaign.code,
+						referrerId: referrer.id,
+						referrerName: referrer.name,
 						qualificationRules: project.qualificationRules,
 						minPriceSatang: sql<
 							number | null
@@ -244,6 +237,7 @@ export async function getCustomer(
 					.innerJoin(leadSource, eq(leadSource.id, lead.sourceId))
 					.innerJoin(project, eq(project.id, lead.projectId))
 					.leftJoin(campaign, eq(campaign.id, lead.campaignId))
+					.leftJoin(referrer, eq(referrer.id, lead.referredByContactId))
 					.where(inArray(lead.id, visibleIds)),
 				db
 					.select()
@@ -294,7 +288,6 @@ export async function getCustomer(
 		marketingConsent: row.marketingConsent,
 		consentRecordedAt: row.consentRecordedAt,
 		consentRecordedBy: consent?.name ?? null,
-		referredBy: referrer ?? null,
 		leads: summaries.map((s) => {
 			const d = details.find((x) => x.lead.id === s.id);
 			if (!d) {
@@ -334,6 +327,10 @@ export async function getCustomer(
 				buyingTimeline: l.buyingTimeline,
 				unitTypeIds: l.unitTypeIds,
 				buyerIntent: l.buyerIntent,
+				incomeRange: l.incomeRange,
+				referredBy: d.referrerId
+					? { id: d.referrerId, name: d.referrerName ?? "" }
+					: null,
 				qualifiedAt: l.qualifiedAt,
 				convertedAt: l.convertedAt,
 				nextFollowUpAt: l.nextFollowUpAt,
@@ -371,17 +368,17 @@ export async function getCustomer(
 
 const primaryPhone = sql<
 	string | null
->`(select p.phone_e164 from customer_phone p where p.customer_id = ${customer.id} order by p.is_primary desc limit 1)`;
+>`(select p.phone_e164 from contact_phone p where p.contact_id = ${contact.id} order by p.is_primary desc limit 1)`;
 
-/** Name contains the query, or the query is one of the customer's phones. */
-function customerSearch(query: string | undefined): SQL | undefined {
+/** Name contains the query, or the query is one of the contact's phones. */
+function contactSearch(query: string | undefined): SQL | undefined {
 	const q = query?.trim();
 	if (!q) return undefined;
 	const phone = normalizePhone(q);
 	return or(
-		ilike(customer.name, `%${q.replace(/[%_\\]/g, "\\$&")}%`),
+		ilike(contact.name, `%${q.replace(/[%_\\]/g, "\\$&")}%`),
 		phone
-			? sql`exists (select 1 from customer_phone p where p.customer_id = ${customer.id} and p.phone_e164 = ${phone})`
+			? sql`exists (select 1 from contact_phone p where p.contact_id = ${contact.id} and p.phone_e164 = ${phone})`
 			: undefined,
 	);
 }
@@ -401,8 +398,8 @@ export async function listLeads(
 	const rows = await db
 		.select({
 			leadId: lead.id,
-			customerId: customer.id,
-			customerName: customer.name,
+			contactId: contact.id,
+			contactName: contact.name,
 			projectName: project.name,
 			status: lead.status,
 			priority: lead.priority,
@@ -413,7 +410,7 @@ export async function listLeads(
 			primaryPhone,
 		})
 		.from(lead)
-		.innerJoin(customer, eq(customer.id, lead.customerId))
+		.innerJoin(contact, eq(contact.id, lead.contactId))
 		.innerJoin(project, eq(project.id, lead.projectId))
 		.leftJoin(member, eq(member.id, lead.ownerMemberId))
 		.leftJoin(ownerUser, eq(ownerUser.id, member.userId))
@@ -430,7 +427,7 @@ export async function listLeads(
 				input.ownership === "pool"
 					? sql`${lead.ownerMemberId} is null`
 					: undefined,
-				customerSearch(input.query),
+				contactSearch(input.query),
 			),
 		)
 		.orderBy(desc(lead.priority), desc(lead.createdAt))
@@ -447,8 +444,8 @@ export async function listOpportunities(
 	const rows = await db
 		.select({
 			opportunityId: opportunity.id,
-			customerId: customer.id,
-			customerName: customer.name,
+			contactId: contact.id,
+			contactName: contact.name,
 			projectName: project.name,
 			status: opportunity.status,
 			ownerMemberId: opportunity.ownerMemberId,
@@ -458,7 +455,7 @@ export async function listOpportunities(
 			primaryPhone,
 		})
 		.from(opportunity)
-		.innerJoin(customer, eq(customer.id, opportunity.customerId))
+		.innerJoin(contact, eq(contact.id, opportunity.contactId))
 		.innerJoin(project, eq(project.id, opportunity.projectId))
 		.leftJoin(member, eq(member.id, opportunity.ownerMemberId))
 		.leftJoin(ownerUser, eq(ownerUser.id, member.userId))
@@ -474,7 +471,7 @@ export async function listOpportunities(
 				input.ownership === "mine"
 					? eq(opportunity.ownerMemberId, tenant.memberId)
 					: undefined,
-				customerSearch(input.query),
+				contactSearch(input.query),
 			),
 		)
 		.orderBy(desc(opportunity.lastVisitAt))
@@ -482,107 +479,107 @@ export async function listOpportunities(
 	return withPhone(rows);
 }
 
-export async function updateCustomer(
+export async function updateContact(
 	db: Database,
 	tenant: Tenant,
-	input: z.infer<typeof updateCustomerInput>,
+	input: z.infer<typeof updateContactInput>,
 ) {
-	const { customerId, ...changes } = input;
+	const { contactId, ...changes } = input;
 	await db.transaction(async (tx) => {
-		await requireCustomerAccess(tx, tenant, customerId);
-		await tx.update(customer).set(changes).where(eq(customer.id, customerId));
+		await requireContactAccess(tx, tenant, contactId);
+		await tx.update(contact).set(changes).where(eq(contact.id, contactId));
 		await writeAudit(tx, tenant, {
-			action: "customer.update",
-			entityType: "customer",
-			entityId: customerId,
+			action: "contact.update",
+			entityType: "contact",
+			entityId: contactId,
 			after: { fields: Object.keys(changes) },
 		});
 	});
 }
 
-export async function addCustomerPhone(
+export async function addContactPhone(
 	db: Database,
 	tenant: Tenant,
-	input: z.infer<typeof customerPhoneInput>,
+	input: z.infer<typeof contactPhoneInput>,
 ) {
 	const phone = normalizePhone(input.phone);
 	if (!phone) badRequest("Invalid phone number");
 	await db.transaction(async (tx) => {
-		await requireCustomerAccess(tx, tenant, input.customerId);
+		await requireContactAccess(tx, tenant, input.contactId);
 		const [taken] = await tx
-			.select({ customerId: customerPhone.customerId })
-			.from(customerPhone)
+			.select({ contactId: contactPhone.contactId })
+			.from(contactPhone)
 			.where(
 				and(
-					eq(customerPhone.organizationId, tenant.organizationId),
-					eq(customerPhone.phoneE164, phone),
+					eq(contactPhone.organizationId, tenant.organizationId),
+					eq(contactPhone.phoneE164, phone),
 				),
 			);
 		if (taken) {
 			conflict(
-				taken.customerId === input.customerId
-					? "This customer already has this number"
-					: "This number belongs to another customer",
+				taken.contactId === input.contactId
+					? "This contact already has this number"
+					: "This number belongs to another contact",
 			);
 		}
-		await tx.insert(customerPhone).values({
+		await tx.insert(contactPhone).values({
 			organizationId: tenant.organizationId,
-			customerId: input.customerId,
+			contactId: input.contactId,
 			phoneE164: phone,
 		});
 		await writeAudit(tx, tenant, {
-			action: "customer.phone_add",
-			entityType: "customer",
-			entityId: input.customerId,
+			action: "contact.phone_add",
+			entityType: "contact",
+			entityId: input.contactId,
 		});
 	});
 }
 
-export async function removeCustomerPhone(
+export async function removeContactPhone(
 	db: Database,
 	tenant: Tenant,
-	input: z.infer<typeof customerPhoneInput>,
+	input: z.infer<typeof contactPhoneInput>,
 ) {
 	const phone = normalizePhone(input.phone) ?? input.phone;
 	await db.transaction(async (tx) => {
-		await requireCustomerAccess(tx, tenant, input.customerId);
+		await requireContactAccess(tx, tenant, input.contactId);
 		const phones = await tx
 			.select({
-				phoneE164: customerPhone.phoneE164,
-				isPrimary: customerPhone.isPrimary,
+				phoneE164: contactPhone.phoneE164,
+				isPrimary: contactPhone.isPrimary,
 			})
-			.from(customerPhone)
-			.where(eq(customerPhone.customerId, input.customerId));
+			.from(contactPhone)
+			.where(eq(contactPhone.contactId, input.contactId));
 		const target = phones.find((p) => p.phoneE164 === phone);
 		if (!target) notFound("Phone");
 		if (phones.length === 1)
-			badRequest("A customer needs at least one phone number");
+			badRequest("A contact needs at least one phone number");
 		await tx
-			.delete(customerPhone)
+			.delete(contactPhone)
 			.where(
 				and(
-					eq(customerPhone.organizationId, tenant.organizationId),
-					eq(customerPhone.phoneE164, phone),
+					eq(contactPhone.organizationId, tenant.organizationId),
+					eq(contactPhone.phoneE164, phone),
 				),
 			);
 		if (target.isPrimary) {
 			const next = phones.find((p) => p.phoneE164 !== phone);
 			if (next) {
 				await tx
-					.update(customerPhone)
+					.update(contactPhone)
 					.set({ isPrimary: true })
 					.where(
 						and(
-							eq(customerPhone.organizationId, tenant.organizationId),
-							eq(customerPhone.phoneE164, next.phoneE164),
+							eq(contactPhone.organizationId, tenant.organizationId),
+							eq(contactPhone.phoneE164, next.phoneE164),
 						),
 					);
 			}
 		}
 		await writeAudit(tx, tenant, {
-			action: "customer.phone_remove",
-			entityType: "customer",
-			entityId: input.customerId,
+			action: "contact.phone_remove",
+			entityType: "contact",
+			entityId: input.contactId,
 		});
 	});
 }
@@ -594,57 +591,22 @@ export async function setConsent(
 	input: z.infer<typeof consentInput>,
 ) {
 	await db.transaction(async (tx) => {
-		const row = await requireCustomerAccess(tx, tenant, input.customerId);
+		const row = await requireContactAccess(tx, tenant, input.contactId);
 		if (row.marketingConsent === input.marketingConsent) return;
 		await tx
-			.update(customer)
+			.update(contact)
 			.set({
 				marketingConsent: input.marketingConsent,
 				consentRecordedByUserId: tenant.userId,
 				consentRecordedAt: new Date(),
 			})
-			.where(eq(customer.id, row.id));
+			.where(eq(contact.id, row.id));
 		await writeAudit(tx, tenant, {
-			action: "customer.consent_change",
-			entityType: "customer",
+			action: "contact.consent_change",
+			entityType: "contact",
 			entityId: row.id,
 			before: { marketingConsent: row.marketingConsent },
 			after: { marketingConsent: input.marketingConsent },
-		});
-	});
-}
-
-export async function setReferrer(
-	db: Database,
-	tenant: Tenant,
-	input: z.infer<typeof referrerInput>,
-) {
-	if (input.referrerCustomerId === input.customerId) {
-		badRequest("A customer can't refer themselves");
-	}
-	await db.transaction(async (tx) => {
-		await requireCustomerAccess(tx, tenant, input.customerId);
-		if (input.referrerCustomerId) {
-			const [ref] = await tx
-				.select({ id: customer.id })
-				.from(customer)
-				.where(
-					and(
-						eq(customer.id, input.referrerCustomerId),
-						eq(customer.organizationId, tenant.organizationId),
-					),
-				);
-			if (!ref) notFound("Referrer");
-		}
-		await tx
-			.update(customer)
-			.set({ referredByCustomerId: input.referrerCustomerId })
-			.where(eq(customer.id, input.customerId));
-		await writeAudit(tx, tenant, {
-			action: "customer.referrer_change",
-			entityType: "customer",
-			entityId: input.customerId,
-			after: { referredByCustomerId: input.referrerCustomerId },
 		});
 	});
 }

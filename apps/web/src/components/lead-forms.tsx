@@ -9,6 +9,8 @@ import {
 	disqualifyReasons,
 	type FundingType,
 	fundingTypes,
+	type IncomeRange,
+	incomeRanges,
 	type LostReason,
 	lostReasons,
 } from "@Real-Estate-CRM/db/constants";
@@ -60,7 +62,7 @@ export function useLeadError() {
 	};
 }
 
-/** Everything that shows a lead or opportunity: Overview, pool, customer page, lists. */
+/** Everything that shows a lead or opportunity: Overview, pool, contact page, lists. */
 export function useRefreshLeads() {
 	const trpc = useTRPC();
 	const queryClient = useQueryClient();
@@ -69,14 +71,14 @@ export function useRefreshLeads() {
 			queryClient.invalidateQueries(trpc.overview.pathFilter()),
 			queryClient.invalidateQueries(trpc.todo.pathFilter()),
 			queryClient.invalidateQueries(trpc.pool.pathFilter()),
-			queryClient.invalidateQueries(trpc.customer.pathFilter()),
+			queryClient.invalidateQueries(trpc.contact.pathFilter()),
 			queryClient.invalidateQueries(trpc.lead.pathFilter()),
 			queryClient.invalidateQueries(trpc.opportunity.pathFilter()),
 		]);
 }
 
 export type FormTarget = Target & {
-	customerName: string;
+	contactName: string;
 	projectId?: string;
 	/** Prefill for Mark qualified. */
 	qualification?: {
@@ -85,6 +87,7 @@ export type FormTarget = Target & {
 		buyingTimeline: BuyingTimeline | null;
 		unitTypeIds: string[];
 		buyerIntent: BuyerIntent | null;
+		incomeRange?: IncomeRange | null;
 	};
 	priceRange?: { min: number; max: number } | null;
 };
@@ -228,7 +231,7 @@ export function OutcomeForm({
 		>
 			<DialogHeader>
 				<DialogTitle>{t(`titles.${outcome}`)}</DialogTitle>
-				<DialogDescription>{target.customerName}</DialogDescription>
+				<DialogDescription>{target.contactName}</DialogDescription>
 			</DialogHeader>
 			<FieldGroup className="py-4">
 				<NoteField value={note} onChange={setNote} />
@@ -289,7 +292,7 @@ export function RescheduleForm({
 		>
 			<DialogHeader>
 				<DialogTitle>{t("changeFollowUp")}</DialogTitle>
-				<DialogDescription>{target.customerName}</DialogDescription>
+				<DialogDescription>{target.contactName}</DialogDescription>
 			</DialogHeader>
 			<FieldGroup className="py-4">{followUp.field}</FieldGroup>
 			<Footer
@@ -336,7 +339,7 @@ export function NoteForm({
 		>
 			<DialogHeader>
 				<DialogTitle>{t("addNote")}</DialogTitle>
-				<DialogDescription>{target.customerName}</DialogDescription>
+				<DialogDescription>{target.contactName}</DialogDescription>
 			</DialogHeader>
 			<FieldGroup className="py-4">
 				<NoteField value={note} onChange={setNote} />
@@ -382,6 +385,10 @@ export function QualifyForm({
 	const [intent, setIntent] = useState<BuyerIntent[]>(
 		q?.buyerIntent ? [q.buyerIntent] : [],
 	);
+	const [income, setIncome] = useState<IncomeRange[]>(
+		q?.incomeRange ? [q.incomeRange] : [],
+	);
+	const tir = useTranslations("incomeRanges");
 	const [submitted, setSubmitted] = useState(false);
 	const followUp = useFollowUp(target, "current", submitted);
 	const unitTypes = useQuery(
@@ -432,6 +439,7 @@ export function QualifyForm({
 					buyingTimeline,
 					unitTypeIds: types,
 					buyerIntent,
+					incomeRange: income[0] ?? null,
 					nextFollowUpAt: followUp.date.toISOString(),
 				});
 			}}
@@ -439,7 +447,7 @@ export function QualifyForm({
 			<DialogHeader>
 				<DialogTitle>{t("title")}</DialogTitle>
 				<DialogDescription>
-					{t("description", { name: target.customerName })}
+					{t("description", { name: target.contactName })}
 				</DialogDescription>
 			</DialogHeader>
 			<FieldGroup className="py-4">
@@ -504,6 +512,13 @@ export function QualifyForm({
 					onChange={setIntent}
 					invalid={submitted && intent.length !== 1}
 					error={t("required")}
+				/>
+				<ChoiceChips
+					legend={t("income")}
+					options={incomeRanges.map((v) => ({ value: v, label: tir(v) }))}
+					value={income}
+					onChange={setIncome}
+					clearable
 				/>
 				{followUp.field}
 			</FieldGroup>
@@ -571,14 +586,14 @@ export function VisitForm({
 	const pending =
 		convert.isPending || recordVisit.isPending || arrived.isPending;
 	const title = {
-		arrived: ta("arrivedTitle", { name: target.customerName }),
+		arrived: ta("arrivedTitle", { name: target.contactName }),
 		convert: t("title"),
 		recordVisit: tv("title"),
 	}[mode];
 	const description = {
 		arrived: ta("arrivedDescription"),
-		convert: t("description", { name: target.customerName }),
-		recordVisit: tv("description", { name: target.customerName }),
+		convert: t("description", { name: target.contactName }),
+		recordVisit: tv("description", { name: target.contactName }),
 	}[mode];
 	return (
 		<form
@@ -663,7 +678,7 @@ export function FundingForm({
 			}}
 		>
 			<DialogHeader>
-				<DialogTitle>{t("title", { name: target.customerName })}</DialogTitle>
+				<DialogTitle>{t("title", { name: target.contactName })}</DialogTitle>
 				<DialogDescription>{t("hint")}</DialogDescription>
 			</DialogHeader>
 			<FieldGroup className="py-4">
@@ -677,6 +692,85 @@ export function FundingForm({
 				/>
 			</FieldGroup>
 			<Footer pending={setFunding.isPending} label={ta("save")} />
+		</form>
+	);
+}
+
+/** Who referred the contact to this project: a contact found by phone (brief §5). */
+export function ReferrerForm({
+	target,
+	current,
+	onDone,
+}: {
+	target: FormTarget;
+	current?: { name: string } | null;
+	onDone: () => void;
+}) {
+	const t = useTranslations("leadActions.referrer");
+	const ta = useTranslations("leadActions");
+	const trpc = useTRPC();
+	const refresh = useRefreshLeads();
+	const onError = useLeadError();
+	const [phone, setPhone] = useState("");
+	const setReferrer = useMutation(
+		trpc.lead.setReferrer.mutationOptions({
+			onSuccess: async () => {
+				toast.success(t("saved"));
+				onDone();
+				await refresh();
+			},
+			onError: (e) =>
+				e.message === "Referrer not found"
+					? toast.error(t("notFound"))
+					: onError(e),
+		}),
+	);
+	return (
+		<form
+			onSubmit={(e) => {
+				e.preventDefault();
+				if (!phone.trim()) return;
+				setReferrer.mutate({ leadId: target.id, referrerPhone: phone.trim() });
+			}}
+		>
+			<DialogHeader>
+				<DialogTitle>{t("title")}</DialogTitle>
+				<DialogDescription>
+					{current
+						? t("current", { name: current.name })
+						: t("description", { name: target.contactName })}
+				</DialogDescription>
+			</DialogHeader>
+			<FieldGroup className="py-4">
+				<Field>
+					<FieldLabel htmlFor="referrer-phone">{t("phone")}</FieldLabel>
+					<Input
+						id="referrer-phone"
+						name="referrerPhone"
+						type="tel"
+						value={phone}
+						onChange={(e) => setPhone(e.target.value)}
+					/>
+				</Field>
+			</FieldGroup>
+			<Footer
+				pending={setReferrer.isPending}
+				label={ta("save")}
+				extra={
+					current ? (
+						<Button
+							type="button"
+							variant="secondary"
+							disabled={setReferrer.isPending}
+							onClick={() =>
+								setReferrer.mutate({ leadId: target.id, referrerPhone: null })
+							}
+						>
+							{t("clear")}
+						</Button>
+					) : null
+				}
+			/>
 		</form>
 	);
 }
@@ -758,7 +852,7 @@ export function CloseForm({
 			<DialogHeader>
 				<DialogTitle>{t(`exits.${exit}`)}</DialogTitle>
 				<DialogDescription>
-					{t(`exitHints.${exit}`, { name: target.customerName })}
+					{t(`exitHints.${exit}`, { name: target.contactName })}
 				</DialogDescription>
 			</DialogHeader>
 			<FieldGroup className="py-4">

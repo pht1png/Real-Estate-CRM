@@ -113,8 +113,8 @@ function statusItems(
  * confirmed visit). Filters live in the URL so links (e.g. Overview cards)
  * can open them; older `pipeline=deals` / `stage=` links still work.
  */
-export function CustomerList() {
-	const t = useTranslations("customers");
+export function ContactList() {
+	const t = useTranslations("contacts");
 	const tls = useTranslations("leadStatuses");
 	const tos = useTranslations("opportunityStatuses");
 	const tc = useTranslations("common");
@@ -195,10 +195,10 @@ export function CustomerList() {
 					timeStyle: "short",
 				})
 			: tc("none");
-	const nameCell = (customerId: string, name: string, priority = false) => (
+	const nameCell = (contactId: string, name: string, priority = false) => (
 		<TableCell className="font-medium">
 			<Link
-				href={`/customers/${customerId}` as Route}
+				href={`/contacts/${contactId}` as Route}
 				className="underline-offset-4 hover:underline"
 			>
 				{name}
@@ -338,7 +338,7 @@ export function CustomerList() {
 							<TableBody>
 								{leads.data?.map((l) => (
 									<TableRow key={l.leadId}>
-										{nameCell(l.customerId, l.customerName, l.priority)}
+										{nameCell(l.contactId, l.contactName, l.priority)}
 										<TableCell>{l.primaryPhone}</TableCell>
 										<TableCell>{l.projectName}</TableCell>
 										<TableCell>{tls(l.status)}</TableCell>
@@ -369,7 +369,7 @@ export function CustomerList() {
 						<TableBody>
 							{opportunities.data?.map((d) => (
 								<TableRow key={d.opportunityId}>
-									{nameCell(d.customerId, d.customerName)}
+									{nameCell(d.contactId, d.contactName)}
 									<TableCell>{d.primaryPhone}</TableCell>
 									<TableCell>{d.projectName}</TableCell>
 									<TableCell>{tos(d.status)}</TableCell>

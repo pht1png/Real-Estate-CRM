@@ -37,6 +37,7 @@ import {
 } from "../services/role-label";
 import { listMembersInScope } from "../services/team";
 import {
+	appointmentRouter,
 	campaignRouter,
 	customerRouter,
 	leadRouter,
@@ -99,6 +100,7 @@ export const appRouter = router({
 	unit: unitRouter,
 	lead: leadRouter,
 	opportunity: opportunityRouter,
+	appointment: appointmentRouter,
 	customer: customerRouter,
 	leadSource: leadSourceRouter,
 	campaign: campaignRouter,

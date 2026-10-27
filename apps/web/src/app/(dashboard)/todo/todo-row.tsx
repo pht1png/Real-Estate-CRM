@@ -7,19 +7,21 @@ import type { inferRouterOutputs } from "@trpc/server";
 import type { Route } from "next";
 import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
-
+import { AppointmentActions } from "@/components/appointment-forms";
 import { LeadActions, UnreachablePrompt } from "@/components/lead-actions";
 import {
 	AttributeList,
 	PipelineCard,
+	TemperatureBadge,
 	TypeBadge,
 } from "@/components/pipeline-card";
 import { usePipelineLabel } from "@/hooks/use-pipeline-label";
 
 type Todo = inferRouterOutputs<AppRouter>["todo"]["list"];
 export type TodoLead = Todo["dueToday"][number];
+export type TodoAppointment = Todo["arrivals"]["items"][number];
 
-/** A to-do card: lead (blue) or deal (green), type badge top left, aligned attributes. */
+/** A to-do card: lead (blue) or opportunity (green), type badge top left, aligned attributes. */
 export function TodoRow({
 	lead: l,
 	now,
@@ -38,7 +40,7 @@ export function TodoRow({
 	const tf = useTranslations("fit");
 	const format = useFormatter();
 	const pipelineLabel = usePipelineLabel();
-	// Deal rows carry null where an action target expects "not given".
+	// Opportunity rows carry null where an action target expects "not given".
 	const target = {
 		...l,
 		qualification: l.qualification ?? undefined,
@@ -70,6 +72,8 @@ export function TodoRow({
 					: { value: "" };
 			case "unreachable":
 				return { value: t("due.unreachable"), tone: "danger" as const };
+			case "quiet":
+				return { value: t("due.quiet"), tone: "danger" as const };
 			default:
 				return l.nextFollowUpAt
 					? {
@@ -83,8 +87,11 @@ export function TodoRow({
 	})();
 	const items = [
 		{
-			label: l.kind === "lead" ? t("attrs.status") : t("attrs.stage"),
-			value: pipelineLabel(l.status, l.stage),
+			label: t("attrs.status"),
+			value:
+				l.kind === "lead"
+					? pipelineLabel(l.status, null)
+					: pipelineLabel(null, l.status),
 		},
 		{ label: t("attrs.project"), value: l.projectName },
 		...(l.primaryPhone
@@ -124,6 +131,7 @@ export function TodoRow({
 					</Link>
 				</div>
 				{l.priority && <Badge>{tc("priority")}</Badge>}
+				<TemperatureBadge temperature={l.temperature} />
 			</div>
 			<AttributeList items={items} />
 			{l.unreachable && (
@@ -134,6 +142,67 @@ export function TodoRow({
 				/>
 			)}
 			<LeadActions target={target} onDone={onDone} size={size} />
+		</PipelineCard>
+	);
+}
+
+/**
+ * A booked showroom visit: a first tour (lead, blue) or a follow-up visit
+ * (opportunity, green), with Arrived / Didn't come and Reschedule / Cancel.
+ */
+export function AppointmentRow({
+	appointment: a,
+	late,
+}: {
+	appointment: TodoAppointment;
+	/** Still scheduled 2 hours after the start: "did they come?". */
+	late?: boolean;
+}) {
+	const t = useTranslations("todo");
+	const ta = useTranslations("appointments");
+	const tl = useTranslations("leadStatuses");
+	const format = useFormatter();
+	const kind = a.firstTour ? "lead" : "opportunity";
+	const when = format.dateTime(new Date(a.startsAt), {
+		...(late && { weekday: "short", day: "numeric", month: "short" }),
+		hour: "2-digit",
+		minute: "2-digit",
+	});
+	const visitKind = ta(a.firstTour ? "firstTour" : "followUpVisit");
+	const items = [
+		{
+			label: t("attrs.appointment"),
+			value: `${late ? t("unanswered.booked", { time: when }) : when} · ${visitKind}`,
+			tone: late ? ("danger" as const) : undefined,
+		},
+		...(a.firstTour
+			? [
+					{
+						label: t("attrs.status"),
+						value: tl(a.qualified ? "qualified" : "connected"),
+					},
+				]
+			: []),
+		{ label: t("attrs.project"), value: a.projectName },
+		...(a.primaryPhone
+			? [{ label: t("attrs.phone"), value: a.primaryPhone }]
+			: []),
+	];
+	return (
+		<PipelineCard kind={kind}>
+			<div className="flex min-w-0 flex-col gap-1">
+				<TypeBadge kind={kind} />
+				<Link
+					href={`/customers/${a.customerId}` as Route}
+					className="font-medium underline-offset-4 hover:underline"
+				>
+					{a.customerName}
+				</Link>
+			</div>
+			<AttributeList items={items} />
+			<AppointmentActions
+				appointment={{ ...a, priceRange: a.priceRange ?? undefined }}
+			/>
 		</PipelineCard>
 	);
 }

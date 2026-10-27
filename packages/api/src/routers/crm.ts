@@ -15,6 +15,20 @@ import {
 	setOpportunityFollowUp,
 } from "../services/activity";
 import {
+	appointmentSlots,
+	appointmentSlotsInput,
+	arrivedInput,
+	bookAppointment,
+	bookAppointmentInput,
+	cancelAppointment,
+	cancelAppointmentInput,
+	markArrived,
+	markNoShow,
+	noShowInput,
+	rescheduleAppointment,
+	rescheduleAppointmentInput,
+} from "../services/appointments";
+import {
 	createCampaign,
 	createCampaignInput,
 	listCampaigns,
@@ -23,7 +37,6 @@ import {
 	updateCampaignInput,
 } from "../services/campaign";
 import { captureEnquiry, captureEnquiryInput } from "../services/capture";
-import { convertLead, convertLeadInput } from "../services/conversion";
 import {
 	addCustomerPhone,
 	consentInput,
@@ -50,8 +63,8 @@ import {
 	markLostInput,
 	nurtureLead,
 	nurtureLeadInput,
-	setOpportunityStage,
-	setOpportunityStageInput,
+	setOpportunityStatus,
+	setOpportunityStatusInput,
 } from "../services/exit";
 import {
 	archiveSource,
@@ -83,6 +96,14 @@ import {
 	updateRulesInput,
 } from "../services/rules";
 import { getTodo, todoCount } from "../services/todo";
+import {
+	confirmVisit,
+	confirmVisitInput,
+	recordOpportunityVisit,
+	recordVisitInput,
+	setFunding,
+	setFundingInput,
+} from "../services/visits";
 
 const read = requirePermission({ lead: ["read"] });
 const capture = requirePermission({ lead: ["capture"] });
@@ -111,9 +132,10 @@ export const leadRouter = router({
 	qualify: read
 		.input(qualifyLeadInput)
 		.mutation(({ ctx, input }) => qualifyLead(ctx.db, ctx.tenant, input)),
+	/** Confirm visit: the first visit converts a qualified lead. */
 	convert: read
-		.input(convertLeadInput)
-		.mutation(({ ctx, input }) => convertLead(ctx.db, ctx.tenant, input)),
+		.input(confirmVisitInput)
+		.mutation(({ ctx, input }) => confirmVisit(ctx.db, ctx.tenant, input)),
 	disqualify: read
 		.input(disqualifyLeadInput)
 		.mutation(({ ctx, input }) => disqualifyLead(ctx.db, ctx.tenant, input)),
@@ -131,7 +153,7 @@ export const leadRouter = router({
 		.mutation(({ ctx, input }) => addNote(ctx.db, ctx.tenant, input)),
 });
 
-/** Opportunity (deal) pipeline, created by a confirmed visit. */
+/** Opportunity pipeline, created by a confirmed visit. */
 export const opportunityRouter = router({
 	list: read
 		.input(listOpportunitiesInput)
@@ -141,10 +163,18 @@ export const opportunityRouter = router({
 		.mutation(({ ctx, input }) =>
 			logOpportunityOutcome(ctx.db, ctx.tenant, input),
 		),
-	setStage: read
-		.input(setOpportunityStageInput)
+	setStatus: read
+		.input(setOpportunityStatusInput)
 		.mutation(({ ctx, input }) =>
-			setOpportunityStage(ctx.db, ctx.tenant, input),
+			setOpportunityStatus(ctx.db, ctx.tenant, input),
+		),
+	setFunding: read
+		.input(setFundingInput)
+		.mutation(({ ctx, input }) => setFunding(ctx.db, ctx.tenant, input)),
+	recordVisit: read
+		.input(recordVisitInput)
+		.mutation(({ ctx, input }) =>
+			recordOpportunityVisit(ctx.db, ctx.tenant, input),
 		),
 	markLost: read
 		.input(markLostInput)
@@ -157,6 +187,30 @@ export const opportunityRouter = router({
 	followUpPicks: read
 		.input(opportunityIdInput)
 		.query(({ ctx, input }) => getFollowUpPicks(ctx.db, ctx.tenant, input)),
+});
+
+/** Showroom appointments; services check the host (owner) or a manager. */
+export const appointmentRouter = router({
+	book: read
+		.input(bookAppointmentInput)
+		.mutation(({ ctx, input }) => bookAppointment(ctx.db, ctx.tenant, input)),
+	reschedule: read
+		.input(rescheduleAppointmentInput)
+		.mutation(({ ctx, input }) =>
+			rescheduleAppointment(ctx.db, ctx.tenant, input),
+		),
+	cancel: read
+		.input(cancelAppointmentInput)
+		.mutation(({ ctx, input }) => cancelAppointment(ctx.db, ctx.tenant, input)),
+	arrived: read
+		.input(arrivedInput)
+		.mutation(({ ctx, input }) => markArrived(ctx.db, ctx.tenant, input)),
+	noShow: read
+		.input(noShowInput)
+		.mutation(({ ctx, input }) => markNoShow(ctx.db, ctx.tenant, input)),
+	slots: read
+		.input(appointmentSlotsInput)
+		.query(({ ctx, input }) => appointmentSlots(ctx.db, ctx.tenant, input)),
 });
 
 export const poolRouter = router({

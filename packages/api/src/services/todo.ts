@@ -1,14 +1,15 @@
 import type { Database } from "@Real-Estate-CRM/db";
 import {
+	appointment,
 	customer,
 	type FitResult,
 	lead,
 	openLeadStatuses,
-	openOpportunityStages,
+	openOpportunityStatuses,
 	opportunity,
 	project,
 } from "@Real-Estate-CRM/db/schema/index";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, lt, sql } from "drizzle-orm";
 
 import { formatPhone } from "../phone";
 import { noAnswerStreak, streakSince } from "./activity";
@@ -19,6 +20,7 @@ import {
 } from "./lead-access";
 import { returnExpiredClaims } from "./pool";
 import { getRules } from "./rules";
+import { liveTemperature } from "./temperature";
 import type { Tenant } from "./tenancy";
 
 const LIMIT = 100;
@@ -26,9 +28,14 @@ const LIMIT = 100;
 const primaryPhone = sql<
 	string | null
 >`(select p.phone_e164 from customer_phone p where p.customer_id = ${customer.id} order by p.is_primary desc limit 1)`;
-/** End of today in the project's time zone (brief §3: working days per project). */
+/** Start of today in the project's time zone (brief §3: working days per project). */
+const startOfToday = (now: Date) =>
+	sql<string>`(date_trunc('day', ${now}::timestamptz at time zone ${project.timeZone}) at time zone ${project.timeZone})`;
+/** End of today in the project's time zone. */
 const endOfToday = (now: Date) =>
 	sql<string>`((date_trunc('day', ${now}::timestamptz at time zone ${project.timeZone}) + interval '1 day') at time zone ${project.timeZone})`;
+/** An appointment still scheduled this long after its start asks "did they come?". */
+const ARRIVAL_CHECK_MS = 2 * 3_600_000;
 const priceBound = (fn: "min" | "max", projectId: unknown) =>
 	sql<
 		number | null
@@ -39,12 +46,14 @@ export type TodoReason =
 	| "follow_up_today"
 	| "overdue"
 	| "no_follow_up"
-	| "unreachable";
+	| "unreachable"
+	| "quiet";
 
 /**
- * To-do page (brief §7): showroom arrivals today (bookings arrive in M5), my
- * leads and deals due today, and what slipped (overdue, missing follow-up,
- * unreachable). Expired claims are returned to the pool first (lazy check).
+ * To-do page (brief §7): showroom arrivals today, my leads and opportunities
+ * due today, and what slipped (overdue, missing follow-up, unreachable,
+ * appointments nobody closed, hot or warm opportunities gone quiet). Expired
+ * claims are returned to the pool first (lazy check).
  */
 export async function getTodo(db: Database, tenant: Tenant) {
 	await returnExpiredClaims(db, { organizationId: tenant.organizationId });
@@ -52,7 +61,14 @@ export async function getTodo(db: Database, tenant: Tenant) {
 	const rules = await getRules(db, tenant.organizationId);
 	const streak = noAnswerStreak(streakSince(rules.unreachableWindowDays, now));
 
-	const [leadRows, dealRows] = await Promise.all([
+	const quietSince = new Date(
+		now.getTime() - rules.quietOpportunityDays * 86_400_000,
+	);
+	const lastActivityAt = sql<
+		string | null
+	>`(select max(a.at) from activity a where a.opportunity_id = ${opportunity.id})`;
+
+	const [leadRows, opportunityRows, appointmentRows] = await Promise.all([
 		db
 			.select({
 				id: lead.id,
@@ -97,21 +113,72 @@ export async function getTodo(db: Database, tenant: Tenant) {
 				customerName: customer.name,
 				projectId: project.id,
 				projectName: project.name,
-				stage: opportunity.stage,
+				status: opportunity.status,
+				fundingType: opportunity.fundingType,
+				visitCount: opportunity.visitCount,
 				nextFollowUpAt: opportunity.nextFollowUpAt,
+				dueToday: sql<boolean>`(${opportunity.nextFollowUpAt} is null or ${opportunity.nextFollowUpAt} < ${endOfToday(now)})`,
+				lastActivityAt,
+				budgetMinSatang: lead.budgetMinSatang,
+				budgetMaxSatang: lead.budgetMaxSatang,
+				buyingTimeline: lead.buyingTimeline,
+				qualificationRules: project.qualificationRules,
+				minPriceSatang: priceBound("min", opportunity.projectId),
+				maxPriceSatang: priceBound("max", opportunity.projectId),
 				primaryPhone,
 			})
 			.from(opportunity)
+			.innerJoin(lead, eq(lead.id, opportunity.leadId))
 			.innerJoin(customer, eq(customer.id, opportunity.customerId))
 			.innerJoin(project, eq(project.id, opportunity.projectId))
 			.where(
 				and(
 					visibleOpportunityCondition(tenant),
 					eq(opportunity.ownerMemberId, tenant.memberId),
-					inArray(opportunity.stage, [...openOpportunityStages]),
-					sql`(${opportunity.nextFollowUpAt} is null or ${opportunity.nextFollowUpAt} < ${endOfToday(now)})`,
+					inArray(opportunity.status, [...openOpportunityStatuses]),
+					// Due today, or quiet long enough to be a "gone quiet" candidate.
+					sql`(${opportunity.nextFollowUpAt} is null or ${opportunity.nextFollowUpAt} < ${endOfToday(now)}
+						or coalesce(${lastActivityAt}::timestamptz, ${opportunity.createdAt}) < ${quietSince})`,
 				),
 			)
+			.limit(LIMIT),
+		// My scheduled appointments up to the end of today: today's arrivals,
+		// and older ones nobody marked arrived, no-show or cancelled.
+		db
+			.select({
+				appointmentId: appointment.id,
+				leadId: appointment.leadId,
+				opportunityId: appointment.opportunityId,
+				startsAt: appointment.startsAt,
+				endsAt: appointment.endsAt,
+				customerId: customer.id,
+				customerName: customer.name,
+				projectId: project.id,
+				projectName: project.name,
+				leadStatus: lead.status,
+				budgetMinSatang: lead.budgetMinSatang,
+				budgetMaxSatang: lead.budgetMaxSatang,
+				buyingTimeline: lead.buyingTimeline,
+				unitTypeIds: lead.unitTypeIds,
+				buyerIntent: lead.buyerIntent,
+				minPriceSatang: priceBound("min", lead.projectId),
+				maxPriceSatang: priceBound("max", lead.projectId),
+				today: sql<boolean>`${appointment.startsAt} >= ${startOfToday(now)}`,
+				primaryPhone,
+			})
+			.from(appointment)
+			.innerJoin(lead, eq(lead.id, appointment.leadId))
+			.innerJoin(customer, eq(customer.id, lead.customerId))
+			.innerJoin(project, eq(project.id, lead.projectId))
+			.where(
+				and(
+					eq(appointment.organizationId, tenant.organizationId),
+					eq(appointment.memberId, tenant.memberId),
+					eq(appointment.status, "scheduled"),
+					lt(appointment.startsAt, endOfToday(now)),
+				),
+			)
+			.orderBy(asc(appointment.startsAt))
 			.limit(LIMIT),
 	]);
 
@@ -155,7 +222,8 @@ export async function getTodo(db: Database, tenant: Tenant) {
 			projectId: r.projectId,
 			projectName: r.projectName,
 			status: r.status,
-			stage: null,
+			temperature: null,
+			fundingType: null,
 			priority: r.priority,
 			contactDeadlineAt: r.contactDeadlineAt,
 			nextFollowUpAt: r.nextFollowUpAt,
@@ -177,49 +245,118 @@ export async function getTodo(db: Database, tenant: Tenant) {
 			...phone(r.primaryPhone),
 		};
 	});
-	const deals = dealRows.map((r) => ({
-		kind: "opportunity" as const,
-		id: r.id,
+	const opportunities = opportunityRows.flatMap((r) => {
+		const temperature = liveTemperature(
+			r,
+			r,
+			r.minPriceSatang !== null && r.maxPriceSatang !== null
+				? { min: r.minPriceSatang, max: r.maxPriceSatang }
+				: null,
+			qualificationRulesOf(r),
+		);
+		// Hot or warm with nothing logged for a while (brief §6).
+		const quiet =
+			temperature !== null && new Date(r.lastActivityAt ?? 0) < quietSince;
+		if (!r.dueToday && !quiet) return [];
+		const followUp = followUpReason(r.nextFollowUpAt);
+		const reason: TodoReason =
+			quiet && (!r.dueToday || followUp === "follow_up_today")
+				? "quiet"
+				: followUp;
+		return [
+			{
+				kind: "opportunity" as const,
+				id: r.id,
+				customerId: r.customerId,
+				customerName: r.customerName,
+				projectId: r.projectId,
+				projectName: r.projectName,
+				status: r.status,
+				temperature,
+				fundingType: r.fundingType,
+				priority: false,
+				contactDeadlineAt: null,
+				nextFollowUpAt: r.nextFollowUpAt,
+				attempts: 0,
+				unreachable: false,
+				reason,
+				fit: null,
+				qualification: null,
+				priceRange: null,
+				...phone(r.primaryPhone),
+			},
+		];
+	});
+
+	const appointments = appointmentRows.map((r) => ({
+		kind: "appointment" as const,
+		appointmentId: r.appointmentId,
+		leadId: r.leadId,
+		opportunityId: r.opportunityId,
+		/** No opportunity at booking = a first tour; else a follow-up visit. */
+		firstTour: r.opportunityId === null,
+		/** A qualified lead converts on arrival; others qualify face to face first. */
+		qualified: r.leadStatus === "qualified",
+		today: r.today,
+		startsAt: r.startsAt,
+		endsAt: r.endsAt,
 		customerId: r.customerId,
 		customerName: r.customerName,
 		projectId: r.projectId,
 		projectName: r.projectName,
-		status: null,
-		stage: r.stage,
-		priority: false,
-		contactDeadlineAt: null,
-		nextFollowUpAt: r.nextFollowUpAt,
-		attempts: 0,
-		unreachable: false,
-		reason: followUpReason(r.nextFollowUpAt),
-		fit: null,
-		qualification: null,
-		priceRange: null,
+		/** Prefill for qualifying an unvetted guest face to face. */
+		qualification: {
+			budgetMinSatang: r.budgetMinSatang,
+			budgetMaxSatang: r.budgetMaxSatang,
+			buyingTimeline: r.buyingTimeline,
+			unitTypeIds: r.unitTypeIds,
+			buyerIntent: r.buyerIntent,
+		},
+		priceRange:
+			r.minPriceSatang !== null && r.maxPriceSatang !== null
+				? { min: r.minPriceSatang, max: r.maxPriceSatang }
+				: null,
 		...phone(r.primaryPhone),
 	}));
+	const unanswered = (a: (typeof appointments)[number]) =>
+		a.startsAt.getTime() + ARRIVAL_CHECK_MS <= now.getTime();
+	const arrivals = appointments.filter((a) => a.today && !unanswered(a));
 
-	type Row = (typeof leads)[number] | (typeof deals)[number];
+	type Row = (typeof leads)[number] | (typeof opportunities)[number];
 	const isStale = (r: Row) =>
 		r.reason === "overdue" ||
 		r.reason === "no_follow_up" ||
-		r.reason === "unreachable";
+		r.reason === "unreachable" ||
+		r.reason === "quiet";
 	const time = (d: Date | null) => d?.getTime() ?? Number.NEGATIVE_INFINITY;
 	const dueAt = (r: Row) => r.contactDeadlineAt ?? r.nextFollowUpAt;
 	const byTime = (a: Row, b: Row) =>
 		time(dueAt(a)) - time(dueAt(b)) || Number(b.priority) - Number(a.priority);
-	const rows: Row[] = [...leads, ...deals];
+	const rows: Row[] = [...leads, ...opportunities];
 
 	return {
-		// Booked showroom visits arrive with appointments (M5).
-		arrivals: { qualified: 0, unvetted: 0, items: [] as Row[] },
+		arrivals: {
+			qualified: arrivals.filter((a) => a.firstTour && a.qualified).length,
+			unvetted: arrivals.filter((a) => a.firstTour && !a.qualified).length,
+			followUps: arrivals.filter((a) => !a.firstTour).length,
+			items: arrivals,
+		},
 		dueToday: rows.filter((r) => !isStale(r)).sort(byTime),
 		stale: rows.filter(isStale).sort(byTime),
+		/** "Did they come?": still scheduled 2 hours after the start. */
+		unansweredAppointments: appointments.filter(unanswered),
 		unreachableAttempts: rules.unreachableAttempts,
 	};
 }
 
-/** Sidebar badge: items due today plus what slipped. */
+/** Sidebar badge: arrivals, items due today and what slipped. */
 export async function todoCount(db: Database, tenant: Tenant) {
 	const todo = await getTodo(db, tenant);
-	return { count: todo.dueToday.length + todo.stale.length };
+	return {
+		count:
+			todo.arrivals.items.length +
+			todo.dueToday.length +
+			todo.stale.length +
+			todo.unansweredAppointments.length,
+	};
 }

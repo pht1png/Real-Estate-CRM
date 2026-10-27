@@ -7,6 +7,8 @@ import {
 	buyingTimelines,
 	type DisqualifyReason,
 	disqualifyReasons,
+	type FundingType,
+	fundingTypes,
 	type LostReason,
 	lostReasons,
 } from "@Real-Estate-CRM/db/constants";
@@ -49,7 +51,7 @@ const ERROR_CODES = [
 	"PRECONDITION_FAILED",
 ] as const;
 
-/** Translated toast for a failed lead or deal action, by tRPC error code. */
+/** Translated toast for a failed lead or opportunity action, by tRPC error code. */
 export function useLeadError() {
 	const t = useTranslations("leadActions.errors");
 	return (e: { data?: { code?: string } | null }) => {
@@ -58,7 +60,7 @@ export function useLeadError() {
 	};
 }
 
-/** Everything that shows a lead or deal: Overview, pool, customer page, lists. */
+/** Everything that shows a lead or opportunity: Overview, pool, customer page, lists. */
 export function useRefreshLeads() {
 	const trpc = useTRPC();
 	const queryClient = useQueryClient();
@@ -158,7 +160,7 @@ export function OutcomeForm({
 	outcome: "answered" | "no_answer" | "line";
 	onDone: () => void;
 	/** Leads only: save, then open Mark qualified. */
-	onQualify?: () => void;
+	onQualify?: (nextFollowUpAt: Date) => void;
 }) {
 	const t = useTranslations("leadActions");
 	const trpc = useTRPC();
@@ -186,14 +188,14 @@ export function OutcomeForm({
 		}
 		// Refreshing now could drop this row from a list and take the form
 		// with it; the qualify form (or closing the dialog) refreshes instead.
-		if (thenQualify && onQualify) return onQualify();
+		if (thenQualify && onQualify) return onQualify(followUp.date);
 		onDone();
 		await refresh();
 	};
 	const leadLog = useMutation(
 		trpc.lead.logOutcome.mutationOptions({ onError }),
 	);
-	const dealLog = useMutation(
+	const opportunityLog = useMutation(
 		trpc.opportunity.logOutcome.mutationOptions({ onError }),
 	);
 
@@ -217,7 +219,7 @@ export function OutcomeForm({
 						{ onSuccess: (result) => done(thenQualify, result) },
 					);
 				} else {
-					dealLog.mutate(
+					opportunityLog.mutate(
 						{ opportunityId: target.id, ...fields },
 						{ onSuccess: () => done(false) },
 					);
@@ -233,7 +235,7 @@ export function OutcomeForm({
 				{followUp.field}
 			</FieldGroup>
 			<Footer
-				pending={leadLog.isPending || dealLog.isPending}
+				pending={leadLog.isPending || opportunityLog.isPending}
 				label={t("save")}
 				extra={
 					onQualify && outcome !== "no_answer" ? (
@@ -268,7 +270,7 @@ export function RescheduleForm({
 	const leadSet = useMutation(
 		trpc.lead.setFollowUp.mutationOptions({ onSuccess, onError }),
 	);
-	const dealSet = useMutation(
+	const opportunitySet = useMutation(
 		trpc.opportunity.setFollowUp.mutationOptions({ onSuccess, onError }),
 	);
 	return (
@@ -281,7 +283,7 @@ export function RescheduleForm({
 				if (target.kind === "lead") {
 					leadSet.mutate({ leadId: target.id, nextFollowUpAt });
 				} else {
-					dealSet.mutate({ opportunityId: target.id, nextFollowUpAt });
+					opportunitySet.mutate({ opportunityId: target.id, nextFollowUpAt });
 				}
 			}}
 		>
@@ -291,7 +293,7 @@ export function RescheduleForm({
 			</DialogHeader>
 			<FieldGroup className="py-4">{followUp.field}</FieldGroup>
 			<Footer
-				pending={leadSet.isPending || dealSet.isPending}
+				pending={leadSet.isPending || opportunitySet.isPending}
 				label={t("save")}
 			/>
 		</form>
@@ -511,17 +513,24 @@ export function QualifyForm({
 }
 
 /**
- * Conversion trigger (brief §2): only when the customer actually came to the
- * showroom. The visit time can't be in the future (a booked tour isn't a visit).
+ * A showroom visit, recorded one way (brief §6): Confirm visit on a lead (the
+ * first visit converts it), Record visit on an opportunity (a repeat walk-in),
+ * or Arrived on an appointment. The visit time can't be in the future (a
+ * booked tour isn't a visit); a future follow-up is always set.
  */
-export function ConvertForm({
+export function VisitForm({
 	target,
+	appointmentId,
 	onDone,
 }: {
 	target: FormTarget;
+	/** Arrived on this appointment. */
+	appointmentId?: string;
 	onDone: () => void;
 }) {
 	const t = useTranslations("leadActions.convert");
+	const tv = useTranslations("leadActions.recordVisit");
+	const ta = useTranslations("appointments");
 	const trpc = useTRPC();
 	const refresh = useRefreshLeads();
 	const onError = useLeadError();
@@ -534,37 +543,65 @@ export function ConvertForm({
 	const visitOk =
 		!Number.isNaN(visitDate.getTime()) &&
 		visitDate.getTime() <= Date.now() + 60_000;
-	const convert = useMutation(
-		trpc.lead.convert.mutationOptions({
-			onSuccess: async () => {
-				toast.success(t("saved"));
-				onDone();
-				await refresh();
-			},
-			onError,
-		}),
+	const mode = appointmentId
+		? "arrived"
+		: target.kind === "lead"
+			? "convert"
+			: "recordVisit";
+	const saved = {
+		arrived: ta("arrivedSaved"),
+		convert: t("saved"),
+		recordVisit: tv("saved"),
+	}[mode];
+	const options = {
+		onSuccess: async () => {
+			toast.success(saved);
+			onDone();
+			await refresh();
+		},
+		onError,
+	};
+	const convert = useMutation(trpc.lead.convert.mutationOptions(options));
+	const recordVisit = useMutation(
+		trpc.opportunity.recordVisit.mutationOptions(options),
 	);
+	const arrived = useMutation(
+		trpc.appointment.arrived.mutationOptions(options),
+	);
+	const pending =
+		convert.isPending || recordVisit.isPending || arrived.isPending;
+	const title = {
+		arrived: ta("arrivedTitle", { name: target.customerName }),
+		convert: t("title"),
+		recordVisit: tv("title"),
+	}[mode];
+	const description = {
+		arrived: ta("arrivedDescription"),
+		convert: t("description", { name: target.customerName }),
+		recordVisit: tv("description", { name: target.customerName }),
+	}[mode];
 	return (
 		<form
 			onSubmit={(e) => {
 				e.preventDefault();
 				setSubmitted(true);
 				if (!visitOk || !followUp.valid) return;
-				convert.mutate({
-					leadId: target.id,
+				const fields = {
 					visitedAt: new Date(
 						Math.min(visitDate.getTime(), Date.now()),
 					).toISOString(),
 					note: note.trim() || undefined,
 					nextFollowUpAt: followUp.date.toISOString(),
-				});
+				};
+				if (appointmentId) arrived.mutate({ appointmentId, ...fields });
+				else if (target.kind === "lead") {
+					convert.mutate({ leadId: target.id, ...fields });
+				} else recordVisit.mutate({ opportunityId: target.id, ...fields });
 			}}
 		>
 			<DialogHeader>
-				<DialogTitle>{t("title")}</DialogTitle>
-				<DialogDescription>
-					{t("description", { name: target.customerName })}
-				</DialogDescription>
+				<DialogTitle>{title}</DialogTitle>
+				<DialogDescription>{description}</DialogDescription>
 			</DialogHeader>
 			<FieldGroup className="py-4">
 				<Field data-invalid={(submitted && !visitOk) || undefined}>
@@ -582,12 +619,69 @@ export function ConvertForm({
 				<NoteField value={note} onChange={setNote} />
 				{followUp.field}
 			</FieldGroup>
-			<Footer pending={convert.isPending} label={t("confirm")} />
+			<Footer pending={pending} label={t("confirm")} />
 		</form>
 	);
 }
 
-/** Lead exits (Disqualify with a reason, Nurture) and the deal exit (Lost). */
+/** How the buyer pays (brief §5); loan details wait for the mortgage milestone. */
+export function FundingForm({
+	target,
+	current,
+	onDone,
+}: {
+	target: FormTarget;
+	current?: FundingType | null;
+	onDone: () => void;
+}) {
+	const t = useTranslations("leadActions.funding");
+	const ta = useTranslations("leadActions");
+	const tf = useTranslations("fundingTypes");
+	const trpc = useTRPC();
+	const refresh = useRefreshLeads();
+	const onError = useLeadError();
+	const [value, setValue] = useState<FundingType[]>(current ? [current] : []);
+	const [submitted, setSubmitted] = useState(false);
+	const setFunding = useMutation(
+		trpc.opportunity.setFunding.mutationOptions({
+			onSuccess: async () => {
+				toast.success(t("saved"));
+				onDone();
+				await refresh();
+			},
+			onError,
+		}),
+	);
+	const [chosen] = value;
+	return (
+		<form
+			onSubmit={(e) => {
+				e.preventDefault();
+				setSubmitted(true);
+				if (!chosen) return;
+				setFunding.mutate({ opportunityId: target.id, fundingType: chosen });
+			}}
+		>
+			<DialogHeader>
+				<DialogTitle>{t("title", { name: target.customerName })}</DialogTitle>
+				<DialogDescription>{t("hint")}</DialogDescription>
+			</DialogHeader>
+			<FieldGroup className="py-4">
+				<ChoiceChips
+					legend={t("menu")}
+					options={fundingTypes.map((v) => ({ value: v, label: tf(v) }))}
+					value={value}
+					onChange={setValue}
+					invalid={submitted && !chosen}
+					error={ta("reasonRequired")}
+				/>
+			</FieldGroup>
+			<Footer pending={setFunding.isPending} label={ta("save")} />
+		</form>
+	);
+}
+
+/** Lead exits (Disqualify with a reason, Nurture) and the opportunity exit (Lost). */
 export function CloseForm({
 	target,
 	exit,

@@ -1,6 +1,7 @@
 import type { Database } from "@Real-Estate-CRM/db";
 import {
 	activity,
+	appointment,
 	campaign,
 	customer,
 	customerPhone,
@@ -9,7 +10,7 @@ import {
 	leadStatuses,
 	member,
 	opportunity,
-	opportunityStages,
+	opportunityStatuses,
 	project,
 	user,
 } from "@Real-Estate-CRM/db/schema/index";
@@ -36,6 +37,7 @@ import {
 	visibleLeadCondition,
 	visibleOpportunityCondition,
 } from "./lead-access";
+import { liveTemperature } from "./temperature";
 import type { Tenant } from "./tenancy";
 
 type Executor = Pick<Database, "select">;
@@ -54,9 +56,9 @@ export const listLeadsInput = z.strictObject({
 export const listOpportunitiesInput = z.strictObject({
 	query: search,
 	projectId: z.uuid().optional(),
-	stages: z
-		.array(z.enum(opportunityStages))
-		.max(opportunityStages.length)
+	statuses: z
+		.array(z.enum(opportunityStatuses))
+		.max(opportunityStatuses.length)
 		.optional(),
 	ownership: z.enum(["mine", "all"]).optional(),
 });
@@ -81,12 +83,12 @@ export const referrerInput = z.strictObject({
 
 const ownerUser = aliasedTable(user, "owner_user");
 
-/** The latest deal stage of the outer `lead` row (null until converted). */
-const latestStage = sql<
-	(typeof opportunityStages)[number] | null
->`(select o.stage from opportunity o where o.lead_id = ${sql.raw(`"lead"."id"`)} order by o.created_at desc limit 1)`;
+/** The latest opportunity status of the outer `lead` row (null until converted). */
+const latestOpportunityStatus = sql<
+	(typeof opportunityStatuses)[number] | null
+>`(select o.status from opportunity o where o.lead_id = ${sql.raw(`"lead"."id"`)} order by o.created_at desc limit 1)`;
 
-/** Every lead of a customer, with project, owner and deal stage (no private fields). */
+/** Every lead of a customer, with project, owner and opportunity status (no private fields). */
 function leadSummaries(
 	db: Executor,
 	organizationId: string,
@@ -99,7 +101,7 @@ function leadSummaries(
 			projectId: lead.projectId,
 			projectName: project.name,
 			status: lead.status,
-			stage: latestStage,
+			opportunityStatus: latestOpportunityStatus,
 			ownerMemberId: lead.ownerMemberId,
 			ownerName: ownerUser.name,
 		})
@@ -118,7 +120,7 @@ function leadSummaries(
 
 /**
  * Duplicate check while typing (brief §6): the customer behind a phone, with a
- * summary line per project (project · status or deal stage · owner) — never
+ * summary line per project (project · lead or opportunity status · owner) — never
  * private details.
  */
 export async function lookupByPhone(
@@ -145,11 +147,11 @@ export async function lookupByPhone(
 		customer: {
 			...match,
 			leads: leads.map(
-				({ projectId, projectName, status, stage, ownerName }) => ({
+				({ projectId, projectName, status, opportunityStatus, ownerName }) => ({
 					projectId,
 					projectName,
 					status,
-					stage,
+					opportunityStatus,
 					ownerName,
 				}),
 			),
@@ -186,7 +188,8 @@ async function requireCustomerAccess(
 
 /**
  * Customer page: shared profile; per visible project the lead (vetting) and
- * its latest deal, with one timeline; summary lines for the rest.
+ * its latest opportunity, its appointments and one timeline; summary lines
+ * for the rest.
  */
 export async function getCustomer(
 	db: Database,
@@ -220,7 +223,8 @@ export async function getCustomer(
 	const visibleIds = summaries
 		.filter((s) => canSeeLead(tenant, s))
 		.map((s) => s.id);
-	const [details, deals, activities] = visibleIds.length
+	const hostUser = aliasedTable(user, "host_user");
+	const [details, opportunities, appointments, activities] = visibleIds.length
 		? await Promise.all([
 				db
 					.select({
@@ -248,6 +252,23 @@ export async function getCustomer(
 					.orderBy(desc(opportunity.createdAt)),
 				db
 					.select({
+						id: appointment.id,
+						leadId: appointment.leadId,
+						opportunityId: appointment.opportunityId,
+						memberId: appointment.memberId,
+						hostName: hostUser.name,
+						startsAt: appointment.startsAt,
+						endsAt: appointment.endsAt,
+						status: appointment.status,
+						cancelReason: appointment.cancelReason,
+					})
+					.from(appointment)
+					.innerJoin(member, eq(member.id, appointment.memberId))
+					.innerJoin(hostUser, eq(hostUser.id, member.userId))
+					.where(inArray(appointment.leadId, visibleIds))
+					.orderBy(desc(appointment.startsAt)),
+				db
+					.select({
 						id: activity.id,
 						leadId: activity.leadId,
 						opportunityId: activity.opportunityId,
@@ -262,7 +283,7 @@ export async function getCustomer(
 					.where(inArray(activity.leadId, visibleIds))
 					.orderBy(desc(activity.at)),
 			])
-		: [[], [], []];
+		: [[], [], [], []];
 
 	return {
 		id: row.id,
@@ -283,12 +304,17 @@ export async function getCustomer(
 					id: s.id,
 					projectName: s.projectName,
 					status: s.status,
-					stage: s.stage,
+					opportunityStatus: s.opportunityStatus,
 					ownerName: s.ownerName,
 				};
 			}
 			const l = d.lead;
-			const deal = deals.find((o) => o.leadId === l.id) ?? null;
+			const opp = opportunities.find((o) => o.leadId === l.id) ?? null;
+			const priceRange =
+				d.minPriceSatang !== null && d.maxPriceSatang !== null
+					? { min: d.minPriceSatang, max: d.maxPriceSatang }
+					: null;
+			const rules = qualificationRulesOf(d);
 			return {
 				visible: true as const,
 				id: l.id,
@@ -312,31 +338,31 @@ export async function getCustomer(
 				convertedAt: l.convertedAt,
 				nextFollowUpAt: l.nextFollowUpAt,
 				contactDeadlineAt: l.contactDeadlineAt,
-				fit: assessFit(
-					{
-						budgetMinSatang: l.budgetMinSatang,
-						budgetMaxSatang: l.budgetMaxSatang,
-						buyingTimeline: l.buyingTimeline,
-						priceRange:
-							d.minPriceSatang !== null && d.maxPriceSatang !== null
-								? { min: d.minPriceSatang, max: d.maxPriceSatang }
-								: null,
-					},
-					qualificationRulesOf(d),
-				),
+				fit: assessFit({ ...l, priceRange }, rules),
 				projectMinPriceSatang: d.minPriceSatang,
 				projectMaxPriceSatang: d.maxPriceSatang,
 				createdAt: l.createdAt,
-				opportunity: deal && {
-					id: deal.id,
-					stage: deal.stage,
-					lostReason: deal.lostReason,
-					ownerMemberId: deal.ownerMemberId,
-					firstVisitAt: deal.firstVisitAt,
-					lastVisitAt: deal.lastVisitAt,
-					visitCount: deal.visitCount,
-					nextFollowUpAt: deal.nextFollowUpAt,
+				opportunity: opp && {
+					id: opp.id,
+					status: opp.status,
+					lostReason: opp.lostReason,
+					fundingType: opp.fundingType,
+					ownerMemberId: opp.ownerMemberId,
+					firstVisitAt: opp.firstVisitAt,
+					lastVisitAt: opp.lastVisitAt,
+					visitCount: opp.visitCount,
+					nextFollowUpAt: opp.nextFollowUpAt,
+					temperature: liveTemperature(opp, l, priceRange, rules),
 				},
+				appointments: appointments
+					.filter((a) => a.leadId === l.id)
+					.map((a) => ({
+						...a,
+						// No opportunity at booking = the first tour (brief §6).
+						kind: a.opportunityId
+							? ("follow_up" as const)
+							: ("first_tour" as const),
+					})),
 				activities: activities.filter((a) => a.leadId === l.id),
 			};
 		}),
@@ -412,7 +438,7 @@ export async function listLeads(
 	return withPhone(rows);
 }
 
-/** Deal pipeline list, most recent visit first. */
+/** Opportunity pipeline list, most recent visit first. */
 export async function listOpportunities(
 	db: Database,
 	tenant: Tenant,
@@ -424,7 +450,7 @@ export async function listOpportunities(
 			customerId: customer.id,
 			customerName: customer.name,
 			projectName: project.name,
-			stage: opportunity.stage,
+			status: opportunity.status,
 			ownerMemberId: opportunity.ownerMemberId,
 			ownerName: ownerUser.name,
 			lastVisitAt: opportunity.lastVisitAt,
@@ -442,8 +468,8 @@ export async function listOpportunities(
 				input.projectId
 					? eq(opportunity.projectId, input.projectId)
 					: undefined,
-				input.stages?.length
-					? inArray(opportunity.stage, input.stages)
+				input.statuses?.length
+					? inArray(opportunity.status, input.statuses)
 					: undefined,
 				input.ownership === "mine"
 					? eq(opportunity.ownerMemberId, tenant.memberId)

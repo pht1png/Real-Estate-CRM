@@ -192,7 +192,7 @@ export async function autoQualifyIfFits(
 		{
 			organizationId,
 			leadId: row.id,
-			type: "stage_change",
+			type: "status_change",
 			at: now,
 			data: { from: row.status, to: "qualified", reason: FIT_VERSION },
 		},

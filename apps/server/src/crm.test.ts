@@ -338,10 +338,10 @@ describe("duplicates and re-enquiry", () => {
 			"Riverside",
 		]);
 		expect(Object.keys(lookup.customer?.leads[0] ?? {}).sort()).toEqual([
+			"opportunityStatus",
 			"ownerName",
 			"projectId",
 			"projectName",
-			"stage",
 			"status",
 		]);
 	});
@@ -401,7 +401,7 @@ describe("duplicates and re-enquiry", () => {
 		);
 	});
 
-	test("disqualified leads and lost deals reopen as new; a live deal only gets the activity", async () => {
+	test("disqualified leads and lost opportunities reopen as new; a live opportunity only gets the activity", async () => {
 		const s = await setup();
 		const leadId = await captureOwnedByA(s);
 		await db
@@ -414,7 +414,7 @@ describe("duplicates and re-enquiry", () => {
 		const [reopened] = await db.select().from(lead).where(eq(lead.id, leadId));
 		expect(reopened).toMatchObject({ status: "new", disqualifyReason: null });
 
-		// A confirmed visit made it a deal: a re-enquiry is only logged on it.
+		// A confirmed visit made it an opportunity: a re-enquiry is only logged on it.
 		await db
 			.update(lead)
 			.set({ ownerMemberId: s.salesA.member.id })
@@ -443,7 +443,7 @@ describe("duplicates and re-enquiry", () => {
 			);
 		expect(enquiry).toBeDefined();
 
-		// Once the deal is lost, the lead starts over and can convert again.
+		// Once the opportunity is lost, the lead starts over and can convert again.
 		await s.salesA.caller.opportunity.markLost({
 			opportunityId,
 			reason: "bought_competitor",
@@ -460,11 +460,14 @@ describe("duplicates and re-enquiry", () => {
 			nextFollowUpAt: followUp(),
 		});
 		expect(second.opportunityId).not.toBe(opportunityId);
-		const deals = await db
+		const opportunities = await db
 			.select()
 			.from(opportunity)
 			.where(eq(opportunity.leadId, leadId));
-		expect(deals.map((d) => d.stage).sort()).toEqual(["lost", "visited"]);
+		expect(opportunities.map((o) => o.status).sort()).toEqual([
+			"lost",
+			"visited",
+		]);
 	});
 
 	test("five simultaneous captures of a new phone create one customer and one lead", async () => {
@@ -520,7 +523,7 @@ describe("visibility (brief §4)", () => {
 			id: a.leadId,
 			projectName: "Riverside",
 			status: "new",
-			stage: null,
+			opportunityStatus: null,
 			ownerName: s.salesA.user.name,
 		});
 		expect(page.leads.find((i) => i.projectName === "Hillside")?.visible).toBe(
@@ -695,7 +698,8 @@ describe("rules", () => {
 			deadlineRollHours: 2,
 			unreachableAttempts: 3,
 			unreachableWindowDays: 7,
-			nurtureCheckDays: 30,
+			appointmentMinutes: 60,
+			quietOpportunityDays: 3,
 		});
 		expect(
 			await codeOf(s.salesA.caller.rules.update({ reEnquiryWindowDays: 30 })),

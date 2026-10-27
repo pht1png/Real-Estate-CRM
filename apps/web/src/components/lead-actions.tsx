@@ -3,8 +3,9 @@
 import type {
 	DisqualifyReason,
 	FitResult,
+	FundingType,
 	LeadStatus,
-	OpportunityStage,
+	OpportunityStatus,
 } from "@Real-Estate-CRM/db/constants";
 import { Button, buttonVariants } from "@Real-Estate-CRM/ui/components/button";
 import {
@@ -26,11 +27,15 @@ import { cn } from "@Real-Estate-CRM/ui/lib/utils";
 import { useMutation } from "@tanstack/react-query";
 import {
 	BadgeCheckIcon,
+	BanknoteIcon,
 	CalendarClockIcon,
+	CalendarPlusIcon,
 	DoorOpenIcon,
 	EllipsisIcon,
 	HandIcon,
 	HandshakeIcon,
+	HourglassIcon,
+	KeyRoundIcon,
 	MessageCircleIcon,
 	PhoneIcon,
 	PhoneMissedIcon,
@@ -46,18 +51,21 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { useCan } from "@/hooks/use-me";
 import { useTRPC } from "@/utils/trpc";
 
+import { BookAppointmentForm } from "./appointment-forms";
 import {
 	CloseForm,
-	ConvertForm,
 	type FormTarget,
+	FundingForm,
 	NoteForm,
 	OutcomeForm,
 	QualifyForm,
 	RescheduleForm,
 	useLeadError,
 	useRefreshLeads,
+	VisitForm,
 } from "./lead-forms";
 
 /** Take a lead from the pool (brief §6). */
@@ -92,19 +100,41 @@ export function ClaimButton({ leadId }: { leadId: string }) {
 
 export type ActionTarget = FormTarget & {
 	phoneE164?: string | null;
-	status?: LeadStatus | null;
-	stage?: OpportunityStage | null;
+	/** The lead's status, or the opportunity's (by `kind`). */
+	status?: LeadStatus | OpportunityStatus | null;
 	/** Qualification check (brief §6): suggests the next step, never acts alone. */
 	fit?: FitResult | null;
+	fundingType?: FundingType | null;
 };
+
+/** Manual moves offered on an opportunity; the rest come from deposits (M6). */
+const nextStatuses: Partial<
+	Record<
+		OpportunityStatus,
+		"negotiating" | "waiting_mortgage_result" | "transferred"
+	>
+> = {
+	visited: "negotiating",
+	contracted: "waiting_mortgage_result",
+	waiting_mortgage_result: "transferred",
+};
+const withMortgage = (f: FundingType | null | undefined) =>
+	f === "mortgage" || f === "cash_mortgage";
 
 type Pane =
 	| { kind: "result" }
 	| { kind: "outcome"; outcome: "answered" | "no_answer" | "line" }
 	| { kind: "followUp" }
 	| { kind: "note" }
-	| { kind: "qualify"; thenConvert?: boolean }
+	| {
+			kind: "qualify";
+			thenConvert?: boolean;
+			/** Just chosen in the call result: the row's own value is stale. */
+			nextFollowUpAt?: Date;
+	  }
 	| { kind: "convert" }
+	| { kind: "book" }
+	| { kind: "funding" }
 	| {
 			kind: "close";
 			exit: "disqualify" | "nurture" | "lost";
@@ -112,7 +142,7 @@ type Pane =
 	  };
 
 /**
- * One-tap actions (brief §7) on a lead or a deal: Call (dialler + result),
+ * One-tap actions (brief §7) on a lead or an opportunity: Call (dialler + result),
  * LINE, and a ⋯ menu. Every result ends with the next follow-up.
  */
 export function LeadActions({
@@ -126,6 +156,8 @@ export function LeadActions({
 	size?: "default" | "lg";
 }) {
 	const t = useTranslations("leadActions");
+	const ta = useTranslations("appointments");
+	const can = useCan();
 	const trpc = useTRPC();
 	const refresh = useRefreshLeads();
 	const onError = useLeadError();
@@ -136,16 +168,34 @@ export function LeadActions({
 		setPane(null);
 		onDone?.();
 	};
-	const negotiate = useMutation(
-		trpc.opportunity.setStage.mutationOptions({
-			onSuccess: async () => {
-				toast.success(t("toasts.negotiating"));
+	const tos = useTranslations("opportunityStatuses");
+	const setStatus = useMutation(
+		trpc.opportunity.setStatus.mutationOptions({
+			onSuccess: async (_, input) => {
+				toast.success(t("status.saved", { status: tos(input.status) }));
 				onDone?.();
 				await refresh();
 			},
 			onError,
 		}),
 	);
+	const opportunityStatus = isLead
+		? null
+		: (target.status as OpportunityStatus | null | undefined);
+	const next = opportunityStatus ? nextStatuses[opportunityStatus] : undefined;
+	const canMove =
+		!!next &&
+		(next !== "waiting_mortgage_result" || withMortgage(target.fundingType)) &&
+		// A sales manager marks the transfer (brief §4).
+		(next !== "transferred" || can({ lead: ["assign"] }));
+	const open =
+		opportunityStatus === "visited" || opportunityStatus === "negotiating";
+	// After a deposit there are no calls to log; only status, funding, notes.
+	const working = isLead || open;
+	// A tour is booked once you've spoken to them (brief §6).
+	const canBook = isLead
+		? target.status === "connected" || target.status === "qualified"
+		: open;
 
 	// One-tap suggestion from the fit check; the salesperson confirms.
 	const suggest =
@@ -186,7 +236,7 @@ export function LeadActions({
 		<div className="flex flex-col gap-2">
 			{suggestion}
 			<div className="flex gap-2">
-				{target.phoneE164 ? (
+				{!working ? null : target.phoneE164 ? (
 					<a
 						href={`tel:${target.phoneE164}`}
 						className={cn(
@@ -208,14 +258,16 @@ export function LeadActions({
 						{t("logCall")}
 					</Button>
 				)}
-				<Button
-					variant="outline"
-					size={big ? "lg" : "default"}
-					onClick={() => setPane({ kind: "outcome", outcome: "line" })}
-				>
-					<MessageCircleIcon data-icon="inline-start" />
-					{t("line")}
-				</Button>
+				{working && (
+					<Button
+						variant="outline"
+						size={big ? "lg" : "default"}
+						onClick={() => setPane({ kind: "outcome", outcome: "line" })}
+					>
+						<MessageCircleIcon data-icon="inline-start" />
+						{t("line")}
+					</Button>
+				)}
 				<DropdownMenu>
 					<DropdownMenuTrigger
 						render={
@@ -244,23 +296,48 @@ export function LeadActions({
 									</DropdownMenuItem>
 								</>
 							)}
-							{!isLead && target.stage === "visited" && (
-								<DropdownMenuItem
-									onClick={() =>
-										negotiate.mutate({
-											opportunityId: target.id,
-											stage: "negotiating",
-										})
-									}
-								>
-									<HandshakeIcon />
-									{t("markNegotiating")}
+							{canBook && (
+								<DropdownMenuItem onClick={() => setPane({ kind: "book" })}>
+									<CalendarPlusIcon />
+									{ta("book")}
 								</DropdownMenuItem>
 							)}
-							<DropdownMenuItem onClick={() => setPane({ kind: "followUp" })}>
-								<CalendarClockIcon />
-								{t("changeFollowUp")}
-							</DropdownMenuItem>
+							{!isLead && open && (
+								<DropdownMenuItem onClick={() => setPane({ kind: "convert" })}>
+									<DoorOpenIcon />
+									{t("recordVisit.menu")}
+								</DropdownMenuItem>
+							)}
+							{!isLead && opportunityStatus !== "transferred" && (
+								<DropdownMenuItem onClick={() => setPane({ kind: "funding" })}>
+									<BanknoteIcon />
+									{t("funding.menu")}
+								</DropdownMenuItem>
+							)}
+							{canMove && next && (
+								<DropdownMenuItem
+									onClick={() =>
+										setStatus.mutate({ opportunityId: target.id, status: next })
+									}
+								>
+									{next === "negotiating" ? (
+										<HandshakeIcon />
+									) : next === "transferred" ? (
+										<KeyRoundIcon />
+									) : (
+										<HourglassIcon />
+									)}
+									{next === "negotiating"
+										? t("markNegotiating")
+										: t(`status.${next}`)}
+								</DropdownMenuItem>
+							)}
+							{working && (
+								<DropdownMenuItem onClick={() => setPane({ kind: "followUp" })}>
+									<CalendarClockIcon />
+									{t("changeFollowUp")}
+								</DropdownMenuItem>
+							)}
 							<DropdownMenuItem onClick={() => setPane({ kind: "note" })}>
 								<StickyNoteIcon />
 								{t("addNote")}
@@ -287,13 +364,15 @@ export function LeadActions({
 									</DropdownMenuItem>
 								</>
 							) : (
-								<DropdownMenuItem
-									variant="destructive"
-									onClick={() => setPane({ kind: "close", exit: "lost" })}
-								>
-									<ThumbsDownIcon />
-									{t("exits.lost")}
-								</DropdownMenuItem>
+								(open || opportunityStatus === "waiting_mortgage_result") && (
+									<DropdownMenuItem
+										variant="destructive"
+										onClick={() => setPane({ kind: "close", exit: "lost" })}
+									>
+										<ThumbsDownIcon />
+										{t("exits.lost")}
+									</DropdownMenuItem>
+								)
 							)}
 						</DropdownMenuGroup>
 					</DropdownMenuContent>
@@ -323,7 +402,8 @@ export function LeadActions({
 							onDone={done}
 							onQualify={
 								isLead && target.status !== "qualified"
-									? () => setPane({ kind: "qualify" })
+									? (nextFollowUpAt) =>
+											setPane({ kind: "qualify", nextFollowUpAt })
 									: undefined
 							}
 						/>
@@ -334,7 +414,10 @@ export function LeadActions({
 					{pane?.kind === "note" && <NoteForm target={target} onDone={done} />}
 					{pane?.kind === "qualify" && (
 						<QualifyForm
-							target={target}
+							target={{
+								...target,
+								nextFollowUpAt: pane.nextFollowUpAt ?? target.nextFollowUpAt,
+							}}
 							onDone={done}
 							onNext={
 								pane.thenConvert
@@ -344,7 +427,17 @@ export function LeadActions({
 						/>
 					)}
 					{pane?.kind === "convert" && (
-						<ConvertForm target={target} onDone={done} />
+						<VisitForm target={target} onDone={done} />
+					)}
+					{pane?.kind === "book" && (
+						<BookAppointmentForm target={target} onDone={done} />
+					)}
+					{pane?.kind === "funding" && (
+						<FundingForm
+							target={target}
+							current={target.fundingType}
+							onDone={done}
+						/>
 					)}
 					{pane?.kind === "close" && (
 						<CloseForm

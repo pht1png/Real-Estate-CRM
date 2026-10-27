@@ -17,7 +17,8 @@ export const updateRulesInput = z.strictObject({
 	deadlineRollHours: z.number().int().min(0).max(8).optional(),
 	unreachableAttempts: z.number().int().min(1).max(20).optional(),
 	unreachableWindowDays: z.number().int().min(1).max(60).optional(),
-	nurtureCheckDays: z.number().int().min(1).max(365).optional(),
+	appointmentMinutes: z.number().int().min(15).max(240).optional(),
+	quietOpportunityDays: z.number().int().min(1).max(30).optional(),
 });
 
 type Executor = Pick<Database, "select">;
@@ -31,7 +32,11 @@ export async function getRules(
 		.select({ rules: organizationSettings.rules })
 		.from(organizationSettings)
 		.where(eq(organizationSettings.organizationId, organizationId));
-	return { ...defaultRules, ...row?.rules };
+	// Only known keys: overrides of retired rules stay stored but unused.
+	const overrides = Object.entries(row?.rules ?? {}).filter(
+		([key]) => key in defaultRules,
+	);
+	return { ...defaultRules, ...Object.fromEntries(overrides) };
 }
 
 export async function getRulesForTenant(db: Database, tenant: Tenant) {

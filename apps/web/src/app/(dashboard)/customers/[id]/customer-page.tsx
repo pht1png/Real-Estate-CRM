@@ -58,7 +58,7 @@ export function CustomerPage({ customerId }: { customerId: string }) {
 									<li key={i.id}>
 										{t("summaryLine", {
 											project: i.projectName,
-											stage: pipelineLabel(i.status, i.stage),
+											status: pipelineLabel(i.status, i.opportunityStatus),
 											owner: i.ownerName ?? t("pool"),
 										})}
 									</li>

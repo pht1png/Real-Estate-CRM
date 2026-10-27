@@ -3,8 +3,8 @@
 import {
 	type LeadStatus,
 	leadStatuses,
-	type OpportunityStage,
-	opportunityStages,
+	type OpportunityStatus,
+	opportunityStatuses,
 } from "@Real-Estate-CRM/db/constants";
 import { Badge } from "@Real-Estate-CRM/ui/components/badge";
 import {
@@ -45,7 +45,7 @@ import { useDeferredValue, useState } from "react";
 import { useTRPC } from "@/utils/trpc";
 
 const ALL = "all";
-type Pipeline = "leads" | "deals";
+type Pipeline = "leads" | "opportunities";
 
 function FilterSelect({
 	id,
@@ -91,7 +91,7 @@ function listParam(raw: string | null, allowed: readonly string[]) {
 	return valid.length ? valid.join(",") : ALL;
 }
 
-/** Status/stage options, plus a combined one when a link asked for several. */
+/** Status options, plus a combined one when a link asked for several. */
 function statusItems(
 	value: string,
 	all: readonly string[],
@@ -109,30 +109,34 @@ function statusItems(
 }
 
 /**
- * Two pipelines (brief §2): Leads (vetting queue) and Deals (after a
+ * Two pipelines (brief §2): Leads (vetting queue) and Opportunities (after a
  * confirmed visit). Filters live in the URL so links (e.g. Overview cards)
- * can open them.
+ * can open them; older `pipeline=deals` / `stage=` links still work.
  */
 export function CustomerList() {
 	const t = useTranslations("customers");
 	const tls = useTranslations("leadStatuses");
-	const tos = useTranslations("opportunityStages");
+	const tos = useTranslations("opportunityStatuses");
 	const tc = useTranslations("common");
 	const format = useFormatter();
 	const trpc = useTRPC();
 	const params = useSearchParams();
 	const router = useRouter();
 	const pathname = usePathname();
-	const [pipeline, setPipeline] = useState<Pipeline>(
-		params.get("pipeline") === "deals" ? "deals" : "leads",
-	);
+	const [pipeline, setPipeline] = useState<Pipeline>(() => {
+		const v = params.get("pipeline");
+		return v === "opportunities" || v === "deals" ? "opportunities" : "leads";
+	});
 	const [query, setQuery] = useState(params.get("q") ?? "");
 	const [projectId, setProjectId] = useState(params.get("project") ?? ALL);
 	const [status, setStatus] = useState(() =>
 		listParam(params.get("status"), leadStatuses),
 	);
-	const [stage, setStage] = useState(() =>
-		listParam(params.get("stage"), opportunityStages),
+	const [opportunityStatus, setOpportunityStatus] = useState(() =>
+		listParam(
+			params.get("opportunityStatus") ?? params.get("stage"),
+			opportunityStatuses,
+		),
 	);
 	const [ownership, setOwnership] = useState<"all" | "mine" | "pool">(() => {
 		const v = params.get("ownership");
@@ -168,15 +172,20 @@ export function CustomerList() {
 			{ placeholderData: keepPreviousData, enabled: pipeline === "leads" },
 		),
 	);
-	const deals = useQuery(
+	const opportunities = useQuery(
 		trpc.opportunity.list.queryOptions(
 			{
 				...common,
-				stages:
-					stage === ALL ? undefined : (stage.split(",") as OpportunityStage[]),
+				statuses:
+					opportunityStatus === ALL
+						? undefined
+						: (opportunityStatus.split(",") as OpportunityStatus[]),
 				ownership: ownership === "pool" ? "all" : ownership,
 			},
-			{ placeholderData: keepPreviousData, enabled: pipeline === "deals" },
+			{
+				placeholderData: keepPreviousData,
+				enabled: pipeline === "opportunities",
+			},
 		),
 	);
 	const dateTime = (d: Date | string | null) =>
@@ -214,9 +223,9 @@ export function CustomerList() {
 			<Tabs
 				value={pipeline}
 				onValueChange={(v) => {
-					const next = v === "deals" ? "deals" : "leads";
+					const next = v === "opportunities" ? "opportunities" : "leads";
 					setPipeline(next);
-					sync({ pipeline: next });
+					sync({ pipeline: next, stage: "" });
 				}}
 			>
 				<TabsList>
@@ -224,9 +233,9 @@ export function CustomerList() {
 						<span aria-hidden className="bg-lead size-2 rounded-full" />
 						{t("pipelines.leads")}
 					</TabsTrigger>
-					<TabsTrigger value="deals">
-						<span aria-hidden className="bg-deal size-2 rounded-full" />
-						{t("pipelines.deals")}
+					<TabsTrigger value="opportunities">
+						<span aria-hidden className="bg-opportunity size-2 rounded-full" />
+						{t("pipelines.opportunities")}
 					</TabsTrigger>
 				</TabsList>
 			</Tabs>
@@ -277,17 +286,17 @@ export function CustomerList() {
 					/>
 				) : (
 					<FilterSelect
-						id="deal-stage"
-						label={t("stage")}
-						value={stage}
+						id="opportunity-status"
+						label={t("status")}
+						value={opportunityStatus}
 						onChange={(v) => {
-							setStage(v);
-							sync({ stage: v });
+							setOpportunityStatus(v);
+							sync({ opportunityStatus: v, stage: "" });
 						}}
 						items={statusItems(
-							stage,
-							opportunityStages,
-							(s) => tos(s as OpportunityStage),
+							opportunityStatus,
+							opportunityStatuses,
+							(s) => tos(s as OpportunityStatus),
 							tc("all"),
 						)}
 					/>
@@ -341,7 +350,7 @@ export function CustomerList() {
 						</Table>
 					</div>
 				)
-			) : deals.isSuccess && deals.data.length === 0 ? (
+			) : opportunities.isSuccess && opportunities.data.length === 0 ? (
 				empty
 			) : (
 				<div className="overflow-x-auto rounded-lg border">
@@ -351,19 +360,19 @@ export function CustomerList() {
 								<TableHead>{t("name")}</TableHead>
 								<TableHead>{t("phone")}</TableHead>
 								<TableHead>{t("project")}</TableHead>
-								<TableHead>{t("stage")}</TableHead>
+								<TableHead>{t("status")}</TableHead>
 								<TableHead>{t("ownership")}</TableHead>
 								<TableHead>{t("lastVisit")}</TableHead>
 								<TableHead>{t("followUp")}</TableHead>
 							</TableRow>
 						</TableHeader>
 						<TableBody>
-							{deals.data?.map((d) => (
+							{opportunities.data?.map((d) => (
 								<TableRow key={d.opportunityId}>
 									{nameCell(d.customerId, d.customerName)}
 									<TableCell>{d.primaryPhone}</TableCell>
 									<TableCell>{d.projectName}</TableCell>
-									<TableCell>{tos(d.stage)}</TableCell>
+									<TableCell>{tos(d.status)}</TableCell>
 									<TableCell>{d.ownerName}</TableCell>
 									<TableCell>{dateTime(d.lastVisitAt)}</TableCell>
 									<TableCell>{dateTime(d.nextFollowUpAt)}</TableCell>

@@ -5,8 +5,9 @@ import {
 	contactActivityTypes,
 	type LeadStatus,
 	lead,
+	type OpportunityStatus,
 	openLeadStatuses,
-	openOpportunityStages,
+	openOpportunityStatuses,
 	opportunity,
 	project,
 } from "@Real-Estate-CRM/db/schema/index";
@@ -56,7 +57,7 @@ export const opportunityFollowUpInput = z.strictObject({
 	nextFollowUpAt: futureDateTime,
 });
 
-/** The owner works their lead or deal; managers covering the project may act on any. */
+/** The owner works their lead or opportunity; managers covering the project may act on any. */
 export function requireActor(
 	tenant: Tenant,
 	row: { ownerMemberId: string | null },
@@ -84,10 +85,10 @@ export function requireOpenLead(row: { status: LeadStatus }) {
 	}
 }
 
-/** Deals before a deposit (visited, negotiating). */
-export function requireOpenOpportunity(row: { stage: string }) {
-	if (!(openOpportunityStages as readonly string[]).includes(row.stage)) {
-		badRequest("This deal is no longer open");
+/** Opportunities before a deposit (visited, negotiating). */
+export function requireOpenOpportunity(row: { status: OpportunityStatus }) {
+	if (!openOpportunityStatuses.includes(row.status)) {
+		badRequest("This opportunity is no longer open");
 	}
 }
 
@@ -130,7 +131,7 @@ export function logStatusChange(
 	return tx.insert(activity).values({
 		organizationId: tenant.organizationId,
 		leadId,
-		type: "stage_change",
+		type: "status_change",
 		at,
 		byUserId: tenant.userId,
 		data: { from, to, reason },
@@ -215,7 +216,7 @@ export async function logLeadOutcome(
 	});
 }
 
-/** Call result or LINE contact on a deal; no automatic stage moves. */
+/** Call result or LINE contact on an opportunity; no automatic status moves. */
 export async function logOpportunityOutcome(
 	db: Database,
 	tenant: Tenant,
@@ -284,7 +285,7 @@ export async function setOpportunityFollowUp(
 	});
 }
 
-/** Note on a lead or deal timeline. */
+/** Note on a lead or opportunity timeline. */
 export const addNoteInput = z
 	.strictObject({
 		leadId: z.uuid().optional(),

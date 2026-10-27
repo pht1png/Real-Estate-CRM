@@ -16,7 +16,7 @@ import {
 	uniqueEmail,
 } from "./support";
 
-test("salesperson on a phone: pool, To do sections, qualify, confirmed visit → deal → lost, unreachable → disqualified, walk-in", async ({
+test("salesperson on a phone: pool, To do sections, qualify, confirmed visit → opportunity → lost, unreachable → disqualified, walk-in", async ({
 	page: owner,
 	browser,
 }) => {
@@ -40,25 +40,27 @@ test("salesperson on a phone: pool, To do sections, qualify, confirmed visit →
 	const m = malee.page;
 	await m.goto("/dashboard");
 	await m.getByRole("button", { name: "Toggle Sidebar" }).click();
-	await expect(m.getByRole("link", { name: /พูลลีด.*มี 2 ลีดรอรับ/ })).toBeVisible();
-	await m.getByRole("link", { name: /พูลลีด/ }).click();
+	await expect(
+		m.getByRole("link", { name: /พูลผู้สนใจ.*มีผู้สนใจ 2 รายรอรับ/ }),
+	).toBeVisible();
+	await m.getByRole("link", { name: /พูลผู้สนใจ/ }).click();
 	await expect(m).toHaveURL(/\/pool$/);
 	await m.keyboard.press("Escape");
 
 	// Claim both from the Pool page.
-	const pool = m.getByRole("list", { name: "พูลลีด" });
+	const pool = m.getByRole("list", { name: "พูลผู้สนใจ" });
 	for (const name of ["Khun Nida", "Khun Mali"]) {
 		await pool
 			.getByRole("listitem")
 			.filter({ hasText: name })
-			.getByRole("button", { name: "รับลีด" })
+			.getByRole("button", { name: "รับผู้สนใจ" })
 			.click();
 		await expect(pool.getByText(name)).toBeHidden();
 	}
 
 	// Overview: the Leads section counts both as New.
 	await m.goto("/dashboard");
-	const leadsSection = m.getByRole("region", { name: "ลีด", exact: true });
+	const leadsSection = m.getByRole("region", { name: "ผู้สนใจ", exact: true });
 	await expect(
 		leadsSection.getByRole("link", { name: /ใหม่\s*2/ }),
 	).toBeVisible();
@@ -68,7 +70,7 @@ test("salesperson on a phone: pool, To do sections, qualify, confirmed visit →
 	const due = m.getByRole("region", { name: /ถึงกำหนดวันนี้/ });
 	const stale = m.getByRole("region", { name: /ค้าง \/ เกินกำหนด/ });
 	const nida = due.getByRole("listitem").filter({ hasText: "Khun Nida" });
-	await expect(nida.getByText("ลีด", { exact: true })).toBeVisible();
+	await expect(nida.getByText("ผู้สนใจ", { exact: true })).toBeVisible();
 	await expect(
 		nida.getByRole("definition").filter({ hasText: "ใหม่" }),
 	).toBeVisible();
@@ -100,7 +102,7 @@ test("salesperson on a phone: pool, To do sections, qualify, confirmed visit →
 	// Start mode walks what's left (Mali).
 	await m.getByRole("button", { name: "เริ่มโทร" }).click();
 	const callMode = m.getByRole("dialog", { name: "โหมดโทร" });
-	await expect(callMode.getByText("ลีดที่ 1 จาก 1")).toBeVisible();
+	await expect(callMode.getByText("รายที่ 1 จาก 1")).toBeVisible();
 	await logNoAnswer(m, callMode);
 	await expect(callMode.getByText("เรียบร้อยแล้ว")).toBeVisible();
 	await callMode.getByRole("button", { name: "กลับไปหน้าภาพรวม" }).click();
@@ -114,7 +116,7 @@ test("salesperson on a phone: pool, To do sections, qualify, confirmed visit →
 	await prompt.getByRole("button", { name: "ไม่ผ่าน (ติดต่อไม่ได้)" }).click();
 	await expect(mali).toHaveCount(0);
 
-	// Nida comes to the showroom (already qualified): Confirm visit → green deal.
+	// Nida comes to the showroom (already qualified): Confirm visit → green opportunity.
 	await m.goto("/customers");
 	await m.getByRole("link", { name: "Khun Nida" }).click();
 	const card = m
@@ -176,13 +178,16 @@ test("salesperson on a phone: pool, To do sections, qualify, confirmed visit →
 	await expect(visitArun).toBeHidden();
 	await expect(arun.locator('[data-kind="opportunity"]')).toBeVisible();
 
-	// Overview: the Opportunities section counts the new deal; lost this month 1.
+	// Overview: the Opportunities section counts the new opportunity; lost this month 1.
 	await m.goto("/dashboard");
-	const deals = m.getByRole("region", { name: "ดีล", exact: true });
+	const opportunities = m.getByRole("region", {
+		name: "โอกาสการขาย",
+		exact: true,
+	});
 	await expect(
-		deals.getByRole("link", { name: /เยี่ยมชมแล้ว\s*1/ }),
+		opportunities.getByRole("link", { name: /เยี่ยมชมแล้ว\s*1/ }),
 	).toBeVisible();
-	await expect(deals.getByText(/ไม่ซื้อ 1/)).toBeVisible();
+	await expect(opportunities.getByText(/ไม่ซื้อ 1/)).toBeVisible();
 
 	await malee.context.close();
 });

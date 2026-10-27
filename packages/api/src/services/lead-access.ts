@@ -8,7 +8,7 @@ import type { Tenant } from "./tenancy";
 type Owned = { projectId: string; ownerMemberId: string | null };
 
 /**
- * Brief §4: a lead or deal is private to its owner, managers covering the
+ * Brief §4: a lead or opportunity is private to its owner, managers covering the
  * project and executives (plus owners/admins). Salespeople also see the pool
  * of their projects. Everyone else gets a summary line only.
  */

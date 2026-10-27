@@ -1,7 +1,10 @@
 "use client";
 
+import type { Temperature } from "@Real-Estate-CRM/db/constants";
+import { Badge } from "@Real-Estate-CRM/ui/components/badge";
 import { Card, CardContent } from "@Real-Estate-CRM/ui/components/card";
 import { cn } from "@Real-Estate-CRM/ui/lib/utils";
+import { FlameIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
@@ -9,10 +12,10 @@ export type Pipeline = "lead" | "opportunity";
 
 const edge = {
 	lead: "border-l-4 border-l-lead bg-lead-muted/60",
-	opportunity: "border-l-4 border-l-deal bg-deal-muted/60",
+	opportunity: "border-l-4 border-l-opportunity bg-opportunity-muted/60",
 } as const;
 
-/** A lead (blue) or deal (green) card; type and stage are never one badge. */
+/** A lead (blue) or opportunity (green) card; type and status are never one badge. */
 export function PipelineCard({
 	kind,
 	className,
@@ -29,18 +32,37 @@ export function PipelineCard({
 	);
 }
 
-/** "Lead" / "Deal" in the pipeline colour, top left of a card. */
+/** "Lead" / "Opportunity" in the pipeline colour, top left of a card. */
 export function TypeBadge({ kind }: { kind: Pipeline }) {
 	const t = useTranslations("pipeline");
 	return (
 		<span
 			className={cn(
 				"inline-flex w-fit items-center px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase",
-				kind === "lead" ? "bg-lead text-white" : "bg-deal text-white",
+				kind === "lead" ? "bg-lead text-white" : "bg-opportunity text-white",
 			)}
 		>
 			{t(kind)}
 		</span>
+	);
+}
+
+/** Hot / warm on an opportunity (computed on read, brief §6). */
+export function TemperatureBadge({
+	temperature,
+}: {
+	temperature: Temperature | null | undefined;
+}) {
+	const t = useTranslations("temperatures");
+	if (!temperature) return null;
+	return (
+		<Badge
+			variant={temperature === "hot" ? "destructive" : "secondary"}
+			className="shrink-0"
+		>
+			<FlameIcon data-icon="inline-start" />
+			{t(temperature)}
+		</Badge>
 	);
 }
 

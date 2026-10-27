@@ -212,7 +212,7 @@ export function createAuth(
 					// Until offboarding (M7) moves leads to a manager, a member who
 					// still owns open leads can't be removed.
 					beforeRemoveMember: async ({ member }) => {
-						const [[leads], [deals]] = await Promise.all([
+						const [[leads], [opportunities]] = await Promise.all([
 							database
 								.select({ n: sql<number>`count(*)::int` })
 								.from(lead)
@@ -228,11 +228,11 @@ export function createAuth(
 								.where(
 									and(
 										eq(opportunity.ownerMemberId, member.id),
-										notInArray(opportunity.stage, ["transferred", "lost"]),
+										notInArray(opportunity.status, ["transferred", "lost"]),
 									),
 								),
 						]);
-						if ((leads?.n ?? 0) + (deals?.n ?? 0) > 0) {
+						if ((leads?.n ?? 0) + (opportunities?.n ?? 0) > 0) {
 							throw new APIError("BAD_REQUEST", {
 								code: "MEMBER_OWNS_LEADS",
 								message:
